@@ -394,7 +394,7 @@ export class JSToCodonTranslator {
             }
 
             case "AwaitExpression":
-                return `(await ${this.transpile(node.argument)})`;
+                return `(@ ${this.transpile(node.argument)})`;
 
             case "TemplateLiteral": {
                 let tpl = "`";

@@ -445,3 +445,65 @@ export { a, b } from "./math";
         expect(roundtrippedJs).toContain('export { a, b } from "./math";');
     });
 });
+
+describe("Monadic @ and @: Await Verb Support", () => {
+    test("Transpiles @ expr and @: expr to JavaScript await", () => {
+        const codonCode = `
+res1 =: @ (fetch url)
+res2 =: @: (api.get id)
+res3 =: (@ task())
+res4 =: (await legacyCall())
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("const res1 = await fetch(url);");
+        expect(js).toContain("const res2 = await api.get(id);");
+        expect(js).toContain("const res3 = await task();");
+        expect(js).toContain("const res4 = await legacyCall();");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles standalone statement await @ expr", () => {
+        const codonCode = `
+@ (delay 50)
+(@ cleanup())
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("await delay(50);");
+        expect(js).toContain("await cleanup();");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips JS await expressions using @ notation", () => {
+        const jsCode = `
+async function loadData(endpoint) {
+  const response = await fetch(endpoint);
+  const data = await response.json();
+  return data;
+}
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("@");
+        expect(codonCode).not.toContain("(await");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+        expect(roundtrippedJs).toContain("await fetch(endpoint)");
+        expect(roundtrippedJs).toContain("await response.json()");
+    });
+});
+

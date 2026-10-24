@@ -7,7 +7,7 @@ async_method. run  do.
 results =: (0$0)
 for_of. {name,fn} : this.tests do.
 try. do.
-(await fn())
+(@ fn())
 (results.push O('name';name;'passed';true))
 catch. error do.
 (results.push O('name';name;'passed';false;'error';error))
@@ -38,7 +38,7 @@ suite =: (new TestSuite)
 }}))
 
 (suite.test 'async resolving value' ({{ NB. async pB|
-value =: (await (Promise.resolve 'hello'))
+value =: (@ (Promise.resolve 'hello'))
 ((expect value).toBe 'hello')
 }}))
 

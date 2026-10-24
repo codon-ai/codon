@@ -10,7 +10,7 @@ return. (new Promise ({{ NB. pB|resolve,reject
 run =: ({{ NB. async pB|
 (this.activeCount++)
 try. do.
-(resolve (await task()))
+(resolve (@ task()))
 catch. err do.
 (reject err)
 finally. do.
@@ -43,7 +43,7 @@ delay =: ({{ NB. pE|ms
 
 tasks =: ((1;2;3;4).map ({{ NB. pE|id
 (queue.add ({{ NB. async pB|
-(await (delay 50))
+(@ (delay 50))
 return. `Task ${id} done`
 }}))
 }}))

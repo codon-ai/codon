@@ -2,14 +2,14 @@ NB. i|D:fs:node%3Afs/promises|D:path:node%3Apath
 
 NB. export
 {{ NB. async FD|scanDir|dir,extension
-entries =: (await (fs.readdir dir O('withFileTypes';true)))
+entries =: (@ (fs.readdir dir O('withFileTypes';true)))
 results =: (0$0)
 for_of. entry : entries do.
 fullPath =: (path.join dir entry.name)
 if. entry.isDirectory() do.
-(results.push '...';(await (scanDir fullPath extension)))
+(results.push '...';(@ (scanDir fullPath extension)))
 elseif. (entry.isFile() && (entry.name.endsWith extension)) do.
-stats =: (await (fs.stat fullPath))
+stats =: (@ (fs.stat fullPath))
 (results.push O('path';fullPath;'size';stats.size))
 end.
 end.
@@ -19,7 +19,7 @@ return. results
 {{ NB. async FD|main|
 targetDir =: (process.argv.[2] || '.')
 ext =: (process.argv.[3] || '.ts')
-files =: (await (scanDir targetDir ext))
+files =: (@ (scanDir targetDir ext))
 totalSize =: (files.reduce ({{ NB. pE|acc,f
 (acc + f.size)
 }}) 0)

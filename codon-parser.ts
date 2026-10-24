@@ -1341,11 +1341,24 @@ export class CodonToASTParser {
             };
         }
 
-        // Await Expression: (await expr)
-        if (wasWrapped && strippedExpr.startsWith("await ")) {
+        // Await Expression: @ expr, @: expr, (@ expr), or (await expr)
+        if (
+            strippedExpr.startsWith("@:") ||
+            strippedExpr.startsWith("@ ") ||
+            (strippedExpr.startsWith("@") && strippedExpr.length > 1) ||
+            strippedExpr.startsWith("await ")
+        ) {
+            let innerArg = "";
+            if (strippedExpr.startsWith("@:")) {
+                innerArg = strippedExpr.slice(2).trim();
+            } else if (strippedExpr.startsWith("@")) {
+                innerArg = strippedExpr.slice(1).trim();
+            } else {
+                innerArg = strippedExpr.slice(6).trim();
+            }
             return {
                 type: "AwaitExpression",
-                argument: this.parseExpression(strippedExpr.slice(6).trim()),
+                argument: this.parseExpression(innerArg),
             };
         }
 
