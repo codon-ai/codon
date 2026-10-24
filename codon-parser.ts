@@ -26,6 +26,7 @@ import type {
     MemberExpression,
     ObjectExpression,
     ArrayExpression,
+    SequenceExpression,
     Literal,
     JSXElement,
     JSXOpeningElement,
@@ -436,7 +437,35 @@ export class CodonToASTParser {
             if (doIdx !== -1 && stmt.endsWith("end.")) {
                 const header = stmt.substring("for.".length, doIdx).trim();
                 const parts = splitAtLevel(header, ";");
-                const init = parts[0] ? this.parseStatement(parts[0]) : null;
+                let init: any = null;
+                if (parts[0] && parts[0].trim()) {
+                    const initStr = parts[0].trim();
+                    const initLines = splitCodonStatements(initStr);
+                    if (initLines.length > 1) {
+                        const decls: any[] = [];
+                        let allVarDecls = true;
+                        for (const line of initLines) {
+                            const parsed = this.parseStatement(line);
+                            if (parsed && parsed.type === "VariableDeclaration") {
+                                decls.push(...parsed.declarations);
+                            } else {
+                                allVarDecls = false;
+                                break;
+                            }
+                        }
+                        if (allVarDecls && decls.length > 0) {
+                            init = {
+                                type: "VariableDeclaration",
+                                kind: "let",
+                                declarations: decls,
+                            };
+                        } else {
+                            init = this.parseStatement(initStr);
+                        }
+                    } else {
+                        init = this.parseStatement(initStr);
+                    }
+                }
                 const test = parts[1] ? this.parseExpression(parts[1]) : null;
                 const update = parts[2] ? this.parseExpression(parts[2]) : null;
                 const mBody = stmt.substring(doIdx + 4, stmt.length - 4).trim();
@@ -1154,6 +1183,22 @@ export class CodonToASTParser {
                 return babelParser.parseExpression(strippedExpr, { plugins: ["jsx"] });
             } catch {
                 // fall through
+            }
+        }
+
+        // Sequence Expression: (a, b) or a, b
+        if (!strippedExpr.startsWith(",")) {
+            const rawParts = splitAtLevel(strippedExpr, ",");
+            const seqParts = rawParts.map((p) => p.trim()).filter((p) => p.length > 0);
+            if (
+                seqParts.length > 1 &&
+                (rawParts.length === seqParts.length ||
+                    (rawParts.length === seqParts.length + 1 && rawParts[rawParts.length - 1].trim() === ""))
+            ) {
+                return {
+                    type: "SequenceExpression",
+                    expressions: seqParts.map((p) => this.parseExpression(p)),
+                };
             }
         }
 

@@ -66,6 +66,7 @@ export type Node =
     | UnaryExpression
     | UpdateExpression
     | ConditionalExpression
+    | SequenceExpression
     | AwaitExpression
     | TemplateLiteral
     | TemplateElement
@@ -500,6 +501,11 @@ export interface ConditionalExpression {
     test: Node;
     consequent: Node;
     alternate: Node;
+}
+
+export interface SequenceExpression {
+    type: "SequenceExpression";
+    expressions: Node[];
 }
 
 export interface AwaitExpression {

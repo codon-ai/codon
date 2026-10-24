@@ -302,3 +302,65 @@ ab = | _10
         expect(result.ab).toBe(10);
     });
 });
+
+describe("SequenceExpression Support", () => {
+    test("Transpiles and roundtrips SequenceExpression in return statements", () => {
+        const jsCode = `
+function compute() {
+  return a(), b(), c();
+}
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("return. (a(), b(), c())");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+        expect(roundtrippedJs).toContain("return a(), b(), c();");
+    });
+
+    test("Transpiles SequenceExpression evaluation and assignment", () => {
+        const jsCode = `
+const result = (a = 1, a = a + 2, a * 10);
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+        const fn = new Function(`let a = 0; ${js}; return result;`);
+        expect(fn()).toBe(30);
+    });
+
+    test("Transpiles ForStatement with sequence update and init", () => {
+        const jsCode = `
+for (let i = 0, j = 10; i < j; i++, j--) {
+  console.log(i, j);
+}
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("((i++), (j--))");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+        expect(roundtrippedJs).toContain("i++, j--");
+    });
+});

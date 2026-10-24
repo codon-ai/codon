@@ -40,6 +40,7 @@ import type {
     UnaryExpression,
     UpdateExpression,
     ConditionalExpression,
+    SequenceExpression,
     AwaitExpression,
     TemplateLiteral,
     ObjectPattern,
@@ -375,6 +376,11 @@ export class JSToCodonTranslator {
             case "ConditionalExpression":
                 return `(${this.transpile(node.test)} ? ${this.transpile(node.consequent)} : ${this.transpile(node.alternate)})`;
 
+            case "SequenceExpression": {
+                const exprs = node.expressions.map((e) => this.transpile(e)).join(", ");
+                return `(${exprs})`;
+            }
+
             case "AwaitExpression":
                 return `(await ${this.transpile(node.argument)})`;
 
@@ -581,6 +587,11 @@ export class CodonToJSCompiler {
             }
             if (res.type === "CallExpression" && res.optional) {
                 return { ...res, type: "OptionalCallExpression" };
+            }
+
+            // Unwrap ExpressionStatement in ForStatement init if present
+            if (res.type === "ForStatement" && res.init && res.init.type === "ExpressionStatement") {
+                res.init = res.init.expression;
             }
 
             // Convert MethodDefinition to Babel ClassMethod
