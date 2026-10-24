@@ -1,4 +1,3 @@
-````markdown
 # J ↔ JS Transpiler
 
 A bidirectional transpiler that converts JavaScript/React (ESTree/Babel AST) into `J` notation, and parses `J` notation back into executable JavaScript.
@@ -25,7 +24,6 @@ This project uses an Abstract Syntax Tree (AST) approach to guarantee structural
 # Install dependencies
 bun add @babel/parser @babel/generator
 ```
-````
 
 ## Usage
 
@@ -74,7 +72,3 @@ The project is split into modular components:
 ## License
 
 MIT
-
-```
-
-```
