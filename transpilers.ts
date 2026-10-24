@@ -55,13 +55,13 @@ import type {
     JSXIdentifier,
     JSXMemberExpression,
     JSXFragment,
-    JTrainExpression,
-    JFoldExpression,
-    JRankExpression,
+    CodonTrainExpression,
+    CodonFoldExpression,
+    CodonRankExpression,
 } from "./types";
 import generate from "@babel/generator";
 
-export class JSToJTranspiler {
+export class JSToCodonTranslator {
     public transpile(node: Node | null | undefined): string {
         if (!node) return "";
 
@@ -491,7 +491,7 @@ export class JSToJTranspiler {
     }
 }
 
-export class JToJSTranspiler {
+export class CodonToJSCompiler {
     public transpile(node: Node): string {
         if (!node) return "";
 
@@ -499,8 +499,8 @@ export class JToJSTranspiler {
             if (Array.isArray(n)) return n.map(toBabel);
             if (!n || typeof n !== "object") return n;
 
-            // Handle J Train Expression (Forks and Hooks)
-            if (n.type === "JTrainExpression") {
+            // Handle Codon Train Expression (Forks and Hooks)
+            if (n.type === "CodonTrainExpression") {
                 if (n.kind === "fork" && n.verbs.length === 3) {
                     return {
                         type: "CallExpression",
@@ -517,8 +517,8 @@ export class JToJSTranspiler {
                 }
             }
 
-            // Handle J Fold / Reduction
-            if (n.type === "JFoldExpression") {
+            // Handle Codon Fold / Reduction
+            if (n.type === "CodonFoldExpression") {
                 return {
                     type: "CallExpression",
                     callee: { type: "Identifier", name: n.scan ? "scan" : "fold" },
@@ -526,8 +526,8 @@ export class JToJSTranspiler {
                 };
             }
 
-            // Handle J Rank
-            if (n.type === "JRankExpression") {
+            // Handle Codon Rank
+            if (n.type === "CodonRankExpression") {
                 return {
                     type: "CallExpression",
                     callee: {
@@ -620,3 +620,6 @@ export class JToJSTranspiler {
         }
     }
 }
+
+export { CodonToJSCompiler as CodonToJSTranspiler };
+export { JSToCodonTranslator as JSToCodonTranspiler };

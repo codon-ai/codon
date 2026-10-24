@@ -1,10 +1,10 @@
 import { describe, test, expect } from "bun:test";
-import { JToASTParser } from "../j-parser";
-import { JToJSTranspiler, JSToJTranspiler } from "../transpilers";
-import * as runtime from "../j-runtime";
+import { CodonToASTParser } from "../codon-parser";
+import { CodonToJSCompiler, JSToCodonTranslator } from "../transpilers";
+import * as runtime from "../codon-runtime";
 import * as parser from "@babel/parser";
 
-describe("J ➔ JS: Trains (Forks & Hooks)", () => {
+describe("Codon ➔ JS: Trains (Forks & Hooks)", () => {
     test("Fork: (+/ % #) evaluates average in runtime", () => {
         const { fork, sum, tally } = runtime;
         const div = (a: number, b: number) => a / b;
@@ -25,35 +25,35 @@ describe("J ➔ JS: Trains (Forks & Hooks)", () => {
     });
 
     test("Transpiles Fork expression to JS", () => {
-        const jCode = `avg =: (fork f g h)`;
-        const astParser = new JToASTParser();
-        const ast = astParser.parse(jCode);
-        const transpiler = new JToJSTranspiler();
+        const codonCode = `avg =: (fork f g h)`;
+        const astParser = new CodonToASTParser();
+        const ast = astParser.parse(codonCode);
+        const transpiler = new CodonToJSCompiler();
         const js = transpiler.transpile(ast);
 
         expect(js).toContain("fork(f, g, h)");
     });
 
     test("Transpiles Hook expression to JS", () => {
-        const jCode = `hookFn =: (hook f g)`;
-        const astParser = new JToASTParser();
-        const ast = astParser.parse(jCode);
-        const transpiler = new JToJSTranspiler();
+        const codonCode = `hookFn =: (hook f g)`;
+        const astParser = new CodonToASTParser();
+        const ast = astParser.parse(codonCode);
+        const transpiler = new CodonToJSCompiler();
         const js = transpiler.transpile(ast);
 
         expect(js).toContain("hook(f, g)");
     });
 });
 
-describe("J ➔ JS: Folds, Scans, and Array Primitives", () => {
+describe("Codon ➔ JS: Folds, Scans, and Array Primitives", () => {
     test("Sum fold (+/) and Product fold (*/)", () => {
-        const jCode = `
+        const codonCode = `
 total =: +/ (1;2;3;4)
 prod =: */ (1;2;3;4)
 `;
-        const astParser = new JToASTParser();
-        const ast = astParser.parse(jCode);
-        const transpiler = new JToJSTranspiler();
+        const astParser = new CodonToASTParser();
+        const ast = astParser.parse(codonCode);
+        const transpiler = new CodonToJSCompiler();
         const js = transpiler.transpile(ast);
 
         expect(js).toContain("sum([1, 2, 3, 4])");
@@ -75,9 +75,9 @@ prod =: */ (1;2;3;4)
     });
 });
 
-describe("J ➔ JS: Control Structures & Classes", () => {
+describe("Codon ➔ JS: Control Structures & Classes", () => {
     test("Transpiles class with fields, constructor, methods, getters, setters", () => {
-        const jCode = `
+        const codonCode = `
 class. Counter do.
 count =: 0
 constructor. initial=0 do.
@@ -92,9 +92,9 @@ return. this.count
 end.
 end.
 `;
-        const astParser = new JToASTParser();
-        const ast = astParser.parse(jCode);
-        const transpiler = new JToJSTranspiler();
+        const astParser = new CodonToASTParser();
+        const ast = astParser.parse(codonCode);
+        const transpiler = new CodonToJSCompiler();
         const js = transpiler.transpile(ast);
 
         expect(js).toContain("class Counter {");
@@ -108,7 +108,7 @@ end.
     });
 
     test("Transpiles if-elseif-else control flow", () => {
-        const jCode = `
+        const codonCode = `
 if. (x === 1) do.
 (console.log 'one')
 elseif. (x === 2) do.
@@ -117,9 +117,9 @@ else.
 (console.log 'other')
 end.
 `;
-        const astParser = new JToASTParser();
-        const ast = astParser.parse(jCode);
-        const transpiler = new JToJSTranspiler();
+        const astParser = new CodonToASTParser();
+        const ast = astParser.parse(codonCode);
+        const transpiler = new CodonToJSCompiler();
         const js = transpiler.transpile(ast);
 
         expect(js).toContain("if (x === 1) {");
@@ -128,14 +128,14 @@ end.
     });
 
     test("Transpiles for_of loop with destructuring", () => {
-        const jCode = `
+        const codonCode = `
 for_of. [key, value] : entries do.
 (console.log key value)
 end.
 `;
-        const astParser = new JToASTParser();
-        const ast = astParser.parse(jCode);
-        const transpiler = new JToJSTranspiler();
+        const astParser = new CodonToASTParser();
+        const ast = astParser.parse(codonCode);
+        const transpiler = new CodonToJSCompiler();
         const js = transpiler.transpile(ast);
 
         expect(js).toContain("for (const [key, value] of entries) {");
@@ -143,7 +143,7 @@ end.
     });
 
     test("Transpiles try-catch-finally", () => {
-        const jCode = `
+        const codonCode = `
 try. do.
 (riskyOperation())
 catch. err do.
@@ -152,9 +152,9 @@ finally. do.
 (cleanup())
 end.
 `;
-        const astParser = new JToASTParser();
-        const ast = astParser.parse(jCode);
-        const transpiler = new JToJSTranspiler();
+        const astParser = new CodonToASTParser();
+        const ast = astParser.parse(codonCode);
+        const transpiler = new CodonToJSCompiler();
         const js = transpiler.transpile(ast);
 
         expect(js).toContain("try {");
@@ -163,20 +163,20 @@ end.
     });
 });
 
-describe("JS ➔ J ➔ JS Roundtrip Fidelity", () => {
+describe("JS ➔ Codon ➔ JS Roundtrip Fidelity", () => {
     test("Object spread and destructuring roundtrip", () => {
         const jsCode = `
 const { a, b = 1, ...rest } = options;
 const merged = { ...defaultConfig, ...options, active: true };
 `;
         const ast = parser.parse(jsCode, { sourceType: "module" });
-        const jsToJ = new JSToJTranspiler();
-        const jCode = jsToJ.transpile(ast.program as any);
+        const jsToCodon = new JSToCodonTranslator();
+        const codonCode = jsToCodon.transpile(ast.program as any);
 
-        const jToAst = new JToASTParser();
-        const jAst = jToAst.parse(jCode);
-        const jToJs = new JToJSTranspiler();
-        const roundtripped = jToJs.transpile(jAst);
+        const codonToAst = new CodonToASTParser();
+        const codonAst = codonToAst.parse(codonCode);
+        const codonToJs = new CodonToJSCompiler();
+        const roundtripped = codonToJs.transpile(codonAst);
 
         expect(() => parser.parse(roundtripped, { sourceType: "module" })).not.toThrow();
         expect(roundtripped).toContain("const {");
@@ -191,13 +191,13 @@ async function fetchUser(id) {
 }
 `;
         const ast = parser.parse(jsCode, { sourceType: "module" });
-        const jsToJ = new JSToJTranspiler();
-        const jCode = jsToJ.transpile(ast.program as any);
+        const jsToCodon = new JSToCodonTranslator();
+        const codonCode = jsToCodon.transpile(ast.program as any);
 
-        const jToAst = new JToASTParser();
-        const jAst = jToAst.parse(jCode);
-        const jToJs = new JToJSTranspiler();
-        const roundtripped = jToJs.transpile(jAst);
+        const codonToAst = new CodonToASTParser();
+        const codonAst = codonToAst.parse(codonCode);
+        const codonToJs = new CodonToJSCompiler();
+        const roundtripped = codonToJs.transpile(codonAst);
 
         expect(() => parser.parse(roundtripped, { sourceType: "module" })).not.toThrow();
         expect(roundtripped).toContain("async function fetchUser(id)");
@@ -205,15 +205,15 @@ async function fetchUser(id) {
     });
 });
 
-describe("J ➔ JS: Lists, Order of Operations & Average", () => {
-    test("ARCHIVE/average.j: Transpiles average function and vector correctly", () => {
-        const jCode = `
+describe("Codon ➔ JS: Lists, Order of Operations & Average", () => {
+    test("ARCHIVE/average.cdn: Transpiles average function and vector correctly", () => {
+        const codonCode = `
 numbers = 1 2 3 4 5
 average = +/ numbers % #numbers
 `;
-        const astParser = new JToASTParser();
-        const ast = astParser.parse(jCode);
-        const transpiler = new JToJSTranspiler();
+        const astParser = new CodonToASTParser();
+        const ast = astParser.parse(codonCode);
+        const transpiler = new CodonToJSCompiler();
         const js = transpiler.transpile(ast);
 
         expect(js).toContain("const numbers = [1, 2, 3, 4, 5];");
@@ -230,17 +230,17 @@ average = +/ numbers % #numbers
         expect(result.average).toBe(3);
     });
 
-    test("J Space-Separated Numeric Vectors & Negative Sign _", () => {
-        const jCode = `
+    test("Codon Space-Separated Numeric Vectors & Negative Sign _", () => {
+        const codonCode = `
 integers = 10 20 30 40
 negatives = _1 _2 3 _4
 floats = 1.5 2.5 3.5
 mixed = _ 10 20
 singleNeg = _42
 `;
-        const astParser = new JToASTParser();
-        const ast = astParser.parse(jCode);
-        const transpiler = new JToJSTranspiler();
+        const astParser = new CodonToASTParser();
+        const ast = astParser.parse(codonCode);
+        const transpiler = new CodonToJSCompiler();
         const js = transpiler.transpile(ast);
 
         expect(js).toContain("const integers = [10, 20, 30, 40];");
@@ -250,22 +250,22 @@ singleNeg = _42
         expect(js).toContain("const singleNeg = -42;");
     });
 
-    test("J Right-to-Left Order of Operations (No Operator Precedence)", () => {
-        const jCode = `
+    test("Codon Right-to-Left Order of Operations (No Operator Precedence)", () => {
+        const codonCode = `
 res1 = 2 * 3 + 4
 res2 = 10 - 4 - 3
 res3 = 20 % 2 + 3
 res4 = 10 - 5 - 2
 `;
-        const astParser = new JToASTParser();
-        const ast = astParser.parse(jCode);
-        const transpiler = new JToJSTranspiler();
+        const astParser = new CodonToASTParser();
+        const ast = astParser.parse(codonCode);
+        const transpiler = new CodonToJSCompiler();
         const js = transpiler.transpile(ast);
 
-        // In J: 2 * (3 + 4) = 14
-        // In J: 10 - (4 - 3) = 9
-        // In J: 20 % (2 + 3) = 20 / 5 = 4
-        // In J: 10 - (5 - 2) = 7
+        // In Codon: 2 * (3 + 4) = 14
+        // In Codon: 10 - (4 - 3) = 9
+        // In Codon: 20 % (2 + 3) = 20 / 5 = 4
+        // In Codon: 10 - (5 - 2) = 7
         const fn = new Function(`${js}; return { res1, res2, res3, res4 };`);
         const result = fn();
         expect(result.res1).toBe(14);
@@ -274,17 +274,17 @@ res4 = 10 - 5 - 2
         expect(result.res4).toBe(7);
     });
 
-    test("J Monadic Verbs: Tally (#), Reciprocal (%), Sqrt (%:), Abs (|)", () => {
-        const jCode = `
+    test("Codon Monadic Verbs: Tally (#), Reciprocal (%), Sqrt (%:), Abs (|)", () => {
+        const codonCode = `
 len1 = # numbers
 len2 = # (10;20;30)
 recip = % 4
 sq = %: 25
 ab = | _10
 `;
-        const astParser = new JToASTParser();
-        const ast = astParser.parse(jCode);
-        const transpiler = new JToJSTranspiler();
+        const astParser = new CodonToASTParser();
+        const ast = astParser.parse(codonCode);
+        const transpiler = new CodonToJSCompiler();
         const js = transpiler.transpile(ast);
 
         expect(js).toContain("const len1 = numbers.length;");

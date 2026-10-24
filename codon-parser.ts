@@ -34,16 +34,16 @@ import type {
     JSXExpressionContainer,
     JSXText,
     JSXIdentifier,
-    JTrainExpression,
-    JFoldExpression,
-    JRankExpression,
+    CodonTrainExpression,
+    CodonFoldExpression,
+    CodonRankExpression,
     RestElement,
     ObjectPattern,
     ArrayPattern,
     AssignmentPattern,
 } from "./types";
 
-export function splitJStatements(code: string): string[] {
+export function splitCodonStatements(code: string): string[] {
     const statements: string[] = [];
     let current = "";
     let parenDepth = 0;
@@ -250,10 +250,10 @@ export function isFullyWrapped(
     return d === 0;
 }
 
-export class JToASTParser {
+export class CodonToASTParser {
     public parse(code: string): Program {
         const normalized = code.replace(/\r\n/g, "\n");
-        const blocks = splitJStatements(normalized);
+        const blocks = splitCodonStatements(normalized);
         const body: Node[] = [];
 
         for (let idx = 0; idx < blocks.length; idx++) {
@@ -343,7 +343,7 @@ export class JToASTParser {
     }
 
     public parseBlock(bodyStr: string): BlockStatement {
-        const stmts = splitJStatements(bodyStr);
+        const stmts = splitCodonStatements(bodyStr);
         const body: Node[] = [];
         for (const s of stmts) {
             const stmt = this.parseStatement(s);
@@ -540,12 +540,12 @@ export class JToASTParser {
 
         // Switch / Select: select. disc case. val do. ... else. do. ... end.
         if (stmt.startsWith("select.")) {
-            const lines = splitJStatements(stmt);
+            const lines = splitCodonStatements(stmt);
             if (stmt.endsWith("end.")) {
                 const firstNl = stmt.indexOf("\n");
                 const discStr = stmt.substring("select.".length, firstNl).trim();
                 const innerCases = stmt.substring(firstNl + 1, stmt.length - 4).trim();
-                const caseBlocks = splitJStatements(innerCases);
+                const caseBlocks = splitCodonStatements(innerCases);
                 const cases: SwitchCase[] = [];
                 for (const cb of caseBlocks) {
                     if (cb.startsWith("case.")) {
@@ -724,7 +724,7 @@ export class JToASTParser {
     }
 
     private parseClassBody(bodyStr: string): ClassBody {
-        const statements = splitJStatements(bodyStr);
+        const statements = splitCodonStatements(bodyStr);
         const body: (MethodDefinition | PropertyDefinition)[] = [];
 
         for (const s of statements) {
@@ -993,7 +993,7 @@ export class JToASTParser {
         // Tier 2: Logical AND: && (left-associative: pick rightmost)
         // Tier 3: Equality: ===, !==, ==, != (left-associative: pick rightmost)
         // Tier 4: Relational: <=, >=, <, > (left-associative: pick rightmost)
-        // Tier 5: J Arithmetic Verbs: +, -, *, /, %, | (strictly right-to-left evaluation: pick leftmost!)
+        // Tier 5: Codon Arithmetic Verbs: +, -, *, /, %, | (strictly right-to-left evaluation: pick leftmost!)
 
         const tiers = [
             { ops: ["="], rightAssoc: true },
@@ -1024,9 +1024,9 @@ export class JToASTParser {
                         if (str.startsWith(op, i)) {
                             // A binary operator cannot have an empty left operand
                             if (str.substring(0, i).trim().length === 0) continue;
-                            // An operator immediately followed by J adverb / or \ is a fold/scan
+                            // An operator immediately followed by Codon adverb / or \ is a fold/scan
                             if (str[i + op.length] === "/" || str[i + op.length] === "\\") continue;
-                            // Boundary checks: do not match inside larger operators or J adverbs
+                            // Boundary checks: do not match inside larger operators or Codon adverbs
                             if (op === "=") {
                                 if (i > 0 && (str[i - 1] === "=" || str[i - 1] === "!" || str[i - 1] === "<" || str[i - 1] === ">")) continue;
                                 if (str[i + 1] === "=" || str[i + 1] === ":" || str[i + 1] === ".") continue;
@@ -1046,7 +1046,7 @@ export class JToASTParser {
                                 if (str[i + 1] === "/" || str[i + 1] === ".") continue;
                             }
 
-                            // For right-associative (Tier 0 '=' and Tier 5 J verbs): pick FIRST occurrence
+                            // For right-associative (Tier 0 '=' and Tier 5 Codon verbs): pick FIRST occurrence
                             if (tier.rightAssoc) {
                                 if (matchIdx === -1) {
                                     matchIdx = i;
@@ -1081,9 +1081,9 @@ export class JToASTParser {
                         right: this.parseExpression(rightStr),
                     };
                 } else {
-                    // Map J primitive verbs to JS operators:
-                    // In J, % is division (/ in JS)
-                    // In J, | is residue/modulo (% in JS)
+                    // Map Codon primitive verbs to JS operators:
+                    // In Codon, % is division (/ in JS)
+                    // In Codon, | is residue/modulo (% in JS)
                     let jsOp = matchedOp;
                     if (matchedOp === "%") jsOp = "/";
                     else if (matchedOp === "|") jsOp = "%";
@@ -1173,11 +1173,11 @@ export class JToASTParser {
             }
         }
 
-        // J Numeric Vector: 1 2 3 4 5 or _1 2 3
+        // Codon Numeric Vector: 1 2 3 4 5 or _1 2 3
         const vecNode = this.parseNumericVector(strippedExpr);
         if (vecNode) return vecNode;
 
-        // Single J numbers with negative sign _ or infinity
+        // Single Codon numbers with negative sign _ or infinity
         if (strippedExpr === "_") {
             return { type: "Identifier", name: "Infinity" };
         }
@@ -1197,7 +1197,7 @@ export class JToASTParser {
         const binNode = this.parseBinaryOrAssignment(strippedExpr);
         if (binNode) return binNode;
 
-        // Monadic J verbs: #, %, %:, |, +/, */
+        // Monadic Codon verbs: #, %, %:, |, +/, */
         if (strippedExpr === "#") return { type: "Identifier", name: "tally" };
         if (strippedExpr === "+/") return { type: "Identifier", name: "sum" };
         if (strippedExpr === "*/") return { type: "Identifier", name: "product" };
@@ -1377,7 +1377,7 @@ export class JToASTParser {
             return { type: "ObjectExpression", properties };
         }
 
-        // J Rank Operator: (verb) "0 target at depth 0
+        // Codon Rank Operator: (verb) "0 target at depth 0
         const rankParts = splitAtLevel(strippedExpr, '"0');
         if (rankParts.length === 2 && rankParts[0].startsWith("(") && rankParts[0].endsWith(")")) {
             const verbNode = this.parseExpression(rankParts[0].slice(1, -1).trim());
@@ -1394,7 +1394,7 @@ export class JToASTParser {
             };
         }
 
-        // J Fold / Reduction: +/ arr, */ arr
+        // Codon Fold / Reduction: +/ arr, */ arr
         const foldMatch = strippedExpr.match(/^([+*<>|%a-zA-Z0-9_.]+)\/\s+([\s\S]*)$/);
         if (foldMatch) {
             const verbStr = foldMatch[1];
@@ -1426,25 +1426,25 @@ export class JToASTParser {
                 };
             }
             return {
-                type: "JFoldExpression",
+                type: "CodonFoldExpression",
                 verb: { type: "Identifier", name: verbStr },
                 target: targetNode,
                 scan: false,
             };
         }
 
-        // J Scan: +\ arr
+        // Codon Scan: +\ arr
         const scanMatch = strippedExpr.match(/^([+*<>|%a-zA-Z0-9_.]+)\\\s+([\s\S]*)$/);
         if (scanMatch) {
             return {
-                type: "JFoldExpression",
+                type: "CodonFoldExpression",
                 verb: { type: "Identifier", name: scanMatch[1] },
                 target: this.parseExpression(scanMatch[2]),
                 scan: true,
             };
         }
 
-        // Function Calls, New, or J Verb Trains (Forks & Hooks)
+        // Function Calls, New, or Codon Verb Trains (Forks & Hooks)
         if (wasWrapped) {
             const spaceParts = splitAtLevel(strippedExpr, " ");
             if (spaceParts.length > 1) {
@@ -1458,21 +1458,21 @@ export class JToASTParser {
 
                 if (spaceParts[0] === "fork" && spaceParts.length === 4) {
                     return {
-                        type: "JTrainExpression",
+                        type: "CodonTrainExpression",
                         kind: "fork",
                         verbs: spaceParts.slice(1).map((p) => this.parseExpression(p)),
                     };
                 }
                 if (spaceParts[0] === "hook" && spaceParts.length === 3) {
                     return {
-                        type: "JTrainExpression",
+                        type: "CodonTrainExpression",
                         kind: "hook",
                         verbs: spaceParts.slice(1).map((p) => this.parseExpression(p)),
                     };
                 }
 
-                // Known J verbs for tacit trains
-                const jVerbs = new Set([
+                // Known Codon verbs for tacit trains
+                const codonVerbs = new Set([
                     "+", "-", "*", "%", "^", "|", "<", ">", "=", "~:",
                     "{.", "}.", "{:", ":}", ",", ";,", "#", "$", "i.",
                     "|:", "/:", "\\:", "+/", "*/", "+./", "*./", ">./", "<./"
@@ -1480,14 +1480,14 @@ export class JToASTParser {
 
                 // Fork check: 3 verbs where none are string/object literals or member calls
                 const isFork = spaceParts.length === 3 &&
-                    (jVerbs.has(spaceParts[1]) || (jVerbs.has(spaceParts[0]) && jVerbs.has(spaceParts[2]))) &&
+                    (codonVerbs.has(spaceParts[1]) || (codonVerbs.has(spaceParts[0]) && codonVerbs.has(spaceParts[2]))) &&
                     !spaceParts[0].includes(".") &&
                     !spaceParts[1].startsWith("'") &&
                     !spaceParts[2].startsWith("'");
 
                 if (isFork) {
                     return {
-                        type: "JTrainExpression",
+                        type: "CodonTrainExpression",
                         kind: "fork",
                         verbs: spaceParts.map((p) => this.parseExpression(p)),
                     };
@@ -1495,12 +1495,12 @@ export class JToASTParser {
 
                 // Hook check: 2 verbs
                 const isHook = spaceParts.length === 2 &&
-                    jVerbs.has(spaceParts[0]) &&
-                    jVerbs.has(spaceParts[1]);
+                    codonVerbs.has(spaceParts[0]) &&
+                    codonVerbs.has(spaceParts[1]);
 
                 if (isHook) {
                     return {
-                        type: "JTrainExpression",
+                        type: "CodonTrainExpression",
                         kind: "hook",
                         verbs: spaceParts.map((p) => this.parseExpression(p)),
                     };
@@ -1827,3 +1827,5 @@ export class JToASTParser {
         return children;
     }
 }
+
+export { CodonToASTParser as CodonParser };

@@ -74,9 +74,9 @@ export type Node =
     | ArrayPattern
     | AssignmentPattern
     | RestElement
-    | JTrainExpression
-    | JFoldExpression
-    | JRankExpression;
+    | CodonTrainExpression
+    | CodonFoldExpression
+    | CodonRankExpression;
 
 export interface Program {
     type: "Program";
@@ -546,22 +546,22 @@ export interface RestElement {
     argument: Node;
 }
 
-// J Specific AST extensions
-export interface JTrainExpression {
-    type: "JTrainExpression";
+// Codon Specific AST extensions
+export interface CodonTrainExpression {
+    type: "CodonTrainExpression";
     kind: "fork" | "hook";
     verbs: Node[];
 }
 
-export interface JFoldExpression {
-    type: "JFoldExpression";
+export interface CodonFoldExpression {
+    type: "CodonFoldExpression";
     verb: Node;
     target: Node;
     scan?: boolean;
 }
 
-export interface JRankExpression {
-    type: "JRankExpression";
+export interface CodonRankExpression {
+    type: "CodonRankExpression";
     verb: Node;
     rank: number | string;
     target: Node;

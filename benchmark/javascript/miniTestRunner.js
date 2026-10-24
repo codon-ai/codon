@@ -32,7 +32,7 @@ export function expect(actual) {
     },
   };
 };
-const export const suite = new TestSuite();
+export const suite = new TestSuite();
 suite.test("math addition", () => {
   expect(1 + 1).toBe(2);
 });

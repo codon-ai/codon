@@ -1,5 +1,5 @@
 /**
- * J-Runtime: Lightweight combinators and array primitives supporting J semantics in JavaScript.
+ * Codon-Runtime: Lightweight combinators and array primitives supporting Codon semantics in JavaScript.
  */
 
 // --- Combinators (Trains) ---
@@ -182,10 +182,10 @@ export function gradeDown(target: any[]): number[] {
 }
 
 export function box(val: any): any {
-    return { __j_box__: true, value: val };
+    return { __codon_box__: true, value: val };
 }
 
 export function open(val: any): any {
-    if (val && typeof val === "object" && val.__j_box__) return val.value;
+    if (val && typeof val === "object" && val.__codon_box__) return val.value;
     return val;
 }

@@ -1,4 +1,14 @@
 {
+  "name": "codon",
+  "version": "0.1.0",
+  "description": "Codon compiler and translator for JavaScript",
+  "main": "cli.ts",
+  "scripts": {
+    "test": "bun test",
+    "compile": "bun run cli.ts compile",
+    "translate": "bun run cli.ts translate",
+    "verify": "bun run cli.ts verify"
+  },
   "dependencies": {
     "@babel/generator": "^8.0.6",
     "@babel/parser": "^8.0.8",
