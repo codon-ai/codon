@@ -4,8 +4,8 @@ wss =: (new WebSocketServer O(port:8081))
 
 subscriptions =: (new Map)
 
-(wss.on 'connection' ({{ NB. pB|ws
-(ws.on 'message' ({{ NB. pB|raw
+(wss.on 'connection' {{ws => do.
+(ws.on 'message' {{raw => do.
 try. do.
 msg =: (JSON.parse raw.toString())
 {type,channel,data} =: msg
@@ -27,10 +27,10 @@ end.
 catch. err do.
 (ws.send (JSON.stringify O(error:'Invalid message payload')))
 end.
-}}))
-(ws.on 'close' ({{ NB. pB|
+}})
+(ws.on 'close' {{ => do.
 for_of. clients : subscriptions.values() do.
 (clients.delete ws)
 end.
-}}))
-}}))
+}})
+}})

@@ -284,15 +284,18 @@ export class JSToCodonTranslator {
 
             case "FunctionExpression": {
                 const feParams = node.params.map((p) => this.transpilePattern(p)).join(",");
-                const asyncPrefix = node.async ? "async " : "";
-                return `({{ NB. ${asyncPrefix}FE|${feParams}\n${this.transpile(node.body)}\n}})`;
+                const fnHeader = node.async ? (feParams ? `async fn ${feParams}` : "async fn") : (feParams ? `fn ${feParams}` : "fn");
+                return `{{${fnHeader} => do.\n${this.transpile(node.body)}\n}}`;
             }
 
             case "ArrowFunctionExpression": {
                 const pStr = node.params.map((p) => this.transpilePattern(p)).join(",");
                 const isBlock = node.body.type === "BlockStatement";
-                const asyncPrefix = node.async ? "async " : "";
-                return `({{ NB. ${asyncPrefix}${isBlock ? "pB" : "pE"}|${pStr}\n${this.transpile(node.body)}\n}})`;
+                const pHeader = node.async ? (pStr ? `async ${pStr}` : "async") : pStr;
+                if (isBlock) {
+                    return `{{${pHeader} => do.\n${this.transpile(node.body)}\n}}`;
+                }
+                return `{{${pHeader} => ${this.transpile(node.body)}}}`;
             }
 
             case "ThisExpression":
@@ -322,9 +325,9 @@ export class JSToCodonTranslator {
                 if (p.method) {
                     const fnVal = p.value;
                     const pStr = fnVal.params.map((param: any) => this.transpilePattern(param)).join(",");
-                    const asyncPrefix = fnVal.async ? "async " : "";
+                    const fnHeader = fnVal.async ? (pStr ? `async fn ${pStr}` : "async fn") : (pStr ? `fn ${pStr}` : "fn");
                     const formattedKey = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(keyStr) ? keyStr : `'${keyStr}'`;
-                    return `${formattedKey}:({{ NB. ${asyncPrefix}method|${pStr}\n${this.transpile(fnVal.body)}\n}})`;
+                    return `${formattedKey}:{{${fnHeader} => do.\n${this.transpile(fnVal.body)}\n}}`;
                 }
                 if (p.shorthand || (p.key.type === "Identifier" && p.value.type === "Identifier" && p.key.name === p.value.name)) {
                     return keyStr;
@@ -337,9 +340,9 @@ export class JSToCodonTranslator {
                 const p = node as any;
                 const keyStr = p.key.type === "Identifier" ? p.key.name : String(p.key.value ?? this.transpile(p.key));
                 const pStr = p.params.map((param: any) => this.transpilePattern(param)).join(",");
-                const asyncPrefix = p.async ? "async " : "";
+                const fnHeader = p.async ? (pStr ? `async fn ${pStr}` : "async fn") : (pStr ? `fn ${pStr}` : "fn");
                 const formattedKey = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(keyStr) ? keyStr : `'${keyStr}'`;
-                return `${formattedKey}:({{ NB. ${asyncPrefix}method|${pStr}\n${this.transpile(p.body)}\n}})`;
+                return `${formattedKey}:{{${fnHeader} => do.\n${this.transpile(p.body)}\n}}`;
             }
 
             case "SpreadElement":

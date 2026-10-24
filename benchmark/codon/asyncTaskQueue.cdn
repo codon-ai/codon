@@ -6,8 +6,8 @@ constructor. concurrency do.
 (this.concurrency = concurrency)
 end.
 method. add task do.
-return. (new Promise ({{ NB. pB|resolve,reject
-run =: ({{ NB. async pB|
+return. (new Promise {{resolve,reject => do.
+run =: {{async => do.
 (this.activeCount++)
 try. do.
 (resolve (@ task()))
@@ -20,13 +20,13 @@ if. next do.
 next()
 end.
 end.
-}})
+}}
 if. (this.activeCount < this.concurrency) do.
 run()
 else.
 (this.queue.push run)
 end.
-}}))
+}})
 end.
 get. pending do.
 return. this.queue.length
@@ -35,17 +35,11 @@ end.
 
 queue =: (new AsyncTaskQueue 2)
 
-delay =: ({{ NB. pE|ms
-(new Promise ({{ NB. pE|resolve
-(setTimeout resolve ms)
-}}))
-}})
+delay =: {{ms => (new Promise {{resolve => (setTimeout resolve ms)}})}}
 
-tasks =: ((1;2;3;4).map ({{ NB. pE|id
-(queue.add ({{ NB. async pB|
+tasks =: ((1;2;3;4).map {{id => (queue.add {{async => do.
 @ (delay 50)
 return. `Task ${id} done`
-}}))
-}}))
+}})}})
 
 ((Promise.all tasks).then console.log)

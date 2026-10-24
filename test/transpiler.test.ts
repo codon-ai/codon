@@ -595,4 +595,143 @@ const payload = { channel, data, status: 200, ...metadata };
     });
 });
 
+describe("Concise Direct Definition (Arrow & Anonymous Functions) Support", () => {
+    test("Transpiles concise arrow expressions {{params => expr}} to JS", () => {
+        const codonCode = `
+double =: {{x => (x * 2)}}
+add =: {{a, b => (a + b)}}
+constant =: {{=> 42}}
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("x => x * 2");
+        expect(js).toContain("(a, b) => a + b");
+        expect(js).toContain("() => 42");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles concise block arrow functions {{params => do. ... }} to JS", () => {
+        const codonCode = `
+processItem =: {{x => do.
+(console.log x)
+return. (x + 1)
+}}
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("console.log(x)");
+        expect(js).toContain("return x + 1");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles async arrow functions {{async params => expr}} and block forms", () => {
+        const codonCode = `
+fetchData =: {{async url => @ (fetch url)}}
+delayTask =: {{async ms => do.
+@ (delay ms)
+return. 1
+}}
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("async url => await fetch(url)");
+        expect(js).toContain("await delay(ms)");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles anonymous function expressions {{fn params => do. ... }} to JS", () => {
+        const codonCode = `
+handler =: {{fn req, res => do.
+(res.json O(ok:true))
+}}
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("function (req, res)");
+        expect(js).toContain("ok: true");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles arrow function with pattern destructuring", () => {
+        const codonCode = `
+calc =: {{[x, y] => (x * y)}}
+getName =: {{({name}) => name}}
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("([x, y]) => x * y");
+        expect(js).toContain("name");
+        expect(js).toContain("=> name");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips JS arrow functions and anonymous function expressions", () => {
+        const jsCode = `
+const double = x => x * 2;
+const add = (a, b) => a + b;
+const run = async () => {
+  await delay(10);
+  return 42;
+};
+const handler = function (req, res) {
+  res.json({ ok: true });
+};
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("{{x => (x * 2)}}");
+        expect(codonCode).toContain("{{a,b => (a + b)}}");
+        expect(codonCode).toContain("{{async => do.");
+        expect(codonCode).toContain("{{fn req,res => do.");
+        expect(codonCode).not.toContain("NB. pE|");
+        expect(codonCode).not.toContain("NB. pB|");
+        expect(codonCode).not.toContain("NB. FE|");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+        expect(roundtrippedJs).toContain("x => x * 2");
+        expect(roundtrippedJs).toContain("(a, b) => a + b");
+        expect(roundtrippedJs).toContain("function (req, res)");
+    });
+
+    test("Retains backward compatibility with legacy NB. pE| and NB. pB| forms", () => {
+        const codonCode = `
+delay =: ({{ NB. pE|ms
+(new Promise ({{ NB. pE|resolve
+(setTimeout resolve ms)
+}}))
+}})
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("ms => new Promise");
+        expect(js).toContain("setTimeout(resolve, ms)");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+});
+
 

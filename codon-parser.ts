@@ -1421,6 +1421,73 @@ export class CodonToASTParser {
         // Direct Definition: {{ ... }}
         if (strippedExpr.startsWith("{{") && strippedExpr.endsWith("}}")) {
             const inner = strippedExpr.slice(2, -2).trim();
+
+            // Concise Arrow / Direct Definition: {{ [async] [fn] [params] => [do.] body [end.] }}
+            const arrowSplit = splitFirstAtLevel(inner, "=>");
+            if (arrowSplit) {
+                const [leftPart, rightPart] = arrowSplit;
+                let rawLeft = leftPart.trim();
+                let isAsync = false;
+                let isFunctionExpr = false;
+
+                if (rawLeft.startsWith("async ") || rawLeft === "async") {
+                    isAsync = true;
+                    rawLeft = rawLeft.startsWith("async ") ? rawLeft.slice(6).trim() : "";
+                }
+
+                if (rawLeft.startsWith("fn ") || rawLeft === "fn") {
+                    isFunctionExpr = true;
+                    rawLeft = rawLeft.startsWith("fn ") ? rawLeft.slice(3).trim() : "";
+                } else if (rawLeft.startsWith("function ") || rawLeft === "function") {
+                    isFunctionExpr = true;
+                    rawLeft = rawLeft.startsWith("function ") ? rawLeft.slice(9).trim() : "";
+                }
+
+                if (rawLeft.startsWith("(") && rawLeft.endsWith(")")) {
+                    rawLeft = rawLeft.slice(1, -1).trim();
+                }
+
+                const params = rawLeft ? this.parseParamList(rawLeft) : [];
+                let bodyStr = rightPart.trim();
+
+                let isBlock = false;
+                if (bodyStr.startsWith("do.")) {
+                    isBlock = true;
+                    bodyStr = bodyStr.slice(3).trim();
+                } else if (
+                    bodyStr.startsWith("return.") ||
+                    bodyStr.startsWith("throw.") ||
+                    bodyStr.startsWith("if.") ||
+                    bodyStr.startsWith("for_of.") ||
+                    bodyStr.startsWith("for.") ||
+                    bodyStr.startsWith("while.") ||
+                    bodyStr.startsWith("try.") ||
+                    splitCodonStatements(bodyStr).length > 1
+                ) {
+                    isBlock = true;
+                }
+
+                if (isFunctionExpr) {
+                    return {
+                        type: "FunctionExpression",
+                        id: null,
+                        params,
+                        body: isBlock ? this.parseBlock(bodyStr) : {
+                            type: "BlockStatement",
+                            body: [{ type: "ReturnStatement", argument: this.parseExpression(bodyStr) }],
+                        },
+                        async: isAsync,
+                    };
+                }
+
+                return {
+                    type: "ArrowFunctionExpression",
+                    params,
+                    body: isBlock ? this.parseBlock(bodyStr) : this.parseExpression(bodyStr),
+                    async: isAsync,
+                };
+            }
+
             const nlIdx = inner.indexOf("\n");
             const firstLine = nlIdx !== -1 ? inner.substring(0, nlIdx).trim() : inner;
             const bodyStr = nlIdx !== -1 ? inner.substring(nlIdx + 1).trim() : "";

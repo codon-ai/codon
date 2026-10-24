@@ -19,34 +19,34 @@ end.
 
 NB. export
 {{ NB. FD|expect|actual
-return. O(toBe:({{ NB. method|expected
+return. O(toBe:{{fn expected => do.
 if. (actual !== expected) do.
 throw. (new Error `Expected ${expected}, but received ${actual}`)
 end.
-}});toEqual:({{ NB. method|expected
+}};toEqual:{{fn expected => do.
 if. ((JSON.stringify actual) !== (JSON.stringify expected)) do.
 throw. (new Error `Expected ${(JSON.stringify expected)}, but got ${(JSON.stringify actual)}`)
 end.
-}}))
+}})
 }}
 
 NB. export
 suite =: (new TestSuite)
 
-(suite.test 'math addition' ({{ NB. pB|
+(suite.test 'math addition' {{ => do.
 ((expect (1 + 1)).toBe 2)
-}}))
+}})
 
-(suite.test 'async resolving value' ({{ NB. async pB|
+(suite.test 'async resolving value' {{async => do.
 value =: @ (Promise.resolve 'hello')
 ((expect value).toBe 'hello')
-}}))
+}})
 
-((suite.run()).then ({{ NB. pB|results
+((suite.run()).then {{results => do.
 for_of. r : results do.
 (console.log `${(r.passed ? '✓ PASS' : '✗ FAIL')}: ${r.name}`)
 if. r.error do.
 (console.error '  ' r.error)
 end.
 end.
-}}))
+}})
