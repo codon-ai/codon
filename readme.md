@@ -6,28 +6,34 @@ This project uses an Abstract Syntax Tree (AST) approach to guarantee structural
 
 ## Features
 
-- **Bidirectional Compilation**: Convert `.j` files to `.js` and vice versa.
-- **AST-Based**: Uses standard ESTree interfaces, mapping them to Babel's AST for reliable code generation.
-- **Advanced J Syntax Support**:
-    - Direct Definition Functions (`{{ ... }}`)
-    - Implicit map calls (`(...) "0 array`)
-    - Object literals (`O(...)`)
-    - Top-level local and global assignments (`=:`)
-- **React/JSX Ready**: Designed with hooks to eventually lower and support JSX and React idioms.
+- **Bidirectional Compilation**: Convert `.j` files to `.js` and vice versa with round-trip fidelity.
+- **J Array Strengths Translated to JS**:
+  - Tacit Trains: Forks `(fork f g h)` / `(f g h)` and Hooks `(hook f g)` / `(f g)`
+  - Folds & Scans: Sum reduction `+/`, product reduction `*/`, scans `+\`, `fold`, `scan`
+  - Array Primitives: `tally`, `range`, `head`, `tail`, `behead`, `curtail`, `take`, `drop`, `from`, `gradeUp`, `gradeDown`
+  - Compact Direct Definition Functions (`{{ ... }}`) with parameters & default arguments
+  - Full J Control Structures: `if. / elseif. / else. / end.`, `for_of.`, `for_in.`, `for.`, `while.`, `whilst.`, `try. / catch. / finally.`, `select. / case.`, `throw.`, `return.`
+- **Modern JavaScript Expressed in J**:
+  - ES6 Classes: `class. Name [extends Super] do. ... end.`, fields, constructors with defaults, methods, async methods, getters, setters
+  - Object & Array Destructuring: `[a, b, ...rest] =: list`, `{a, b: alias, c = default} =: obj`
+  - Object & Array Spread: `O('...'; obj; 'prop'; val)`, `[...a, ...b]`
+  - Optional Chaining: `obj?.prop`, `obj?.[key]`, `fn?.(args)`
+  - Async / Await & Promises
+  - Node Packages & Modules: ES Module imports/exports, namespaced imports, `require`
+  - React & JSX support
+- **Lightweight Zero-Dependency Runtime (`j-runtime.ts`)**:
+  - Implements J combinators (`fork`, `hook`, `atop`, `rank`) and array verbs for running J idioms natively in JavaScript environments.
 
 ## Prerequisites
 
-- [Bun](https://bun.sh/) (or `ts-node` / Node.js)
-- Dependencies: `@babel/parser`, `@babel/generator`
+- [Bun](https://bun.sh/) (or Node.js / `ts-node`)
+- Dependencies: `@babel/parser`, `@babel/generator`, `@babel/types`
 
 ```bash
-# Install dependencies
-bun add @babel/parser @babel/generator
+bun install
 ```
 
 ## Usage
-
-The project includes a unified CLI tool for translating files in either direction.
 
 ### Transpile J to JavaScript (`j2js`)
 
@@ -35,7 +41,6 @@ Converts a `.j` file into standard JavaScript:
 
 ```bash
 bun run cli.ts j2js path/to/file.j
-
 ```
 
 _Output: Generates `path/to/file.js` in the same directory._
@@ -46,28 +51,36 @@ Parses a `.js` (or `.jsx`) file and emits `J` notation:
 
 ```bash
 bun run cli.ts js2j path/to/file.js
-
 ```
 
 _Output: Generates `path/to/file.j` in the same directory._
+
+### Verify Benchmark Suite (`verify`)
+
+Runs round-trip transpilation (`JS ➔ J ➔ JS ➔ Babel AST Validation`) on all 11 benchmark suites:
+
+```bash
+bun run cli.ts verify
+```
+
+### Run Unit Tests
+
+```bash
+bun test
+```
 
 ## Architecture
 
 The project is split into modular components:
 
-- **`cli.ts`**: The command-line entry point. Handles file I/O, parsing arguments, and routing to the correct transpiler.
-- **`j-parser.ts`**: A custom recursive-descent parser that tokenizes and parses `J` notation into a standard ESTree-compatible Abstract Syntax Tree.
+- **`cli.ts`**: The command-line entry point. Handles file I/O, argument parsing, single-file transpilation, and benchmark suite verification.
+- **`j-parser.ts`**: Recursive-descent parser that tokenizes and parses `J` notation, control structures, tacit trains, classes, and pattern destructuring into an ESTree-compatible Abstract Syntax Tree.
 - **`transpilers.ts`**:
-- `JSToJTranspiler`: Walks a JavaScript AST and emits `J` code.
-- `JToJSTranspiler`: Converts our generated ESTree AST into Babel's specific AST format, then uses `@babel/generator` to safely emit formatted, properly-parenthesized JavaScript.
-
-- **`types.ts`**: Type definitions for the AST nodes, ensuring exhaustive checks during the transpilation steps.
-
-## Known Limitations & Roadmap
-
-- **Pattern Matching**: Destructuring assignment (`const { a, b } = c`) and Array patterns are currently placeholders and require further lowering logic.
-- **JSX Encapsulation**: Complete mapping of `JSXElement` nodes into `React.createElement` (or direct J-equivalents) is planned for the next release.
-- **Binary/Logical Operators**: Basic support is implemented, but complex precedence chains are deferred to the Babel generator on the JS side.
+  - `JSToJTranspiler`: Walks modern JavaScript/JSX AST and emits concise, expressive `J` notation.
+  - `JToJSTranspiler`: Converts generated AST into normalized Babel AST nodes, mapping tacit trains and J verbs, then uses `@babel/generator` to safely emit formatted JavaScript.
+- **`types.ts`**: Comprehensive TypeScript definitions for all supported AST nodes.
+- **`j-runtime.ts`**: Zero-dependency library of combinators and array primitives supporting J semantics in JavaScript.
+- **`benchmark/`**: 11 realistic benchmark suites spanning backend servers, async task queues, reactive state machines, test runners, CLI scanners, and React apps in both JS and J.
 
 ## License
 

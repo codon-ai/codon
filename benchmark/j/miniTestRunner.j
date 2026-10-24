@@ -1,0 +1,52 @@
+class. TestSuite do.
+tests =: (0$0)
+method. test name,fn do.
+(this.tests.push O('name';name;'fn';fn))
+end.
+async_method. run  do.
+results =: (0$0)
+for_of. {name,fn} : this.tests do.
+try. do.
+(await fn())
+(results.push O('name';name;'passed';true))
+catch. error do.
+(results.push O('name';name;'passed';false;'error';error))
+end.
+end.
+return. results
+end.
+end.
+
+NB. export
+{{ NB. FD|expect|actual
+return. O('toBe';({{ NB. method|expected
+if. (actual !== expected) do.
+throw. (new Error `Expected ${expected}, but received ${actual}`)
+end.
+}});'toEqual';({{ NB. method|expected
+if. ((JSON.stringify actual) !== (JSON.stringify expected)) do.
+throw. (new Error `Expected ${(JSON.stringify expected)}, but got ${(JSON.stringify actual)}`)
+end.
+}}))
+}}
+
+NB. export
+suite =: (new TestSuite)
+
+(suite.test 'math addition' ({{ NB. pB|
+((expect (1 + 1)).toBe 2)
+}}))
+
+(suite.test 'async resolving value' ({{ NB. async pB|
+value =: (await (Promise.resolve 'hello'))
+((expect value).toBe 'hello')
+}}))
+
+((suite.run()).then ({{ NB. pB|results
+for_of. r : results do.
+(console.log `${(r.passed ? '✓ PASS' : '✗ FAIL')}: ${r.name}`)
+if. r.error do.
+(console.error '  ' r.error)
+end.
+end.
+}}))

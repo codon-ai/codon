@@ -17,8 +17,7 @@ class TestSuite {
     }
     return results;
   }
-}
-
+};
 export function expect(actual) {
   return {
     toBe(expected) {
@@ -32,19 +31,15 @@ export function expect(actual) {
       }
     },
   };
-}
-
-export const suite = new TestSuite();
-
+};
+const export const suite = new TestSuite();
 suite.test("math addition", () => {
   expect(1 + 1).toBe(2);
 });
-
 suite.test("async resolving value", async () => {
   const value = await Promise.resolve("hello");
   expect(value).toBe("hello");
 });
-
 suite.run().then((results) => {
   for (const r of results) {
     console.log(`${r.passed ? "✓ PASS" : "✗ FAIL"}: ${r.name}`);

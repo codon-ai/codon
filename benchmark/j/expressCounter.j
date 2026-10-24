@@ -1,0 +1,26 @@
+NB. i|D:express:express
+
+app =: express()
+
+counter =: 0
+
+(app.get '/' ({{ NB. FE|_,res
+(res.json O('counter';counter))
+}}))
+
+(app.get '/increment' ({{ NB. FE|_,res
+(counter++)
+(res.json O('counter';counter))
+}}))
+
+(app.get '/decrement' ({{ NB. FE|_,res
+(counter--)
+(res.json O('counter';counter))
+}}))
+
+(app.get '/reset' ({{ NB. FE|_,res
+(counter = 0)
+(res.json O('counter';counter))
+}}))
+
+(app.listen 8080)

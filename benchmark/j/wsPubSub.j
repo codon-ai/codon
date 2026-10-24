@@ -1,0 +1,36 @@
+NB. i|N:WebSocketServer:ws|N:WebSocket:ws
+
+wss =: (new WebSocketServer O('port';8081))
+
+subscriptions =: (new Map)
+
+(wss.on 'connection' ({{ NB. pB|ws
+(ws.on 'message' ({{ NB. pB|raw
+try. do.
+msg =: (JSON.parse raw.toString())
+{type,channel,data} =: msg
+if. (type === 'subscribe') do.
+if. (! (subscriptions.has channel)) do.
+(subscriptions.set channel (new Set))
+end.
+((subscriptions.get channel).add ws)
+elseif. (type === 'unsubscribe') do.
+((subscriptions.get channel)?.delete?. ws)
+elseif. (type === 'publish') do.
+payload =: (JSON.stringify O('channel';channel;'data';data))
+for_of. client : ((subscriptions.get channel) || (0$0)) do.
+if. (client.readyState === WebSocket.OPEN) do.
+(client.send payload)
+end.
+end.
+end.
+catch. err do.
+(ws.send (JSON.stringify O('error';'Invalid message payload')))
+end.
+}}))
+(ws.on 'close' ({{ NB. pB|
+for_of. clients : subscriptions.values() do.
+(clients.delete ws)
+end.
+}}))
+}}))

@@ -1,0 +1,51 @@
+NB. export
+class. AsyncTaskQueue do.
+queue =: (0$0)
+activeCount =: 0
+constructor. concurrency do.
+(this.concurrency = concurrency)
+end.
+method. add task do.
+return. (new Promise ({{ NB. pB|resolve,reject
+run =: ({{ NB. async pB|
+(this.activeCount++)
+try. do.
+(resolve (await task()))
+catch. err do.
+(reject err)
+finally. do.
+(this.activeCount--)
+next =: this.queue.shift()
+if. next do.
+next()
+end.
+end.
+}})
+if. (this.activeCount < this.concurrency) do.
+run()
+else.
+(this.queue.push run)
+end.
+}}))
+end.
+get. pending do.
+return. this.queue.length
+end.
+end.
+
+queue =: (new AsyncTaskQueue 2)
+
+delay =: ({{ NB. pE|ms
+(new Promise ({{ NB. pE|resolve
+(setTimeout resolve ms)
+}}))
+}})
+
+tasks =: ((1;2;3;4).map ({{ NB. pE|id
+(queue.add ({{ NB. async pB|
+(await (delay 50))
+return. `Task ${id} done`
+}}))
+}}))
+
+((Promise.all tasks).then console.log)

@@ -1,0 +1,26 @@
+transitions =: O('pending';O('pay';'paid';'cancel';'cancelled');'paid';O('ship';'shipped';'cancel';'cancelled');'shipped';O('deliver';'delivered');'delivered';O'';'cancelled';O'')
+
+NB. export
+{{ NB. FD|transition|order,action
+nextState =: transitions.[order.state]?. [action]
+if. (! nextState) do.
+throw. (new Error `Cannot transition from '${order.state}' with action '${action}'`)
+end.
+return. O('...';order;'state';nextState;'updatedAt';(new Date))
+}}
+
+order =: O('id';'ORD-101';'state';'pending';'updatedAt';(new Date))
+
+(console.log 'Initial:' order.state)
+
+(order = (transition order 'pay'))
+
+(console.log 'After pay:' order.state)
+
+(order = (transition order 'ship'))
+
+(console.log 'After ship:' order.state)
+
+(order = (transition order 'deliver'))
+
+(console.log 'After deliver:' order.state)
