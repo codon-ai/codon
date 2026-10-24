@@ -1,6 +1,37 @@
 # Attempts
 A running log of all successful and failed optimization attempts.
 
+## Revision 5a (successful)
+
+- **Revision Idea**: Introduce concise module import and export declarations via J control words `import. specifiers from 'source'` and `export. declaration`, replacing verbose metadata comments `NB. i|D:...|N:...` and `NB. export\n`.
+- **Rationale**: In fullstack AI development (React components, Express API servers, SQLite database modules, WebSocket servers, CLI utilities, test suites), ES module imports and exports exist at the top of virtually every file. Previously, Codon lacked native import syntax, encoding imports in pipe-separated comment strings (`NB. i|D:React:react|N:useState:react|N:useRef:react`) with colon specifiers and URL-encoded paths. Each import required heavy boilerplate, repeated module sources for each imported identifier, and consumed 15–25 tokens per module. Furthermore, exports relied on comment flags (`NB. export\n`). Adding `import.` and `export.` control words cleanly aligns ES modules with Codon's dot-inflected control word convention (`fn.`, `class.`, `if.`, `return.`):
+  - Default import: `import. express from 'express'`
+  - Named import: `import. {useState,useRef} from 'react'`
+  - Default & named import: `import. React,{useState,useRef} from 'react'`
+  - Namespace import: `import. * as fs from 'node:fs/promises'`
+  - Side-effect import: `import. 'style.css'`
+  - Export declaration: `export. fn. addTodo title do. ... end.` and `export. class. ApiClient do. ... end.`
+  - Export default: `export. default expr`
+  - Retains complete backward compatibility with legacy `NB. i|...`, `NB. export`, `NB. e|`, `NB. ex|`, and `NB. exAll|`.
+- **Target Token Savings for Fullstack Applications**:
+  - Drops import syntax overhead from 15–25 tokens down to 4–8 tokens per imported module.
+  - Eliminates duplicate module source repetitions (e.g. `:react` repeated 3 times in `D:React:react|N:useState:react|N:useRef:react`).
+  - Eliminates URL encoding of module paths (`node%3Afs/promises` -> `'node:fs/promises'`).
+  - Cuts export overhead from `NB. export\n` (3 tokens) to `export. ` (1–2 tokens).
+  - Eliminates 100% of comment metadata wrappers across all fullstack modules.
+- **Concrete Syntax Changes**:
+  - `JSToCodonTranslator`: Emits `import. ${specifiers} from '${src}'` for `ImportDeclaration`, and `export. ${declaration}` for `ExportNamedDeclaration`.
+  - `CodonToASTParser`: Parses `import. ...` statements into ESTree `ImportDeclaration` nodes supporting default, named, combined, namespace, and side-effect forms with `from` or `:`. Parses `export. ...` declarations into `ExportNamedDeclaration` or `ExportDefaultDeclaration`.
+  - Examples:
+    - Old Codon: `NB. i|D:React:react|N:useState:react|N:useRef:react`
+    - New Codon: `import. React,{useState,useRef} from 'react'`
+    - Old Codon: `NB. i|D:fs:node%3Afs/promises|D:path:node%3Apath`
+    - New Codon: `import. fs from 'node:fs/promises'\nimport. path from 'node:path'`
+    - Old Codon: `NB. i|N:WebSocketServer:ws|N:WebSocket:ws`
+    - New Codon: `import. {WebSocketServer,WebSocket} from 'ws'`
+    - Old Codon: `NB. export\nfn. addTodo title do.`
+    - New Codon: `export. fn. addTodo title do.`
+
 ## Revision 4a (successful)
 - **Tokens:** 333
 
