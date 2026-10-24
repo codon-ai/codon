@@ -1,4 +1,4 @@
-# Codon ↔ JS Compiler & Translator
+# Codon
 
 A bidirectional compiler and translator that converts between Codon (`.cdn`) and JavaScript/React (`ESTree` / Babel AST).
 
