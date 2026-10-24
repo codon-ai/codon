@@ -4,6 +4,19 @@ import * as parser from "@babel/parser";
 import { CodonToASTParser } from "./codon-parser";
 import { CodonToJSCompiler, JSToCodonTranslator } from "./transpilers";
 
+const BABEL_PARSER_OPTIONS: parser.ParserOptions = {
+    sourceType: "module",
+    plugins: [
+        "jsx",
+        "exportDefaultFrom",
+        "exportNamespaceFrom",
+        "classProperties",
+        "classPrivateProperties",
+        "classPrivateMethods",
+    ],
+    errorRecovery: true,
+};
+
 const args = process.argv.slice(2);
 if (args.length === 0) {
     console.error("Usage:\n  bun run cli.ts <direction: compile | translate> <file>\n  bun run cli.ts verify");
@@ -39,10 +52,7 @@ function transpileSingleFile(direction: "compile" | "translate", filePath: strin
             console.log(`✅ Successfully compiled ${filePath} to JS -> ${outPath}`);
             return jsCode;
         } else {
-            const ast = parser.parse(code, {
-                sourceType: "module",
-                plugins: ["jsx"],
-            });
+            const ast = parser.parse(code, BABEL_PARSER_OPTIONS);
             const translator = new JSToCodonTranslator();
             const codonCode = translator.transpile(ast.program as any);
             const outPath = filePath.replace(/\.jsx?$/, ".cdn");
@@ -86,10 +96,7 @@ function runBenchmarkVerification() {
             const originalJs = fs.readFileSync(jsPath, "utf-8");
 
             // Step 1: JS -> Codon (Translate)
-            const jsAst = parser.parse(originalJs, {
-                sourceType: "module",
-                plugins: ["jsx"],
-            });
+            const jsAst = parser.parse(originalJs, BABEL_PARSER_OPTIONS);
             const jsToCodon = new JSToCodonTranslator();
             const codonCode = jsToCodon.transpile(jsAst.program as any);
             fs.writeFileSync(codonPath, codonCode, "utf-8");
@@ -101,10 +108,7 @@ function runBenchmarkVerification() {
             const roundtrippedJs = codonToJs.transpile(parsedCodonAST);
 
             // Step 3: Validate generated JS parses with Babel
-            parser.parse(roundtrippedJs, {
-                sourceType: "module",
-                plugins: ["jsx"],
-            });
+            parser.parse(roundtrippedJs, BABEL_PARSER_OPTIONS);
 
             console.log(`✅ PASSED (JS ➔ Codon ➔ JS)`);
             passed++;

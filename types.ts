@@ -51,6 +51,7 @@ export type Node =
     | ContinueStatement
     | EmptyStatement
     | ClassDeclaration
+    | ClassExpression
     | ClassBody
     | MethodDefinition
     | PropertyDefinition
@@ -391,6 +392,13 @@ export interface EmptyStatement {
 
 export interface ClassDeclaration {
     type: "ClassDeclaration";
+    id: Identifier | null;
+    superClass: Node | null;
+    body: ClassBody;
+}
+
+export interface ClassExpression {
+    type: "ClassExpression";
     id: Identifier | null;
     superClass: Node | null;
     body: ClassBody;

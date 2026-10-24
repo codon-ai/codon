@@ -9,6 +9,7 @@ import type {
     FunctionExpression,
     ArrowFunctionExpression,
     ClassDeclaration,
+    ClassExpression,
     ClassBody,
     MethodDefinition,
     PropertyDefinition,
@@ -92,6 +93,9 @@ export class JSToCodonTranslator {
                         }
                     } else if (n.type === "ExportDefaultDeclaration") {
                         exports.push(`NB. e|${this.transpile(n.declaration)}`);
+                    } else if (n.type === "ExportAllDeclaration") {
+                        const source = String((n.source as Literal).value).replace(/\|/g, "%7C").replace(/:/g, "%3A");
+                        exports.push(`NB. exAll|${source}`);
                     } else if (n.type === "ExportNamedDeclaration") {
                         if (n.declaration) {
                             body.push(`NB. export\n` + this.transpile(n.declaration));
@@ -99,7 +103,8 @@ export class JSToCodonTranslator {
                             const specNames = n.specifiers
                                 .map((s) => (s.exported ? s.exported.name : s.local.name))
                                 .join(",");
-                            exports.push(`NB. ex|${specNames}`);
+                            const srcSuffix = n.source ? `:${String((n.source as Literal).value).replace(/\|/g, "%7C").replace(/:/g, "%3A")}` : "";
+                            exports.push(`NB. ex|${specNames}${srcSuffix}`);
                         }
                     } else {
                         body.push(this.transpile(n));
@@ -218,10 +223,17 @@ export class JSToCodonTranslator {
             }
 
             case "ClassDeclaration": {
-                const className = node.id ? node.id.name : "Anonymous";
+                const nameStr = node.id ? ` ${node.id.name}` : "";
                 const superStr = node.superClass ? ` extends ${this.transpile(node.superClass)}` : "";
                 const bodyStr = this.transpile(node.body);
-                return `class. ${className}${superStr} do.\n${bodyStr}\nend.`;
+                return `class.${nameStr}${superStr} do.\n${bodyStr}\nend.`;
+            }
+
+            case "ClassExpression": {
+                const nameStr = node.id ? ` ${node.id.name}` : "";
+                const superStr = node.superClass ? ` extends ${this.transpile(node.superClass)}` : "";
+                const bodyStr = this.transpile(node.body);
+                return `(class.${nameStr}${superStr} do.\n${bodyStr}\nend.)`;
             }
 
             case "ClassBody": {

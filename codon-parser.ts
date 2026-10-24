@@ -4,6 +4,7 @@ import type {
     Identifier,
     BlockStatement,
     ClassDeclaration,
+    ClassExpression,
     ClassBody,
     MethodDefinition,
     PropertyDefinition,
@@ -275,16 +276,31 @@ export class CodonToASTParser {
                         body.push({ type: "ExportNamedDeclaration", declaration: nextStmt, specifiers: [] });
                     }
                 }
+            } else if (b.startsWith("NB. exAll|")) {
+                const src = b.substring(10).trim().replace(/%7C/g, "|").replace(/%3A/g, ":");
+                body.push({
+                    type: "ExportAllDeclaration",
+                    source: { type: "Literal", value: src },
+                });
             } else if (b.startsWith("NB. ex|")) {
-                const specifiers = b
-                    .slice(7)
+                const content = b.slice(7).trim();
+                const colonIdx = content.indexOf(":");
+                const specPart = colonIdx !== -1 ? content.substring(0, colonIdx) : content;
+                const srcPart = colonIdx !== -1 ? content.substring(colonIdx + 1).replace(/%7C/g, "|").replace(/%3A/g, ":") : null;
+                const specifiers = specPart
                     .split(",")
+                    .filter((s) => s.trim().length > 0)
                     .map((s) => ({
                         type: "ExportSpecifier",
                         exported: { type: "Identifier", name: s.trim() },
                         local: { type: "Identifier", name: s.trim() },
                     }));
-                body.push({ type: "ExportNamedDeclaration", declaration: null, specifiers });
+                body.push({
+                    type: "ExportNamedDeclaration",
+                    declaration: null,
+                    specifiers,
+                    source: srcPart ? ({ type: "Literal", value: srcPart } as any) : null,
+                });
             } else if (b.startsWith("NB. e|")) {
                 body.push({
                     type: "ExportDefaultDeclaration",
@@ -366,24 +382,28 @@ export class CodonToASTParser {
             };
         }
 
-        // Class Declaration: class. Name [extends Super] do. ... end.
+        // Class Declaration: class. [Name] [extends Super] do. ... end.
         if (stmt.startsWith("class.")) {
             const doIdx = stmt.indexOf(" do.");
             if (doIdx !== -1 && stmt.endsWith("end.")) {
                 const header = stmt.substring("class.".length, doIdx).trim();
                 const innerBody = stmt.substring(doIdx + 4, stmt.length - 4).trim();
-                const match = header.match(/^([a-zA-Z_$][a-zA-Z0-9_$]*)(?:\s+extends\s+([a-zA-Z_$][a-zA-Z0-9_$]*))?$/);
-                if (match) {
-                    const className = match[1];
-                    const superClass = match[2] ? { type: "Identifier" as const, name: match[2] } : null;
-                    const classBody = this.parseClassBody(innerBody);
-                    return {
-                        type: "ClassDeclaration",
-                        id: { type: "Identifier", name: className },
-                        superClass: superClass as any,
-                        body: classBody,
-                    };
+                let className: Identifier | null = null;
+                let superClass: Identifier | null = null;
+                if (header) {
+                    const match = header.match(/^([a-zA-Z_$][a-zA-Z0-9_$]*)?(?:\s*extends\s+([a-zA-Z_$][a-zA-Z0-9_$]*))?$/);
+                    if (match) {
+                        if (match[1]) className = { type: "Identifier", name: match[1] };
+                        if (match[2]) superClass = { type: "Identifier", name: match[2] };
+                    }
                 }
+                const classBody = this.parseClassBody(innerBody);
+                return {
+                    type: "ClassDeclaration",
+                    id: className,
+                    superClass: superClass as any,
+                    body: classBody,
+                };
             }
         }
 
@@ -1172,6 +1192,31 @@ export class CodonToASTParser {
                     operator: "--",
                     argument: this.parseExpression(strippedExpr.slice(2).trim()),
                     prefix: true,
+                };
+            }
+        }
+
+        // Class Expression: (class. [Name] [extends Super] do. ... end.) or class. ... end.
+        if (strippedExpr.startsWith("class.")) {
+            const doIdx = strippedExpr.indexOf(" do.");
+            if (doIdx !== -1 && strippedExpr.endsWith("end.")) {
+                const header = strippedExpr.substring("class.".length, doIdx).trim();
+                const innerBody = strippedExpr.substring(doIdx + 4, strippedExpr.length - 4).trim();
+                let className: Identifier | null = null;
+                let superClass: Identifier | null = null;
+                if (header) {
+                    const match = header.match(/^([a-zA-Z_$][a-zA-Z0-9_$]*)?(?:\s*extends\s+([a-zA-Z_$][a-zA-Z0-9_$]*))?$/);
+                    if (match) {
+                        if (match[1]) className = { type: "Identifier", name: match[1] };
+                        if (match[2]) superClass = { type: "Identifier", name: match[2] };
+                    }
+                }
+                const classBody = this.parseClassBody(innerBody);
+                return {
+                    type: "ClassExpression",
+                    id: className,
+                    superClass: superClass as any,
+                    body: classBody,
                 };
             }
         }

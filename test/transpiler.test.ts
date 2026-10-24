@@ -364,3 +364,84 @@ for (let i = 0, j = 10; i < j; i++, j--) {
         expect(roundtrippedJs).toContain("i++, j--");
     });
 });
+
+describe("ClassExpression & Re-exports Support", () => {
+    test("Transpiles and roundtrips anonymous ClassExpression assigned to variable", () => {
+        const jsCode = `
+const Counter = class {
+  count = 0;
+  constructor(initial = 0) {
+    this.count = initial;
+  }
+  inc() {
+    this.count++;
+  }
+};
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("Counter =: (class. do.");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+        const fn = new Function(`${roundtrippedJs}; const c = new Counter(5); c.inc(); return c.count;`);
+        expect(fn()).toBe(6);
+    });
+
+    test("Transpiles and roundtrips named ClassExpression with inheritance", () => {
+        const jsCode = `
+class Animal {
+  constructor(name) {
+    this.name = name;
+  }
+}
+const Dog = class Canine extends Animal {
+  bark() {
+    return "Woof " + this.name;
+  }
+};
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("Dog =: (class. Canine extends Animal do.");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+        const fn = new Function(`${roundtrippedJs}; const d = new Dog("Buddy"); return d.bark();`);
+        expect(fn()).toBe("Woof Buddy");
+    });
+
+    test("Transpiles and roundtrips ExportAllDeclaration and re-exports", () => {
+        const jsCode = `
+export * from "./utils";
+export { a, b } from "./math";
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("NB. exAll|./utils");
+        expect(codonCode).toContain("NB. ex|a,b:./math");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+        expect(roundtrippedJs).toContain('export * from "./utils";');
+        expect(roundtrippedJs).toContain('export { a, b } from "./math";');
+    });
+});
