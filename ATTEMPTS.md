@@ -2,6 +2,7 @@
 A running log of all successful and failed optimization attempts.
 
 ## Revision 5a (successful)
+- **Tokens:** 237
 
 - **Revision Idea**: Introduce concise module import and export declarations via J control words `import. specifiers from 'source'` and `export. declaration`, replacing verbose metadata comments `NB. i|D:...|N:...` and `NB. export\n`.
 - **Rationale**: In fullstack AI development (React components, Express API servers, SQLite database modules, WebSocket servers, CLI utilities, test suites), ES module imports and exports exist at the top of virtually every file. Previously, Codon lacked native import syntax, encoding imports in pipe-separated comment strings (`NB. i|D:React:react|N:useState:react|N:useRef:react`) with colon specifiers and URL-encoded paths. Each import required heavy boilerplate, repeated module sources for each imported identifier, and consumed 15–25 tokens per module. Furthermore, exports relied on comment flags (`NB. export\n`). Adding `import.` and `export.` control words cleanly aligns ES modules with Codon's dot-inflected control word convention (`fn.`, `class.`, `if.`, `return.`):
