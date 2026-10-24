@@ -1,12 +1,12 @@
 NB. export
-{{ NB. FD|parseCSV|raw
+fn. parseCSV raw do.
 lines =: ((raw.trim()).split "\n")
 [,...rows] =: lines
 return. (((rows.map {{line => ((line.split ',').map {{cell => cell.trim()}})}}).filter {{[item,category,qty,price] => (((item && category) && (! (isNaN (Number qty)))) && (! (isNaN (Number price))))}}).map {{[item,category,qty,price] => O(item;category;quantity:(Number qty);price:(Number price))}})
-}}
+end.
 
 NB. export
-{{ NB. FD|aggregateByCategory|records
+fn. aggregateByCategory records do.
 summary =: O''
 for_of. {category,quantity,price} : records do.
 prev =: (summary.[category] ?? O(totalRevenue:0;totalQuantity:0;avgPrice:0))
@@ -15,7 +15,7 @@ totalQuantity =: (prev.totalQuantity + quantity)
 (summary.[category] = O(totalRevenue;totalQuantity;avgPrice:((Math.round ((totalRevenue / totalQuantity) * 100)) / 100)))
 end.
 return. summary
-}}
+end.
 
 mockCSV =: `
 item,category,quantity,price

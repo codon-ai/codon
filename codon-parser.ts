@@ -69,6 +69,8 @@ export function splitCodonStatements(code: string): string[] {
         "constructor.",
         "async_method.",
         "method.",
+        "async_fn.",
+        "fn.",
         "get.",
         "set.",
     ];
@@ -317,6 +319,22 @@ export class CodonToASTParser {
                         body.push({ type: "ExportNamedDeclaration", declaration: nextStmt, specifiers: [] });
                     }
                 }
+            } else if (b.startsWith("export.")) {
+                const remainder = b.slice("export.".length).trim();
+                if (remainder) {
+                    const parsed = this.parseStatement(remainder);
+                    if (parsed) body.push({ type: "ExportNamedDeclaration", declaration: parsed, specifiers: [] });
+                } else if (idx + 1 < blocks.length) {
+                    idx++;
+                    const nextStmt = this.parseStatement(blocks[idx]);
+                    if (nextStmt) {
+                        body.push({ type: "ExportNamedDeclaration", declaration: nextStmt, specifiers: [] });
+                    }
+                }
+            } else if (b.startsWith("export ") && (b.startsWith("export fn.") || b.startsWith("export async_fn.") || b.startsWith("export class."))) {
+                const remainder = b.slice(7).trim();
+                const parsed = this.parseStatement(remainder);
+                if (parsed) body.push({ type: "ExportNamedDeclaration", declaration: parsed, specifiers: [] });
             } else if (b.startsWith("NB. exAll|")) {
                 const src = b.substring(10).trim().replace(/%7C/g, "|").replace(/%3A/g, ":");
                 body.push({
@@ -421,6 +439,42 @@ export class CodonToASTParser {
                 type: "ExportDefaultDeclaration",
                 declaration: this.parseExpression(stmt.substring(6).trim()),
             };
+        }
+
+        // Function Declaration: [async_]fn. [name] [params] do. ... end.
+        const isAsyncFn = stmt.startsWith("async_fn.");
+        const isSyncFn = stmt.startsWith("fn.");
+        if (isAsyncFn || isSyncFn) {
+            const prefix = isAsyncFn ? "async_fn." : "fn.";
+            const doIdx = stmt.indexOf(" do.");
+            if (doIdx !== -1 && stmt.endsWith("end.")) {
+                const header = stmt.substring(prefix.length, doIdx).trim();
+                let fnName = "";
+                let paramsStr = "";
+                if (header) {
+                    const parenIdx = header.indexOf("(");
+                    if (parenIdx !== -1 && header.endsWith(")")) {
+                        fnName = header.substring(0, parenIdx).trim();
+                        paramsStr = header.substring(parenIdx + 1, header.length - 1).trim();
+                    } else {
+                        const spaceIdx = header.indexOf(" ");
+                        if (spaceIdx !== -1) {
+                            fnName = header.substring(0, spaceIdx).trim();
+                            paramsStr = header.substring(spaceIdx + 1).trim();
+                        } else {
+                            fnName = header.trim();
+                        }
+                    }
+                }
+                const fnBody = stmt.substring(doIdx + 4, stmt.length - 4).trim();
+                return {
+                    type: "FunctionDeclaration",
+                    id: fnName ? { type: "Identifier", name: fnName } : null,
+                    params: paramsStr ? this.parseParamList(paramsStr) : [],
+                    body: this.parseBlock(fnBody),
+                    async: isAsyncFn,
+                };
+            }
         }
 
         // Class Declaration: class. [Name] [extends Super] do. ... end.
@@ -686,7 +740,7 @@ export class CodonToASTParser {
 
         // Destructuring / Variable Assignment: pattern =: expr or pattern =. expr or pattern = expr
         // Crucial: Only match unparenthesized declarations at depth 0 (outside {}, [], ())!
-        if (!stmt.startsWith("(") && !stmt.startsWith("{{") && !stmt.startsWith("class.")) {
+        if (!stmt.startsWith("(") && !stmt.startsWith("{{") && !stmt.startsWith("class.") && !stmt.startsWith("fn.") && !stmt.startsWith("async_fn.")) {
             let depth = 0;
             let braceDepth = 0;
             let bracketDepth = 0;
@@ -1416,6 +1470,12 @@ export class CodonToASTParser {
                     };
                 }
             }
+        }
+
+        // Function Declaration Expression: (fn. name params do. ... end.)
+        if (strippedExpr.startsWith("fn.") || strippedExpr.startsWith("async_fn.")) {
+            const parsed = this.parseStatement(strippedExpr);
+            if (parsed) return parsed as any;
         }
 
         // Direct Definition: {{ ... }}

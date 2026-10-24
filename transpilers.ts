@@ -278,8 +278,10 @@ export class JSToCodonTranslator {
 
             case "FunctionDeclaration": {
                 const fdParams = node.params.map((p) => this.transpilePattern(p)).join(",");
-                const asyncPrefix = node.async ? "async " : "";
-                return `{{ NB. ${asyncPrefix}FD|${node.id ? node.id.name : "anonymous"}|${fdParams}\n${this.transpile(node.body)}\n}}`;
+                const fnName = node.id ? node.id.name : "";
+                const prefix = node.async ? "async_fn." : "fn.";
+                const header = fnName ? (fdParams ? `${fnName} ${fdParams}` : fnName) : (fdParams || "");
+                return `${prefix}${header ? " " + header : ""} do.\n${this.transpile(node.body)}\nend.`;
             }
 
             case "FunctionExpression": {

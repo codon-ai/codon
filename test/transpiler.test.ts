@@ -734,4 +734,159 @@ delay =: ({{ NB. pE|ms
     });
 });
 
+describe("Concise Function Declarations (fn. and async_fn.) Support", () => {
+    test("Transpiles synchronous function declarations fn. name params do. ... end.", () => {
+        const codonCode = `
+fn. addTodo title do.
+return. (Number title)
+end.
+
+fn. getTodos do.
+return. (0$0)
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("function addTodo(title)");
+        expect(js).toContain("function getTodos()");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+
+        const fn = new Function(`${js}; return { add: addTodo("42"), list: getTodos() };`);
+        const res = fn();
+        expect(res.add).toBe(42);
+        expect(res.list).toEqual([]);
+    });
+
+    test("Transpiles asynchronous function declarations async_fn. name params do. ... end.", async () => {
+        const codonCode = `
+async_fn. fetchUser id do.
+return. O(id;name:'Alice')
+end.
+
+async_fn. noop do.
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("async function fetchUser(id)");
+        expect(js).toContain("async function noop()");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+
+        const fn = new Function(`${js}; return fetchUser(101);`);
+        const res = await fn();
+        expect(res).toEqual({ id: 101, name: "Alice" });
+    });
+
+    test("Transpiles exported function declarations with NB. export and export.", () => {
+        const codonCode = `
+NB. export
+fn. parseData raw do.
+return. (raw.trim())
+end.
+
+export. async_fn. sendMsg msg do.
+return. true
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("export function parseData(raw)");
+        expect(js).toContain("export async function sendMsg(msg)");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles function declarations with destructuring and default params", () => {
+        const codonCode = `
+fn. greet name='world' do.
+return. \`Hello \${name}\`
+end.
+
+fn. handleItem {id,val} do.
+return. (id + val)
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain('function greet(name = "world")');
+        expect(js).toContain("function handleItem");
+        expect(js).toContain("id");
+        expect(js).toContain("val");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+
+        const fn = new Function(`${js}; return { g1: greet(), g2: greet("Bob"), h: handleItem({ id: 10, val: 5 }) };`);
+        const res = fn();
+        expect(res.g1).toBe("Hello world");
+        expect(res.g2).toBe("Hello Bob");
+        expect(res.h).toBe(15);
+    });
+
+    test("Roundtrips JS function declarations with fn. and async_fn.", () => {
+        const jsCode = `
+function add(a, b) {
+  return a + b;
+}
+async function fetchData(url) {
+  return await fetch(url);
+}
+export function getStatus() {
+  return 200;
+}
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("fn. add a,b do.");
+        expect(codonCode).toContain("async_fn. fetchData url do.");
+        expect(codonCode).toContain("fn. getStatus do.");
+        expect(codonCode).not.toContain("NB. FD|");
+        expect(codonCode).not.toContain("NB. async FD|");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+        expect(roundtrippedJs).toContain("function add(a, b)");
+        expect(roundtrippedJs).toContain("async function fetchData(url)");
+        expect(roundtrippedJs).toContain("export function getStatus()");
+    });
+
+    test("Retains backward compatibility with legacy NB. FD| and NB. async FD| forms", () => {
+        const codonCode = `
+{{ NB. FD|addTodo|title
+result =: (insertStmt.run title)
+return. (Number result.lastInsertRowid)
+}}
+
+{{ NB. async FD|scanDir|dir,extension
+entries =: @ (fs.readdir dir)
+return. entries
+}}
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("function addTodo(title)");
+        expect(js).toContain("async function scanDir(dir, extension)");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+});
+
+
 

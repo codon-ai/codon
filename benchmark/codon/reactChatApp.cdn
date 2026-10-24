@@ -1,7 +1,7 @@
 NB. i|D:React:react|N:useState:react|N:useRef:react
 
 NB. export
-{{ NB. FD|ChatApp|
+fn. ChatApp do.
 [messages,setMessages] =: (useState (,O(id:1;user:'Alice';text:'Hello world!')))
 [input,setInput] =: (useState '')
 nextId =: (useRef 2)
@@ -25,4 +25,4 @@ return. (<div>
         <button type="submit">Send</button>
       </form>
     </div>)
-}}
+end.

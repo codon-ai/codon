@@ -18,7 +18,7 @@ end.
 end.
 
 NB. export
-{{ NB. FD|expect|actual
+fn. expect actual do.
 return. O(toBe:{{fn expected => do.
 if. (actual !== expected) do.
 throw. (new Error `Expected ${expected}, but received ${actual}`)
@@ -28,7 +28,7 @@ if. ((JSON.stringify actual) !== (JSON.stringify expected)) do.
 throw. (new Error `Expected ${(JSON.stringify expected)}, but got ${(JSON.stringify actual)}`)
 end.
 }})
-}}
+end.
 
 NB. export
 suite =: (new TestSuite)

@@ -1,7 +1,7 @@
 NB. i|D:fs:node%3Afs/promises|D:path:node%3Apath
 
 NB. export
-{{ NB. async FD|scanDir|dir,extension
+async_fn. scanDir dir,extension do.
 entries =: @ (fs.readdir dir O(withFileTypes:true))
 results =: (0$0)
 for_of. entry : entries do.
@@ -14,9 +14,9 @@ stats =: @ (fs.stat fullPath)
 end.
 end.
 return. results
-}}
+end.
 
-{{ NB. async FD|main|
+async_fn. main do.
 targetDir =: (process.argv.[2] || '.')
 ext =: (process.argv.[3] || '.ts')
 files =: @ (scanDir targetDir ext)
@@ -25,7 +25,7 @@ totalSize =: (files.reduce {{acc,f => (acc + f.size)}} 0)
 for_of. file : files do.
 (console.log ` - ${file.path} (${file.size} bytes)`)
 end.
-}}
+end.
 
 if. (process.argv.[1]?.endsWith?. 'cliFileScanner.js') do.
 ((main()).catch console.error)

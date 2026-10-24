@@ -118,3 +118,45 @@ Revision 3a introduces concise direct definition syntax for arrow functions and 
 
 ### Impact on Fullstack Applications
 In modern AI fullstack applications (Express/Koa API routes, Next.js server actions, React event listeners, async job runners, and reactive data pipelines), closures and arrow functions appear on 30–50% of statements. Removing comment overhead (`NB. pE|`, `NB. pB|`, `NB. FE|`) and outer parentheses cuts closure wrapper tokens by 50–70%, directly reducing context usage and speeding up LLM token generation.
+
+## 4. Concise Function Declarations via J Control Words: `fn.` and `async_fn.`
+
+### Overview
+In standard J and prior versions of Codon, named top-level and inner function declarations lacked a concise syntax form, relying instead on comment metadata wrappers (`{{ NB. FD|name|params\n...\n}}` and `{{ NB. async FD|name|params\n...\n}}`). This required 8–12 tokens of syntax and comment boilerplate (`{{`, `NB.`, `FD`, `|`, `name`, `|`, `params`, `}}`) for every declared function.
+
+Revision 4a introduces `fn.` and `async_fn.` as native J control words for declaring functions, standardizing function declarations alongside Codon's existing control structures (`class.`, `method.`, `async_method.`, `constructor.`, `if.`, `for_of.`, `try.`, `while.`).
+- **Synchronous Function Declarations**: `fn. name params do.\nstmts\nend.` cleanly defines functions with parameter lists.
+- **Parameterless Function Declarations**: `fn. name do.\nstmts\nend.` handles functions without arguments.
+- **Asynchronous Function Declarations**: `async_fn. name params do.\nstmts\nend.` defines async functions directly.
+- **Export Integration**: Integrates seamlessly with `NB. export`, `export. fn.`, and `export fn.`.
+- **Pattern Destructuring & Default Parameters**: Supports parameter destructuring (`fn. handle {id,val} do.`) and default parameters (`fn. greet name='world' do.`).
+- **Backward Compatibility**: Legacy `{{ NB. FD|...}}` and `{{ NB. async FD|...}}` remain fully supported.
+
+### Syntax
+- `fn. name params do.\n...\nend.`: Declares a synchronous function `name` with `params`.
+- `fn. name do.\n...\nend.`: Declares a parameterless function `name`.
+- `async_fn. name params do.\n...\nend.`: Declares an asynchronous function `name` with `params`.
+- `async_fn. name do.\n...\nend.`: Declares a parameterless asynchronous function `name`.
+- `NB. export\nfn. name params do.\n...\nend.`: Exports a declared function.
+- `export. fn. name params do.\n...\nend.`: Export declaration using concise dot prefix.
+- `(fn. name params do.\n...\nend.)`: Parenthesized expression form.
+
+### How It Functions
+- **Lexing / Statement Splitting (`splitCodonStatements`)**: `fn.` and `async_fn.` are registered in `blockOpeners`, ensuring the statement scanner balances `blockDepth` across `fn. ... do.` and closing `end.` pairs.
+- **Parsing (`CodonToASTParser`)**: The parser detects `fn.` or `async_fn.`, extracts the function name and parameters before ` do.`, parses the block body up to `end.`, and constructs an ESTree `FunctionDeclaration` AST node with `async: boolean`.
+- **Transpilation (`JSToCodonTranslator`)**: Modern JavaScript `FunctionDeclaration` nodes are automatically translated into `${prefix}${header ? " " + header : ""} do.\n${body}\nend.`.
+- **Code Generation (`CodonToJSCompiler`)**: Compiles `FunctionDeclaration` AST nodes into clean JavaScript `function name(params) { ... }` and `async function name(params) { ... }`.
+
+### Comparison Examples & Token Savings
+
+| Pattern | Standard J / Legacy Codon | Optimized Codon (Rev 4a) | JavaScript Target | Token Reduction |
+| :--- | :--- | :--- | :--- | :--- |
+| **API / DB Function** | `{{ NB. FD|addTodo|title\nresult =: (insertStmt.run title)\nreturn. (Number result.lastInsertRowid)\n}}` | `fn. addTodo title do.\nresult =: (insertStmt.run title)\nreturn. (Number result.lastInsertRowid)\nend.` | `function addTodo(title) { const result = insertStmt.run(title); return Number(result.lastInsertRowid); }` | **~45%** (6 overhead tokens vs 11 tokens) |
+| **Parameterless Query** | `{{ NB. FD|getTodos|\nreturn. selectAllStmt.all()\n}}` | `fn. getTodos do.\nreturn. selectAllStmt.all()\nend.` | `function getTodos() { return selectAllStmt.all(); }` | **~50%** (4 overhead tokens vs 9 tokens) |
+| **Async File Scanner** | `{{ NB. async FD|scanDir|dir,extension\nentries =: @ (fs.readdir dir)\nreturn. entries\n}}` | `async_fn. scanDir dir,extension do.\nentries =: @ (fs.readdir dir)\nreturn. entries\nend.` | `async function scanDir(dir, extension) { const entries = await fs.readdir(dir); return entries; }` | **~45%** (7 overhead tokens vs 13 tokens) |
+| **React Component** | `{{ NB. FD|ChatApp|\n[input,setInput] =: (useState '')\nreturn. (<div />)\n}}` | `fn. ChatApp do.\n[input,setInput] =: (useState '')\nreturn. (<div />)\nend.` | `function ChatApp() { const [input, setInput] = useState(""); return <div />; }` | **~50%** (4 overhead tokens vs 9 tokens) |
+| **Data Pipeline Parser** | `{{ NB. FD|parseCSV|raw\nlines =: (raw.split "\n")\nreturn. lines\n}}` | `fn. parseCSV raw do.\nlines =: (raw.split "\n")\nreturn. lines\nend.` | `function parseCSV(raw) { const lines = raw.split("\n"); return lines; }` | **~45%** (5 overhead tokens vs 10 tokens) |
+| **Test Assertion Helper** | `{{ NB. FD|expect|actual\nreturn. O(toBe:{{fn e => ...}})\n}}` | `fn. expect actual do.\nreturn. O(toBe:{{fn e => ...}})\nend.` | `function expect(actual) { return { toBe: function(e) { ... } }; }` | **~45%** (5 overhead tokens vs 10 tokens) |
+
+### Impact on Fullstack Applications
+In modern AI fullstack applications (React server and client components, Next.js server actions, route handlers, database abstraction layers, and utility modules), named function declarations define core modules and contracts. By replacing awkward comment-based annotations with native `fn.` and `async_fn.` control words, Codon saves 5–8 tokens per function declaration, eliminates comment parsing overhead, and provides a unified syntax style across methods, functions, and control blocks for LLM generation.
