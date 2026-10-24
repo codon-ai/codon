@@ -2,6 +2,7 @@
 A running log of all successful and failed optimization attempts.
 
 ## Revision 2a (successful)
+- **Tokens:** 653
 
 - **Revision Idea**: Introduce concise colon key-value pairs (`key:value`), identifier shorthand properties (`prop`), and direct prefix spread (`...expr`) in Codon object expressions `O(...)`.
 - **Rationale**: In fullstack AI development (REST/GraphQL API endpoints, Express route handlers, React state/props, database ORM queries, WebSocket payloads, and HTTP request headers/options), object literals are among the most frequently generated structures. Previously, Codon required alternating quoted keys and values separated by semicolons (`O('key';value;'key2';value2)`) and lacked property shorthand. This forced repetitive token emissions like `O('counter';counter)` and `O('id';id;'title';title)`. The new syntax enables:
