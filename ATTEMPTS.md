@@ -1,6 +1,30 @@
 # Attempts
 A running log of all successful and failed optimization attempts.
 
+## Revision 4a (successful)
+
+- **Revision Idea**: Introduce concise function declarations via J control words `fn. name params do. ... end.` and `async_fn. name params do. ... end.`, replacing verbose metadata comments `{{ NB. FD|name|params\n...\n}}` and `{{ NB. async FD|name|params\n...\n}}`.
+- **Rationale**: In fullstack AI development (React component definitions, Express/Next.js API route handlers and server actions, database queries and transactions, utility parsers, and test assertion helpers), named top-level and inner function declarations represent standard architectural units. Previously, Codon lacked a concise native statement form for function declarations, relying instead on comment annotations (`{{ NB. FD|name|params\n...\n}}` and `{{ NB. async FD|name|params\n...\n}}`). Each function declaration incurred 8–12 tokens of syntax and comment overhead (`{{`, `NB.`, `FD`, `|`, `name`, `|`, `params`, `}}`), which was inconsistent with Codon's J control structure convention. In Codon and standard J, statement-level blocks consistently follow the control word pattern `<verb>. ... do. ... end.` (such as `class.`, `method.`, `async_method.`, `constructor.`, `if.`, `for_of.`, `try.`, `while.`). Adding `fn.` and `async_fn.` seamlessly extends this idiom to function declarations:
+  - Synchronous function declaration: `fn. name params do.\nstmts\nend.` (or parameterless `fn. name do.\nstmts\nend.`)
+  - Asynchronous function declaration: `async_fn. name params do.\nstmts\nend.` (or parameterless `async_fn. name do.\nstmts\nend.`)
+  - Direct definition naming: `{{fn name params => do.\nstmts\n}}`
+  - Retains complete backward compatibility with legacy `{{ NB. FD|name|params\n...\n}}` and `{{ NB. async FD|...}}` definitions.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates the comment prefix `NB.`, delimiter pipes `|`, and double brace enclosures `{{ ... }}`.
+  - Drops syntax overhead from 8–12 tokens down to ~3–4 tokens (`fn.`, `do.`, `end.`).
+  - Saves 5–8 tokens per function declaration across all modules and fullstack entrypoints.
+  - Standardizes statement structure across methods, classes, and top-level functions, yielding smoother token prediction for LLMs.
+- **Concrete Syntax Changes**:
+  - `JSToCodonTranslator`: Emits `${prefix} ${header} do.\n${body}\nend.` where prefix is `fn.` or `async_fn.` and header is `${name}${params ? " " + params : ""}`.
+  - `CodonToASTParser`: Registers `fn.` and `async_fn.` in statement splitting block openers. Parses `fn. name params do. ... end.` and `async_fn. name params do. ... end.` into ESTree `FunctionDeclaration` AST nodes. Also supports `{{fn name params => do. ... }}`.
+  - Examples:
+    - Old Codon: `{{ NB. FD|addTodo|title\nresult =: (insertStmt.run title)\nreturn. (Number result.lastInsertRowid)\n}}`
+    - New Codon: `fn. addTodo title do.\nresult =: (insertStmt.run title)\nreturn. (Number result.lastInsertRowid)\nend.`
+    - Old Codon: `{{ NB. async FD|scanDir|dir,extension\nentries =: @ (fs.readdir dir O(withFileTypes:true))\n...\n}}`
+    - New Codon: `async_fn. scanDir dir,extension do.\nentries =: @ (fs.readdir dir O(withFileTypes:true))\n...\nend.`
+    - Old Codon: `{{ NB. FD|ChatApp|\n[messages,setMessages] =: (useState (,O(id:1;user:'Alice';text:'Hello world!')))\n...\n}}`
+    - New Codon: `fn. ChatApp do.\n[messages,setMessages] =: (useState (,O(id:1;user:'Alice';text:'Hello world!')))\n...\nend.`
+
 ## Revision 3a (successful)
 - **Tokens:** 561
 
