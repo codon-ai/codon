@@ -2,6 +2,7 @@
 A running log of all successful and failed optimization attempts.
 
 ## Revision 3a (successful)
+- **Tokens:** 561
 
 - **Revision Idea**: Introduce concise direct definition syntax `{{params => body}}`, `{{async params => body}}`, and `{{fn params => do. ... end.}}` for arrow functions and anonymous function expressions in Codon, eliminating verbose `({{ NB. pE|... }})`, `({{ NB. pB|... }})`, and `({{ NB. FE|... }})` comments.
 - **Rationale**: In fullstack AI development (Express/Koa route handlers, asynchronous Promise chains, WebSocket message/connection listeners, array transformation pipelines `.map`/`.filter`, React hooks and state updaters), closures and arrow functions are ubiquitous. Previously, Codon lacked a direct lambda parameter syntax, relying on metadata comments (`({{ NB. pE|params\nexpr\n}})` for expression bodies, `({{ NB. pB|params\nstmts\n}})` for block bodies, and `({{ NB. FE|params\nstmts\n}})` for function expressions). Each closure consumed 10–14 tokens of boilerplate wrapper tokens (`(`, `{{`, `NB.`, `pE|`, newline, `}}`, `)`). The new syntax leverages J's native direct definition delimiter `{{ ... }}` with concise arrow notation:
