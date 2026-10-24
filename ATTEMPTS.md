@@ -2,6 +2,7 @@
 A running log of all successful and failed optimization attempts.
 
 ## Revision 4a (successful)
+- **Tokens:** 333
 
 - **Revision Idea**: Introduce concise function declarations via J control words `fn. name params do. ... end.` and `async_fn. name params do. ... end.`, replacing verbose metadata comments `{{ NB. FD|name|params\n...\n}}` and `{{ NB. async FD|name|params\n...\n}}`.
 - **Rationale**: In fullstack AI development (React component definitions, Express/Next.js API route handlers and server actions, database queries and transactions, utility parsers, and test assertion helpers), named top-level and inner function declarations represent standard architectural units. Previously, Codon lacked a concise native statement form for function declarations, relying instead on comment annotations (`{{ NB. FD|name|params\n...\n}}` and `{{ NB. async FD|name|params\n...\n}}`). Each function declaration incurred 8–12 tokens of syntax and comment overhead (`{{`, `NB.`, `FD`, `|`, `name`, `|`, `params`, `}}`), which was inconsistent with Codon's J control structure convention. In Codon and standard J, statement-level blocks consistently follow the control word pattern `<verb>. ... do. ... end.` (such as `class.`, `method.`, `async_method.`, `constructor.`, `if.`, `for_of.`, `try.`, `while.`). Adding `fn.` and `async_fn.` seamlessly extends this idiom to function declarations:
