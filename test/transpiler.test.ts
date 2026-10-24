@@ -507,3 +507,92 @@ async function loadData(endpoint) {
     });
 });
 
+describe("Concise Object Expressions (Colon Key-Value, Shorthand, Spread)", () => {
+    test("Transpiles shorthand property O(counter) to { counter }", () => {
+        const codonCode = `
+payload =: O(counter)
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("counter");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles colon key-value pairs and multiple shorthand properties", () => {
+        const codonCode = `
+todo =: O(id;title;completed:0;active:true)
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("id");
+        expect(js).toContain("title");
+        expect(js).toContain("completed: 0");
+        expect(js).toContain("active: true");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles nested objects with spread O(...rest;headers:O('Content-Type':'application/json'))", () => {
+        const codonCode = `
+opts =: O(...rest;headers:O('Content-Type':'application/json';...defaultHeaders))
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("...rest");
+        expect(js).toContain("...defaultHeaders");
+        expect(js).toContain('"Content-Type": "application/json"');
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Retains backward compatibility with legacy alternating O('key';val)", () => {
+        const codonCode = `
+legacy =: O('name';'Alice';'age';30;'...';extra)
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain('name: "Alice"');
+        expect(js).toContain("age: 30");
+        expect(js).toContain("...extra");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips JS object literals with shorthand, colon syntax, and spread", () => {
+        const jsCode = `
+const channel = "chat";
+const data = { msg: "hi" };
+const payload = { channel, data, status: 200, ...metadata };
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("channel");
+        expect(codonCode).toContain("data");
+        expect(codonCode).toContain("status:200");
+        expect(codonCode).toContain("...metadata");
+        expect(codonCode).not.toContain("'channel';channel");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+        expect(roundtrippedJs).toContain("channel");
+        expect(roundtrippedJs).toContain("status: 200");
+        expect(roundtrippedJs).toContain("...metadata");
+    });
+});
+
+

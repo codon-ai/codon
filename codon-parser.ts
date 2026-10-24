@@ -224,6 +224,47 @@ export function splitAtLevel(str: string, delimiter: string): string[] {
     return args;
 }
 
+export function splitFirstAtLevel(
+    str: string,
+    delimiter: string,
+): [string, string] | null {
+    let depth = 0;
+    let braceDepth = 0;
+    let bracketDepth = 0;
+    let inString = false;
+    let inTpl = false;
+
+    for (let i = 0; i < str.length; i++) {
+        const char = str[i];
+        if (char === "'" && !inTpl) {
+            inString = !inString;
+            continue;
+        }
+        if (char === "`" && !inString) {
+            inTpl = !inTpl;
+            continue;
+        }
+        if (!inString && !inTpl) {
+            if (char === "(") depth++;
+            else if (char === ")") depth = Math.max(0, depth - 1);
+            else if (char === "{") braceDepth++;
+            else if (char === "}") braceDepth = Math.max(0, braceDepth - 1);
+            else if (char === "[") bracketDepth++;
+            else if (char === "]") bracketDepth = Math.max(0, bracketDepth - 1);
+
+            if (
+                str.startsWith(delimiter, i) &&
+                depth === 0 &&
+                braceDepth === 0 &&
+                bracketDepth === 0
+            ) {
+                return [str.slice(0, i).trim(), str.slice(i + delimiter.length).trim()];
+            }
+        }
+    }
+    return null;
+}
+
 export function isFullyWrapped(
     str: string,
     open: string = "(",
@@ -1443,39 +1484,116 @@ export class CodonToASTParser {
             };
         }
 
-        // Object Expression: O(...) or O''
-        if (/^O[ (]/.test(strippedExpr) || strippedExpr === "O''") {
-            if (strippedExpr === "O''") return { type: "ObjectExpression", properties: [] };
+        // Spread Expression: ...expr (standalone, not an array)
+        if (strippedExpr.startsWith("...") && strippedExpr !== "..." && !strippedExpr.includes(";")) {
+            return {
+                type: "SpreadElement",
+                argument: this.parseExpression(strippedExpr.slice(3).trim()),
+            };
+        }
+
+        // Object Expression: O(...), O'', or O()
+        if (/^O[ (]/.test(strippedExpr) || strippedExpr === "O''" || strippedExpr === "O()") {
+            if (strippedExpr === "O''" || strippedExpr === "O()") return { type: "ObjectExpression", properties: [] };
             let strippedO = strippedExpr.startsWith("O(")
                 ? strippedExpr.substring(1).trim()
                 : strippedExpr.substring(2).trim();
             if (isFullyWrapped(strippedO)) strippedO = strippedO.slice(1, -1);
+            if (!strippedO.trim()) return { type: "ObjectExpression", properties: [] };
 
             const parts = splitAtLevel(strippedO, ";");
             const properties: any[] = [];
-            for (let i = 0; i < parts.length; i += 2) {
-                const keyPart = parts[i].trim();
-                if (keyPart === "'...'" || keyPart === "...") {
-                    properties.push({
-                        type: "SpreadElement",
-                        argument: this.parseExpression(parts[i + 1]),
-                    });
+            let i = 0;
+            while (i < parts.length) {
+                const part = parts[i].trim();
+                if (!part) {
+                    i++;
                     continue;
                 }
-                const keyNode = this.parseExpression(keyPart);
-                const keyName = keyNode.type === "Literal" ? String(keyNode.value) : (keyNode as Identifier).name;
-                const valNode = i + 1 < parts.length ? this.parseExpression(parts[i + 1]) : { type: "Identifier", name: keyName };
-                const isMethod = valNode.type === "FunctionExpression" || (valNode as any).type === "ObjectMethod";
+
+                // Spread: ...expr
+                if (part.startsWith("...") && part !== "...") {
+                    properties.push({
+                        type: "SpreadElement",
+                        argument: this.parseExpression(part.slice(3).trim()),
+                    });
+                    i++;
+                    continue;
+                }
+
+                // Legacy spread: '...';expr or ...;expr
+                if (part === "'...'" || part === "...") {
+                    if (i + 1 < parts.length) {
+                        properties.push({
+                            type: "SpreadElement",
+                            argument: this.parseExpression(parts[i + 1].trim()),
+                        });
+                        i += 2;
+                    } else {
+                        i++;
+                    }
+                    continue;
+                }
+
+                // Key-value pair with colon: key:val or 'key':val
+                const colonSplit = splitFirstAtLevel(part, ":");
+                if (colonSplit) {
+                    const [keyPart, valPart] = colonSplit;
+                    const keyNode = this.parseExpression(keyPart);
+                    const keyName = keyNode.type === "Literal" ? String(keyNode.value) : (keyNode as Identifier).name;
+                    const valNode = this.parseExpression(valPart);
+                    const isMethod = valNode.type === "FunctionExpression" || (valNode as any).type === "ObjectMethod";
+                    properties.push({
+                        type: "Property",
+                        key: /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(keyName)
+                            ? { type: "Identifier", name: keyName }
+                            : { type: "Literal", value: keyName },
+                        value: valNode,
+                        kind: "init",
+                        computed: false,
+                        method: isMethod,
+                        shorthand: false,
+                    });
+                    i++;
+                    continue;
+                }
+
+                // Legacy alternating format: 'key';val
+                if (part.startsWith("'") && i + 1 < parts.length) {
+                    const keyNode = this.parseExpression(part);
+                    const keyName = keyNode.type === "Literal" ? String(keyNode.value) : (keyNode as Identifier).name;
+                    const valNode = this.parseExpression(parts[i + 1].trim());
+                    const isMethod = valNode.type === "FunctionExpression" || (valNode as any).type === "ObjectMethod";
+                    properties.push({
+                        type: "Property",
+                        key: /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(keyName)
+                            ? { type: "Identifier", name: keyName }
+                            : { type: "Literal", value: keyName },
+                        value: valNode,
+                        kind: "init",
+                        computed: false,
+                        method: isMethod,
+                        shorthand: false,
+                    });
+                    i += 2;
+                    continue;
+                }
+
+                // Shorthand property: prop (e.g. counter, channel)
+                const propNode = this.parseExpression(part);
+                const propName = propNode.type === "Literal" ? String(propNode.value) : (propNode as Identifier).name;
                 properties.push({
                     type: "Property",
-                    key: /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(keyName)
-                        ? { type: "Identifier", name: keyName }
-                        : { type: "Literal", value: keyName },
-                    value: valNode,
+                    key: /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(propName)
+                        ? { type: "Identifier", name: propName }
+                        : { type: "Literal", value: propName },
+                    value: propNode,
                     kind: "init",
                     computed: false,
-                    method: isMethod,
+                    method: false,
+                    shorthand: true,
                 });
+                i++;
             }
             return { type: "ObjectExpression", properties };
         }

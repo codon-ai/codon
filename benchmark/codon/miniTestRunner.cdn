@@ -1,16 +1,16 @@
 class. TestSuite do.
 tests =: (0$0)
 method. test name,fn do.
-(this.tests.push O('name';name;'fn';fn))
+(this.tests.push O(name;fn))
 end.
 async_method. run  do.
 results =: (0$0)
 for_of. {name,fn} : this.tests do.
 try. do.
 @ fn()
-(results.push O('name';name;'passed';true))
+(results.push O(name;passed:true))
 catch. error do.
-(results.push O('name';name;'passed';false;'error';error))
+(results.push O(name;passed:false;error))
 end.
 end.
 return. results
@@ -19,11 +19,11 @@ end.
 
 NB. export
 {{ NB. FD|expect|actual
-return. O('toBe';({{ NB. method|expected
+return. O(toBe:({{ NB. method|expected
 if. (actual !== expected) do.
 throw. (new Error `Expected ${expected}, but received ${actual}`)
 end.
-}});'toEqual';({{ NB. method|expected
+}});toEqual:({{ NB. method|expected
 if. ((JSON.stringify actual) !== (JSON.stringify expected)) do.
 throw. (new Error `Expected ${(JSON.stringify expected)}, but got ${(JSON.stringify actual)}`)
 end.

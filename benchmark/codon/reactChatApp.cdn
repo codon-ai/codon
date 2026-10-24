@@ -2,7 +2,7 @@ NB. i|D:React:react|N:useState:react|N:useRef:react
 
 NB. export
 {{ NB. FD|ChatApp|
-[messages,setMessages] =: (useState (,O('id';1;'user';'Alice';'text';'Hello world!')))
+[messages,setMessages] =: (useState (,O(id:1;user:'Alice';text:'Hello world!')))
 [input,setInput] =: (useState '')
 nextId =: (useRef 2)
 sendMessage =: ({{ NB. pB|e
@@ -11,7 +11,7 @@ if. (! input.trim()) do.
 return.
 end.
 (setMessages ({{ NB. pE|prev
-('...';prev;O('id';(nextId.current++);'user';'Me';'text';input.trim()))
+(...prev;O(id:(nextId.current++);user:'Me';text:input.trim()))
 }}))
 (setInput '')
 }})

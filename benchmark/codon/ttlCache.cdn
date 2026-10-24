@@ -6,7 +6,7 @@ constructor. defaultTtlMs=60000 do.
 end.
 method. set key,value,ttlMs=this.defaultTtlMs do.
 expiresAt =: (Date.now() + ttlMs)
-(this.store.set key O('value';value;'expiresAt';expiresAt))
+(this.store.set key O(value;expiresAt))
 end.
 method. get key do.
 entry =: (this.store.get key)

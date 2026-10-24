@@ -122,12 +122,19 @@ export class JSToCodonTranslator {
                 return node.declarations
                     .map((d) => {
                         const idStr = this.transpilePattern(d.id);
-                        const initStr = d.init ? this.transpile(d.init) : "''";
+                        let initStr = d.init ? this.transpile(d.init) : "''";
+                        if (d.init?.type === "AwaitExpression" && initStr.startsWith("(@ ") && initStr.endsWith(")")) {
+                            initStr = "@ " + initStr.slice(3, -1);
+                        }
                         return `${idStr} =: ${initStr}`;
                     })
                     .join("\n");
 
             case "ExpressionStatement":
+                if (node.expression.type === "AwaitExpression") {
+                    const argStr = this.transpile((node.expression as any).argument);
+                    return `@ ${argStr}`;
+                }
                 return this.transpile(node.expression);
 
             case "BlockStatement":
@@ -316,9 +323,14 @@ export class JSToCodonTranslator {
                     const fnVal = p.value;
                     const pStr = fnVal.params.map((param: any) => this.transpilePattern(param)).join(",");
                     const asyncPrefix = fnVal.async ? "async " : "";
-                    return `'${keyStr}';({{ NB. ${asyncPrefix}method|${pStr}\n${this.transpile(fnVal.body)}\n}})`;
+                    const formattedKey = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(keyStr) ? keyStr : `'${keyStr}'`;
+                    return `${formattedKey}:({{ NB. ${asyncPrefix}method|${pStr}\n${this.transpile(fnVal.body)}\n}})`;
                 }
-                return `'${keyStr}';${this.transpile(p.value)}`;
+                if (p.shorthand || (p.key.type === "Identifier" && p.value.type === "Identifier" && p.key.name === p.value.name)) {
+                    return keyStr;
+                }
+                const formattedKey = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(keyStr) ? keyStr : `'${keyStr}'`;
+                return `${formattedKey}:${this.transpile(p.value)}`;
             }
 
             case "ObjectMethod" as any: {
@@ -326,11 +338,12 @@ export class JSToCodonTranslator {
                 const keyStr = p.key.type === "Identifier" ? p.key.name : String(p.key.value ?? this.transpile(p.key));
                 const pStr = p.params.map((param: any) => this.transpilePattern(param)).join(",");
                 const asyncPrefix = p.async ? "async " : "";
-                return `'${keyStr}';({{ NB. ${asyncPrefix}method|${pStr}\n${this.transpile(p.body)}\n}})`;
+                const formattedKey = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(keyStr) ? keyStr : `'${keyStr}'`;
+                return `${formattedKey}:({{ NB. ${asyncPrefix}method|${pStr}\n${this.transpile(p.body)}\n}})`;
             }
 
             case "SpreadElement":
-                return `'...';${this.transpile(node.argument)}`;
+                return `...${this.transpile(node.argument)}`;
 
             case "NewExpression": {
                 const newArgs = node.arguments.map((a) => this.transpile(a)).join(" ");
