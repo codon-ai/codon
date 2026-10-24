@@ -1,7 +1,6 @@
-NB. i|D:React:react|N:useState:react|N:useRef:react
+import. React,{useState,useRef} from 'react'
 
-NB. export
-fn. ChatApp do.
+export. fn. ChatApp do.
 [messages,setMessages] =: (useState (,O(id:1;user:'Alice';text:'Hello world!')))
 [input,setInput] =: (useState '')
 nextId =: (useRef 2)

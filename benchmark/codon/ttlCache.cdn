@@ -1,5 +1,4 @@
-NB. export
-class. TtlCache do.
+export. class. TtlCache do.
 store =: (new Map)
 constructor. defaultTtlMs=60000 do.
 (this.defaultTtlMs = defaultTtlMs)

@@ -75,21 +75,32 @@ export class JSToCodonTranslator {
 
                 for (const n of node.body) {
                     if (n.type === "ImportDeclaration") {
-                        const source = String((n.source as Literal).value).replace(/\|/g, "%7C").replace(/:/g, "%3A");
+                        const src = String((n.source as Literal).value);
                         if (!n.specifiers || n.specifiers.length === 0) {
-                            imports.push(`S::${source}`);
+                            imports.push(`import. '${src}'`);
                         } else {
+                            let defaultSpec = "";
+                            let namespaceSpec = "";
+                            const namedSpecs: string[] = [];
+
                             for (const s of n.specifiers) {
                                 if (s.type === "ImportDefaultSpecifier") {
-                                    imports.push(`D:${s.local.name}:${source}`);
+                                    defaultSpec = s.local.name;
                                 } else if (s.type === "ImportNamespaceSpecifier") {
-                                    imports.push(`A:${s.local.name}:${source}`);
+                                    namespaceSpec = `* as ${s.local.name}`;
                                 } else if (s.type === "ImportSpecifier") {
                                     const imported = s.imported.name;
                                     const local = s.local ? s.local.name : imported;
-                                    imports.push(`N:${imported}${local !== imported ? " as " + local : ""}:${source}`);
+                                    namedSpecs.push(local !== imported ? `${imported} as ${local}` : imported);
                                 }
                             }
+
+                            const specParts: string[] = [];
+                            if (defaultSpec) specParts.push(defaultSpec);
+                            if (namespaceSpec) specParts.push(namespaceSpec);
+                            if (namedSpecs.length > 0) specParts.push(`{${namedSpecs.join(",")}}`);
+
+                            imports.push(`import. ${specParts.join(",")} from '${src}'`);
                         }
                     } else if (n.type === "ExportDefaultDeclaration") {
                         exports.push(`NB. e|${this.transpile(n.declaration)}`);
@@ -98,7 +109,7 @@ export class JSToCodonTranslator {
                         exports.push(`NB. exAll|${source}`);
                     } else if (n.type === "ExportNamedDeclaration") {
                         if (n.declaration) {
-                            body.push(`NB. export\n` + this.transpile(n.declaration));
+                            body.push(`export. ` + this.transpile(n.declaration));
                         } else if (n.specifiers && n.specifiers.length > 0) {
                             const specNames = n.specifiers
                                 .map((s) => (s.exported ? s.exported.name : s.local.name))
@@ -112,7 +123,7 @@ export class JSToCodonTranslator {
                 }
 
                 const out: string[] = [];
-                if (imports.length > 0) out.push(`NB. i|${imports.join("|")}`);
+                out.push(...imports);
                 out.push(...body);
                 out.push(...exports);
                 return out.filter(Boolean).join("\n\n");
@@ -274,6 +285,35 @@ export class JSToCodonTranslator {
                     return `set. ${keyStr} ${params} do.\n${body}\nend.`;
                 }
                 return `${isAsync ? "async_method." : "method."} ${keyStr} ${params} do.\n${body}\nend.`;
+            }
+
+            case "ImportDeclaration": {
+                const src = String((node.source as Literal).value);
+                if (!node.specifiers || node.specifiers.length === 0) {
+                    return `import. '${src}'`;
+                }
+                let defaultSpec = "";
+                let namespaceSpec = "";
+                const namedSpecs: string[] = [];
+
+                for (const s of node.specifiers) {
+                    if (s.type === "ImportDefaultSpecifier") {
+                        defaultSpec = s.local.name;
+                    } else if (s.type === "ImportNamespaceSpecifier") {
+                        namespaceSpec = `* as ${s.local.name}`;
+                    } else if (s.type === "ImportSpecifier") {
+                        const imported = s.imported.name;
+                        const local = s.local ? s.local.name : imported;
+                        namedSpecs.push(local !== imported ? `${imported} as ${local}` : imported);
+                    }
+                }
+
+                const specParts: string[] = [];
+                if (defaultSpec) specParts.push(defaultSpec);
+                if (namespaceSpec) specParts.push(namespaceSpec);
+                if (namedSpecs.length > 0) specParts.push(`{${namedSpecs.join(",")}}`);
+
+                return `import. ${specParts.join(",")} from '${src}'`;
             }
 
             case "FunctionDeclaration": {

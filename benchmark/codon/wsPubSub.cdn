@@ -1,4 +1,4 @@
-NB. i|N:WebSocketServer:ws|N:WebSocket:ws
+import. {WebSocketServer,WebSocket} from 'ws'
 
 wss =: (new WebSocketServer O(port:8081))
 

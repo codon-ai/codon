@@ -1,4 +1,4 @@
-NB. i|D:express:express
+import. express from 'express'
 
 app =: express()
 

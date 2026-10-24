@@ -1,7 +1,8 @@
-NB. i|D:fs:node%3Afs/promises|D:path:node%3Apath
+import. fs from 'node:fs/promises'
 
-NB. export
-async_fn. scanDir dir,extension do.
+import. path from 'node:path'
+
+export. async_fn. scanDir dir,extension do.
 entries =: @ (fs.readdir dir O(withFileTypes:true))
 results =: (0$0)
 for_of. entry : entries do.

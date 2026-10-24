@@ -307,6 +307,8 @@ export class CodonToASTParser {
 
             if (b.startsWith("NB. i|")) {
                 body.push(...this.parseImports(b));
+            } else if (b.startsWith("import.") || b.startsWith("import ")) {
+                body.push(this.parseImportDeclaration(b));
             } else if (b.startsWith("NB. export")) {
                 const remainder = b.slice("NB. export".length).trim();
                 if (remainder) {
@@ -321,7 +323,12 @@ export class CodonToASTParser {
                 }
             } else if (b.startsWith("export.")) {
                 const remainder = b.slice("export.".length).trim();
-                if (remainder) {
+                if (remainder.startsWith("default ")) {
+                    body.push({
+                        type: "ExportDefaultDeclaration",
+                        declaration: this.parseExpression(remainder.slice(8).trim()),
+                    });
+                } else if (remainder) {
                     const parsed = this.parseStatement(remainder);
                     if (parsed) body.push({ type: "ExportNamedDeclaration", declaration: parsed, specifiers: [] });
                 } else if (idx + 1 < blocks.length) {
@@ -418,6 +425,94 @@ export class CodonToASTParser {
         return declarations;
     }
 
+    public parseImportDeclaration(stmt: string): Node {
+        stmt = stmt.trim();
+        let raw = "";
+        if (stmt.startsWith("import.")) {
+            raw = stmt.slice("import.".length).trim();
+        } else if (stmt.startsWith("import ")) {
+            raw = stmt.slice("import".length).trim();
+        }
+
+        // Side-effect only import: import. 'module' or import. "module"
+        if (/^['"`][^'"`]+['"`]$/.test(raw)) {
+            const src = raw.slice(1, -1);
+            return {
+                type: "ImportDeclaration",
+                specifiers: [],
+                source: { type: "Literal", value: src },
+            };
+        }
+
+        let specPart = "";
+        let srcPart = "";
+
+        const fromSplit = splitFirstAtLevel(raw, " from ");
+        if (fromSplit) {
+            specPart = fromSplit[0].trim();
+            srcPart = fromSplit[1].trim();
+        } else {
+            const colonSplit = splitFirstAtLevel(raw, ":");
+            if (colonSplit) {
+                specPart = colonSplit[0].trim();
+                srcPart = colonSplit[1].trim();
+            } else {
+                srcPart = raw;
+            }
+        }
+
+        const src = srcPart.replace(/^['"`]|['"`]$/g, "");
+        const specifiers: any[] = [];
+
+        if (specPart) {
+            const items = splitAtLevel(specPart, ",");
+            for (const item of items) {
+                const trimmed = item.trim();
+                if (!trimmed) continue;
+
+                if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+                    const inner = trimmed.slice(1, -1).trim();
+                    const namedList = splitAtLevel(inner, ",");
+                    for (const named of namedList) {
+                        const n = named.trim();
+                        if (!n) continue;
+                        if (n.includes(" as ")) {
+                            const [imported, local] = n.split(" as ").map((s) => s.trim());
+                            specifiers.push({
+                                type: "ImportSpecifier",
+                                imported: { type: "Identifier", name: imported },
+                                local: { type: "Identifier", name: local },
+                            });
+                        } else {
+                            specifiers.push({
+                                type: "ImportSpecifier",
+                                imported: { type: "Identifier", name: n },
+                                local: { type: "Identifier", name: n },
+                            });
+                        }
+                    }
+                } else if (trimmed.startsWith("* as ")) {
+                    const localName = trimmed.slice(5).trim();
+                    specifiers.push({
+                        type: "ImportNamespaceSpecifier",
+                        local: { type: "Identifier", name: localName },
+                    });
+                } else {
+                    specifiers.push({
+                        type: "ImportDefaultSpecifier",
+                        local: { type: "Identifier", name: trimmed },
+                    });
+                }
+            }
+        }
+
+        return {
+            type: "ImportDeclaration",
+            specifiers,
+            source: { type: "Literal", value: src },
+        };
+    }
+
     public parseBlock(bodyStr: string): BlockStatement {
         const stmts = splitCodonStatements(bodyStr);
         const body: Node[] = [];
@@ -433,7 +528,31 @@ export class CodonToASTParser {
         if (!stmt) return null;
         if (stmt.endsWith(";")) stmt = stmt.slice(0, -1).trim();
 
-        // Export Default
+        // Import Declaration
+        if (stmt.startsWith("import.") || stmt.startsWith("import ")) {
+            return this.parseImportDeclaration(stmt);
+        }
+
+        // Export Declaration
+        if (stmt.startsWith("export.")) {
+            const remainder = stmt.slice("export.".length).trim();
+            if (remainder.startsWith("default ")) {
+                return {
+                    type: "ExportDefaultDeclaration",
+                    declaration: this.parseExpression(remainder.slice(8).trim()),
+                };
+            }
+            const parsed = this.parseStatement(remainder);
+            if (parsed) {
+                return {
+                    type: "ExportNamedDeclaration",
+                    declaration: parsed,
+                    specifiers: [],
+                };
+            }
+        }
+
+        // Export Default (Legacy)
         if (stmt.startsWith("NB. e|")) {
             return {
                 type: "ExportDefaultDeclaration",

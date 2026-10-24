@@ -17,8 +17,7 @@ return. results
 end.
 end.
 
-NB. export
-fn. expect actual do.
+export. fn. expect actual do.
 return. O(toBe:{{fn expected => do.
 if. (actual !== expected) do.
 throw. (new Error `Expected ${expected}, but received ${actual}`)
@@ -30,8 +29,7 @@ end.
 }})
 end.
 
-NB. export
-suite =: (new TestSuite)
+export. suite =: (new TestSuite)
 
 (suite.test 'math addition' {{ => do.
 ((expect (1 + 1)).toBe 2)

@@ -888,5 +888,123 @@ return. entries
     });
 });
 
+describe("Concise Module Imports and Exports (import. and export.) Support", () => {
+    test("Transpiles import. declarations with default, named, namespace, and side-effect specifiers", () => {
+        const codonCode = `
+import. express from 'express'
+import. React,{useState,useRef} from 'react'
+import. * as path from 'path'
+import. 'style.css'
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
 
+        expect(js).toContain('import express from "express";');
+        expect(js).toContain('import React, { useState, useRef } from "react";');
+        expect(js).toContain('import * as path from "path";');
+        expect(js).toContain('import "style.css";');
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
 
+    test("Transpiles import. with colon separator and aliased specifiers", () => {
+        const codonCode = `
+import. express : 'express'
+import. {read as readFile,write as writeFile} from 'fs'
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain('import express from "express";');
+        expect(js).toContain('import { read as readFile, write as writeFile } from "fs";');
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles export. declarations and export. default", () => {
+        const codonCode = `
+export. fn. add a,b do.
+return. (a + b)
+end.
+
+export. class. User do.
+end.
+
+export. default (add 1 2)
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("export function add(a, b)");
+        expect(js).toContain("export class User");
+        expect(js).toContain("export default add(1, 2);");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips JS import and export declarations with import. and export.", () => {
+        const jsCode = `
+import express from "express";
+import React, { useState, useRef } from "react";
+import * as path from "node:path";
+import "reset.css";
+
+export function handleRequest(req, res) {
+  return res.json({ ok: true });
+}
+
+export class ServiceClient {
+  constructor(url) {
+    this.url = url;
+  }
+}
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("import. express from 'express'");
+        expect(codonCode).toContain("import. React,{useState,useRef} from 'react'");
+        expect(codonCode).toContain("import. * as path from 'node:path'");
+        expect(codonCode).toContain("import. 'reset.css'");
+        expect(codonCode).toContain("export. fn. handleRequest req,res do.");
+        expect(codonCode).toContain("export. class. ServiceClient do.");
+        expect(codonCode).not.toContain("NB. i|");
+        expect(codonCode).not.toContain("NB. export\n");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+        expect(roundtrippedJs).toContain('import express from "express";');
+        expect(roundtrippedJs).toContain('import React, { useState, useRef } from "react";');
+        expect(roundtrippedJs).toContain('import * as path from "node:path";');
+        expect(roundtrippedJs).toContain('import "reset.css";');
+        expect(roundtrippedJs).toContain("export function handleRequest(req, res)");
+        expect(roundtrippedJs).toContain("export class ServiceClient");
+    });
+
+    test("Retains backward compatibility with legacy NB. i| and NB. export forms", () => {
+        const codonCode = `
+NB. i|D:express:express|N:useState,useRef:react
+NB. export
+fn. legacyHandler do.
+return. 1
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain('import express from "express";');
+        expect(js).toContain('import { useState, useRef } from "react";');
+        expect(js).toContain("export function legacyHandler()");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+});

@@ -1,5 +1,4 @@
-NB. export
-class. AsyncTaskQueue do.
+export. class. AsyncTaskQueue do.
 queue =: (0$0)
 activeCount =: 0
 constructor. concurrency do.

@@ -1,7 +1,6 @@
 transitions =: O(pending:O(pay:'paid';cancel:'cancelled');paid:O(ship:'shipped';cancel:'cancelled');shipped:O(deliver:'delivered');delivered:O'';cancelled:O'')
 
-NB. export
-fn. transition order,action do.
+export. fn. transition order,action do.
 nextState =: transitions.[order.state]?. [action]
 if. (! nextState) do.
 throw. (new Error `Cannot transition from '${order.state}' with action '${action}'`)

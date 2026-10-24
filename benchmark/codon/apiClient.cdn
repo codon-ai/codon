@@ -1,5 +1,4 @@
-NB. export
-class. ApiClient do.
+export. class. ApiClient do.
 constructor. baseUrl,defaultHeaders=O'' do.
 (this.baseUrl = baseUrl)
 (this.defaultHeaders = defaultHeaders)
