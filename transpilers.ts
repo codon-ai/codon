@@ -54,6 +54,15 @@ export class JSToJTranspiler {
             case "BlockStatement":
                 return node.body.map((n) => this.transpile(n)).join("\n");
 
+            case "IfStatement":
+                const testStr = this.transpile(node.test);
+                const consStr = this.transpile(node.consequent);
+                if (node.alternate) {
+                    const altStr = this.transpile(node.alternate);
+                    return `if. ${testStr} do.\n${consStr}\nelse.\n${altStr}\nend.`;
+                }
+                return `if. ${testStr} do.\n${consStr}\nend.`;
+
             case "FunctionDeclaration":
                 const fdParams = node.params
                     .map((p) => this.transpilePattern(p))
@@ -117,12 +126,24 @@ export class JSToJTranspiler {
                     return `${this.transpile(node.object)}.${this.transpile(node.property)}`;
                 return `${this.transpile(node.object)}.${(node.property as Identifier).name}`;
 
+            case "AssignmentExpression":
             case "BinaryExpression":
             case "LogicalExpression":
                 return `(${this.transpile(node.left)} ${node.operator} ${this.transpile(node.right)})`;
 
             case "UnaryExpression":
                 return `(${node.operator}${this.transpile(node.argument)})`;
+
+            case "TemplateLiteral":
+                let tpl = "`";
+                for (let i = 0; i < node.quasis.length; i++) {
+                    tpl += node.quasis[i].value.raw;
+                    if (i < node.expressions.length) {
+                        tpl += "${" + this.transpile(node.expressions[i]) + "}";
+                    }
+                }
+                tpl += "`";
+                return tpl;
 
             case "Literal":
                 if (node.value === null) return `''`;
@@ -168,7 +189,6 @@ export class JToJSTranspiler {
     public transpile(node: Node): string {
         if (!node) return "";
 
-        // Deep clone and transform ESTree into Babel-compatible AST
         const toBabel = (n: any): any => {
             if (Array.isArray(n)) return n.map(toBabel);
             if (!n || typeof n !== "object") return n;
@@ -178,7 +198,6 @@ export class JToJSTranspiler {
                 res[key] = toBabel(n[key]);
             }
 
-            // Map ESTree 'Literal' to Babel's strict literal types
             if (res.type === "Literal") {
                 if (typeof res.value === "string")
                     return { ...res, type: "StringLiteral" };
@@ -189,7 +208,6 @@ export class JToJSTranspiler {
                 if (res.value === null) return { ...res, type: "NullLiteral" };
             }
 
-            // Map ESTree 'Property' to Babel's 'ObjectProperty'
             if (res.type === "Property") {
                 return { ...res, type: "ObjectProperty" };
             }

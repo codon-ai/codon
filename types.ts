@@ -26,9 +26,12 @@ export type Node =
     | FunctionExpression
     | FunctionDeclaration
     | ReturnStatement
+    | IfStatement
     | BinaryExpression
     | LogicalExpression
+    | AssignmentExpression
     | UnaryExpression
+    | TemplateLiteral
     | ObjectPattern
     | ArrayPattern
     | AssignmentPattern
@@ -45,7 +48,7 @@ export interface VariableDeclaration {
 }
 export interface VariableDeclarator {
     type: "VariableDeclarator";
-    id: Node; // Support Patterns
+    id: Node;
     init: Node | null;
 }
 export interface Identifier {
@@ -163,6 +166,12 @@ export interface ReturnStatement {
     type: "ReturnStatement";
     argument: Node | null;
 }
+export interface IfStatement {
+    type: "IfStatement";
+    test: Node;
+    consequent: Node;
+    alternate: Node | null;
+}
 export interface BinaryExpression {
     type: "BinaryExpression";
     operator: string;
@@ -175,11 +184,22 @@ export interface LogicalExpression {
     left: Node;
     right: Node;
 }
+export interface AssignmentExpression {
+    type: "AssignmentExpression";
+    operator: string;
+    left: Node;
+    right: Node;
+}
 export interface UnaryExpression {
     type: "UnaryExpression";
     operator: string;
     prefix: boolean;
     argument: Node;
+}
+export interface TemplateLiteral {
+    type: "TemplateLiteral";
+    quasis: any[];
+    expressions: Node[];
 }
 export interface ObjectPattern {
     type: "ObjectPattern";

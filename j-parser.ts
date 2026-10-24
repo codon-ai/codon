@@ -1,17 +1,65 @@
 import type { Node, Program, Identifier, BlockStatement } from "./types";
 
-function indexAtLevel(str: string, token: string): number {
-    let depth = 0,
-        inString = false;
-    for (let i = 0; i < str.length; i++) {
-        const c = str[i];
-        if (c === "'") inString = !inString;
-        if (inString) continue;
-        if (c === "(" || c === "{") depth++;
-        else if (c === ")" || c === "}") depth--;
-        else if (depth === 0 && str.startsWith(token, i)) return i;
+export function splitJStatements(code: string): string[] {
+    const statements: string[] = [];
+    let current = "";
+    let parenDepth = 0;
+    let ifDepth = 0;
+    let i = 0;
+
+    while (i < code.length) {
+        // Strings
+        if (code[i] === "'") {
+            current += code[i++];
+            while (i < code.length) {
+                current += code[i];
+                if (code[i] === "'" && code[i + 1] !== "'") {
+                    i++;
+                    break;
+                }
+                if (code[i] === "'" && code[i + 1] === "'") {
+                    current += code[++i];
+                }
+                i++;
+            }
+            continue;
+        }
+
+        // Template Literals
+        if (code[i] === "`") {
+            current += code[i++];
+            while (i < code.length && code[i] !== "`") current += code[i++];
+            if (i < code.length) current += code[i++];
+            continue;
+        }
+
+        if (code[i] === "(" || code[i] === "{" || code[i] === "[") parenDepth++;
+        if (code[i] === ")" || code[i] === "}" || code[i] === "]") parenDepth--;
+
+        if (code.startsWith("if.", i)) ifDepth++;
+        if (code.startsWith("end.", i)) {
+            ifDepth = Math.max(0, ifDepth - 1);
+            current += "end.";
+            i += 4;
+            if (parenDepth === 0 && ifDepth === 0) {
+                statements.push(current.trim());
+                current = "";
+            }
+            continue;
+        }
+
+        current += code[i];
+
+        if (parenDepth === 0 && ifDepth === 0 && code[i] === "\n") {
+            if (current.trim()) {
+                statements.push(current.trim());
+                current = "";
+            }
+        }
+        i++;
     }
-    return -1;
+    if (current.trim()) statements.push(current.trim());
+    return statements;
 }
 
 function splitAtLevel(str: string, delimiter: string): string[] {
@@ -59,13 +107,13 @@ function isFullyWrapped(
 export class JToASTParser {
     public parse(code: string): Program {
         const normalized = code.replace(/\r\n/g, "\n");
-        const blocks = splitAtLevel(normalized, "\n\n");
+        const blocks = splitJStatements(normalized);
         const body: Node[] = [];
         for (const b of blocks) {
             if (b.startsWith("NB. i|"))
                 body.push(...this.parseImports(b.trim()));
             else {
-                const parsed = this.parseStatement(b.trim());
+                const parsed = this.parseStatement(b);
                 if (parsed) body.push(parsed);
             }
         }
@@ -103,42 +151,66 @@ export class JToASTParser {
     }
 
     private parseBlock(bodyStr: string): BlockStatement {
-        const stmts = splitAtLevel(bodyStr, "\n");
+        const stmts = splitJStatements(bodyStr);
         const body: Node[] = [];
         for (const s of stmts) {
-            const stmt = this.parseStatement(s.trim());
+            const stmt = this.parseStatement(s);
             if (stmt) body.push(stmt);
         }
         return { type: "BlockStatement", body };
     }
 
     private parseStatement(stmt: string): Node | null {
+        stmt = stmt.trim();
         if (!stmt) return null;
+        if (stmt.endsWith(";")) stmt = stmt.slice(0, -1).trim();
+
         if (stmt.startsWith("NB. e|"))
             return {
                 type: "ExportDefaultDeclaration",
                 declaration: this.parseExpression(stmt.substring(6).trim()),
             };
 
-        const assignIdx = indexAtLevel(stmt, " =: ");
-        if (
-            assignIdx !== -1 &&
-            !stmt.startsWith("{{") &&
-            !stmt.startsWith("({{")
-        ) {
+        const ifRegex =
+            /^if\.\s*([\s\S]*?)\s*do\.\s*([\s\S]*?)(?:\s*else\.\s*([\s\S]*?))?\s*end\.$/;
+        const matchIf = stmt.match(ifRegex);
+        if (matchIf) {
+            const test = this.parseExpression(matchIf[1]);
+            const consequent = this.parseBlock(matchIf[2]);
+            const alternate = matchIf[3] ? this.parseBlock(matchIf[3]) : null;
+            return { type: "IfStatement", test, consequent, alternate };
+        }
+
+        // Recover from JS-style constant blocks
+        const varMatch = stmt.match(
+            /^(const|let|var)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=\s*([\s\S]*)$/,
+        );
+        if (varMatch) {
+            return {
+                type: "VariableDeclaration",
+                kind: varMatch[1],
+                declarations: [
+                    {
+                        type: "VariableDeclarator",
+                        id: { type: "Identifier", name: varMatch[2] },
+                        init: this.parseExpression(varMatch[3]),
+                    },
+                ],
+            };
+        }
+
+        const assignMatch = stmt.match(
+            /^([a-zA-Z_$][a-zA-Z0-9_$]*)\s*(?:=:|=.)\s*([\s\S]*)$/,
+        );
+        if (assignMatch && !stmt.startsWith("{{") && !stmt.startsWith("({{")) {
             return {
                 type: "VariableDeclaration",
                 kind: "const",
                 declarations: [
                     {
                         type: "VariableDeclarator",
-                        id: {
-                            type: "Identifier",
-                            name: stmt.substring(0, assignIdx).trim(),
-                        },
-                        init: this.parseExpression(
-                            stmt.substring(assignIdx + 4).trim(),
-                        ),
+                        id: { type: "Identifier", name: assignMatch[1] },
+                        init: this.parseExpression(assignMatch[2]),
                     },
                 ],
             };
@@ -147,6 +219,97 @@ export class JToASTParser {
         const expr = this.parseExpression(stmt);
         if (expr.type === "FunctionDeclaration") return expr;
         return { type: "ExpressionStatement", expression: expr };
+    }
+
+    private parseBinaryOrAssignment(str: string): Node | null {
+        let depth = 0,
+            inStr = false,
+            inTpl = false;
+        let lowestPrec = -1;
+        let opIdx = -1;
+        let foundOp = "";
+
+        const ops = [
+            ["="],
+            ["||", "??"],
+            ["&&"],
+            ["===", "!==", "==", "!="],
+            ["<=", ">=", "<", ">"],
+            ["+", "-"],
+            ["*", "/", "%"],
+        ];
+
+        const getPrec = (op: string) =>
+            ops.findIndex((list) => list.includes(op));
+
+        for (let i = 0; i < str.length; i++) {
+            if (str[i] === "'" && !inTpl) inStr = !inStr;
+            if (str[i] === "`" && !inStr) inTpl = !inTpl;
+            if (inStr || inTpl) continue;
+            if (str[i] === "(" || str[i] === "[" || str[i] === "{") depth++;
+            if (str[i] === ")" || str[i] === "]" || str[i] === "}") depth--;
+
+            if (depth === 0) {
+                for (const opGroup of ops) {
+                    for (const op of opGroup) {
+                        if (str.startsWith(op, i)) {
+                            // Ensure we don't accidentally match partial operators
+                            if (
+                                op === "=" &&
+                                (str[i + 1] === "=" ||
+                                    str[i + 1] === ":" ||
+                                    str[i + 1] === ".")
+                            )
+                                continue;
+                            if (
+                                (op === "<" ||
+                                    op === ">" ||
+                                    op === "!" ||
+                                    op === "=") &&
+                                str[i + 1] === "="
+                            )
+                                continue;
+
+                            const p = getPrec(op);
+                            if (p >= lowestPrec) {
+                                lowestPrec = p;
+                                opIdx = i;
+                                foundOp = op;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (opIdx !== -1) {
+            const leftStr = str.substring(0, opIdx).trim();
+            const rightStr = str.substring(opIdx + foundOp.length).trim();
+
+            if (foundOp === "=") {
+                return {
+                    type: "AssignmentExpression",
+                    operator: "=",
+                    left: this.parseExpression(leftStr),
+                    right: this.parseExpression(rightStr),
+                };
+            } else if (["&&", "||", "??"].includes(foundOp)) {
+                return {
+                    type: "LogicalExpression",
+                    operator: foundOp,
+                    left: this.parseExpression(leftStr),
+                    right: this.parseExpression(rightStr),
+                };
+            } else {
+                return {
+                    type: "BinaryExpression",
+                    operator: foundOp,
+                    left: this.parseExpression(leftStr),
+                    right: this.parseExpression(rightStr),
+                };
+            }
+        }
+        return null;
     }
 
     private parseExpression(expr: string): Node {
@@ -159,7 +322,9 @@ export class JToASTParser {
             wasWrapped = true;
         }
 
-        // Functions
+        const binNode = this.parseBinaryOrAssignment(strippedExpr);
+        if (binNode) return binNode;
+
         if (strippedExpr.startsWith("{{") && strippedExpr.endsWith("}}")) {
             const inner = strippedExpr.slice(2, -2).trim();
             const nlIdx = inner.indexOf("\n");
@@ -209,7 +374,6 @@ export class JToASTParser {
                 };
         }
 
-        // Objects
         if (/^O[ (]/.test(strippedExpr) || strippedExpr === "O''") {
             if (strippedExpr === "O''")
                 return { type: "ObjectExpression", properties: [] };
@@ -262,7 +426,6 @@ export class JToASTParser {
             };
         }
 
-        // Single-element Arrays
         if (strippedExpr.startsWith(",") && wasWrapped) {
             return {
                 type: "ArrayExpression",
@@ -302,6 +465,50 @@ export class JToASTParser {
 
         if (strippedExpr === "true" || strippedExpr === "false")
             return { type: "Literal", value: strippedExpr === "true" };
+
+        if (strippedExpr.startsWith("`") && strippedExpr.endsWith("`")) {
+            const content = strippedExpr.slice(1, -1);
+            const quasis = [];
+            const expressions = [];
+            let i = 0;
+            let lastIdx = 0;
+            while (i < content.length) {
+                if (content.substring(i, i + 2) === "${") {
+                    quasis.push({
+                        type: "TemplateElement",
+                        value: {
+                            raw: content.substring(lastIdx, i),
+                            cooked: content.substring(lastIdx, i),
+                        },
+                        tail: false,
+                    });
+                    let depth = 1;
+                    let j = i + 2;
+                    while (j < content.length && depth > 0) {
+                        if (content[j] === "{") depth++;
+                        else if (content[j] === "}") depth--;
+                        j++;
+                    }
+                    expressions.push(
+                        this.parseExpression(content.substring(i + 2, j - 1)),
+                    );
+                    lastIdx = j;
+                    i = j;
+                } else {
+                    i++;
+                }
+            }
+            quasis.push({
+                type: "TemplateElement",
+                value: {
+                    raw: content.substring(lastIdx),
+                    cooked: content.substring(lastIdx),
+                },
+                tail: true,
+            });
+            return { type: "TemplateLiteral", quasis, expressions };
+        }
+
         if (strippedExpr.startsWith("'") && strippedExpr.endsWith("'"))
             return {
                 type: "Literal",
