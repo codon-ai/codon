@@ -12,7 +12,7 @@ for_of. [key,value] : (Object.entries params) do.
 (url.searchParams.set key (String value))
 end.
 end.
-response =: (@ (fetch url.toString() O('...';rest;'headers';O('Content-Type';'application/json';'...';this.defaultHeaders;'...';headers))))
+response =: @ (fetch url.toString() O('...';rest;'headers';O('Content-Type';'application/json';'...';this.defaultHeaders;'...';headers)))
 if. (! response.ok) do.
 throw. (new Error `HTTP Error ${response.status}: ${response.statusText}`)
 end.

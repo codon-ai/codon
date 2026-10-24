@@ -43,7 +43,7 @@ delay =: ({{ NB. pE|ms
 
 tasks =: ((1;2;3;4).map ({{ NB. pE|id
 (queue.add ({{ NB. async pB|
-(@ (delay 50))
+@ (delay 50)
 return. `Task ${id} done`
 }}))
 }}))
