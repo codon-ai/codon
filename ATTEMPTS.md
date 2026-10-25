@@ -1,8 +1,8 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
-## Revision 12a (successful)
-- **Tokens:** 772
+## Revision 12a (unsuccessful)
+- **Tokens:** 8661
 
 - **Revision Idea**: Introduce concise unparenthesized statement-level function and method calls (`callee arg1 arg2`, `obj.method arg1 arg2`, `this.method arg1 arg2`) and standard argument call syntax (`callee(args)`) in Codon, eliminating mandatory outer wrapping parentheses `(console.log 'hello')`, `(res.json O(...))`, and `(addTodo 'item')` across statement-level invocations.
 - **Rationale**: In modern AI fullstack web development (React state setter calls `setMessages(...)` and `setInput(...)`, Express/Koa response streaming `res.json(...)`, `res.status(...)`, `res.writeHead(...)`, database operations `insertStmt.run(...)` and `db.exec(...)`, logging `console.log(...)`, DOM/Observer mutations `observer.observe(...)`, stream piping `req.pipe(...)`, socket emissions `this.emit(...)`, and controller calls `addTodo(...)`), statement-level function and method calls are ubiquitous, occurring on 25–40% of executable lines in fullstack modules. Prior to Revision 12a, Codon suffered from two major limitations:
