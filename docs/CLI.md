@@ -1,6 +1,6 @@
 # Codon Command-Line Interface (CLI) Manual
 
-The Codon CLI provides tools to compile Codon files (`.cdn`) into standard JavaScript (`.js`), translate existing JavaScript/React files (`.js`, `.jsx`) into concise Codon notation with automatic macro compaction, and verify compilation fidelity.
+The Codon CLI provides powerful tools to build entire multi-file Codon projects (similar to `tsc`), bootstrap new applications (`codon init`), compile single Codon files (`.cdn`) into standard JavaScript (`.js`), translate existing JavaScript/React files (`.js`, `.jsx`) into concise Codon notation with automatic macro compaction, and verify compilation fidelity.
 
 ---
 
@@ -8,36 +8,100 @@ The Codon CLI provides tools to compile Codon files (`.cdn`) into standard JavaS
 
 1. [Installation & Requirements](#installation--requirements)
 2. [CLI Commands](#cli-commands)
-   - [`compile`: Codon ➔ JavaScript](#compile-codon--javascript)
+   - [`build`: Project Directory Compilation (tsc-like)](#build-project-directory-compilation-tsc-like)
+   - [`init`: Bootstrap New Codon Project](#init-bootstrap-new-codon-project)
+   - [`compile`: Single File Codon ➔ JavaScript](#compile-single-file-codon--javascript)
    - [`translate`: JavaScript ➔ Codon](#translate-javascript--codon)
    - [`verify`: Benchmark Verification](#verify-benchmark-verification)
-3. [NPM / Bun Script Shortcuts](#npm--bun-script-shortcuts)
-4. [File Extension Conventions](#file-extension-conventions)
-5. [Error Diagnostics & Troubleshooting](#error-diagnostics--troubleshooting)
+3. [Project Configuration (`codon.json`)](#project-configuration-codonjson)
+4. [NPM / Bun Script Shortcuts](#npm--bun-script-shortcuts)
+5. [File Extension Conventions](#file-extension-conventions)
+6. [Error Diagnostics & Troubleshooting](#error-diagnostics--troubleshooting)
 
 ---
 
 ## Installation & Requirements
 
-The CLI runs directly with [Bun](https://bun.sh/) (or Node.js with TypeScript loaders).
+The CLI runs directly with [Bun](https://bun.sh/) or Node.js. It is also exposed via the `bin` executable `codon` (and `codonc`):
 
-Ensure dependencies are installed:
 ```bash
 bun install
 ```
 
-The CLI entrypoint is `index.ts`.
+When installed globally or linked (`npm link` / `bun link`), the CLI can be invoked directly as:
+```bash
+codon <command> [options]
+```
+
+Or via bun during development:
+```bash
+bun run index.ts <command> [options]
+```
 
 ---
 
 ## CLI Commands
 
-### `compile`: Codon ➔ JavaScript
+### `build`: Project Directory Compilation (tsc-like)
 
-Converts a Codon (`.cdn`) source file into standard, executable JavaScript.
+Compiles an entire Codon project directory into standard, runnable ECMAScript modules (ESM), preserving folder structure, rewriting `.cdn` import specifiers to `.js`, copying static assets, and bundling the standalone Codon runtime.
 
 ```bash
-bun run index.ts compile <path-to-file.cdn>
+# Compile project in the current directory (or nearest parent containing codon.json)
+codon build
+
+# Compile project in a specific directory
+codon build ./packages/api
+
+# Watch mode: incremental recompilation on file change
+codon build -w
+codon build --watch
+
+# Clean output directory before building
+codon build --clean
+
+# Override root and output directories
+codon build -r src -o dist
+```
+
+#### Build Options:
+| Flag | Short | Default | Description |
+|---|---|---|---|
+| `--outDir <dir>` | `-o` | `"dist"` | Output directory for compiled `.js` files. |
+| `--rootDir <dir>` | `-r` | `"src"` | Root directory containing `.cdn` source files and assets. |
+| `--project <path>` | `-p` | `"codon.json"` | Path to custom `codon.json` configuration file. |
+| `--watch` | `-w` | `false` | Enable watch mode for fast incremental recompilation. |
+| `--clean` | | `false` | Remove `outDir` contents before building. |
+| `--no-copy-assets` | | `false` | Skip copying static assets (JSON, CSS, SVG, etc.). |
+| `--no-bundle-runtime`| | `false` | Skip emitting `dist/codon-runtime.js`. |
+| `--help` | `-h` | | Display help message. |
+
+---
+
+### `init`: Bootstrap New Codon Project
+
+Bootstraps a ready-to-run Codon project (Method B: native ESM with `package.json` scripts):
+
+```bash
+codon init [target-directory]
+```
+
+#### What It Creates:
+1. **`package.json`**: Configured with `"type": "module"`, `"main": "dist/index.js"`, and scripts:
+   - `"build": "codon build"`
+   - `"dev": "codon build --watch"`
+   - `"start": "node dist/index.js"`
+2. **`codon.json`**: Preconfigured compiler options (`rootDir: "src"`, `outDir: "dist"`).
+3. **`src/index.cdn`**: Starter entrypoint demonstrating imports, functions, array calculations, and execution.
+
+---
+
+### `compile`: Single File Codon ➔ JavaScript
+
+Converts an individual Codon (`.cdn`) source file into standard, executable JavaScript.
+
+```bash
+codon compile <path-to-file.cdn>
 ```
 
 #### What Happens:
@@ -106,13 +170,19 @@ bun run index.ts verify
 For convenience, `package.json` defines shortcuts for the core CLI commands:
 
 ```bash
-# Compile
+# Build entire project
+bun run build
+
+# Bootstrap a new project
+bun run init <dir>
+
+# Compile single file
 bun run compile path/to/file.cdn
 
-# Translate
+# Translate single file
 bun run translate path/to/file.js
 
-# Verify
+# Verify benchmark suite
 bun run verify
 
 # Run unit tests

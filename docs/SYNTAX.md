@@ -484,7 +484,7 @@ throw. (new Error 'Operation failed')
 
 ## 10. Modules & Imports/Exports
 
-Codon uses `import.` and `export.` control words, eliminating legacy comment metadata:
+Codon uses native `import.` and `export.` control words for complete ECMAScript module support:
 
 ```codon
 NB. Imports
@@ -492,9 +492,17 @@ import. express from 'express'
 import. { useState, useEffect } from 'react'
 import. React, { Component } from 'react'
 import. * as fs from 'node:fs/promises'
-import. './styles.css'
+import. { calculateAverage } from './utils/math.cdn'      NB. .cdn is rewritten to .js on compilation
+import. config from './config.json' with { type: 'json' } NB. Import attributes
+import. './styles.css'                                    NB. Side-effect asset import
 
-NB. Exports
+NB. Re-Exports
+export. * from './utils/math.cdn'
+export. * as mathUtils from './utils/math.cdn'
+export. { calculateAverage, sumVector as sum } from './utils/math.cdn'
+export. { localHandler, config }
+
+NB. Named & Default Exports
 export. fn. helper do.
   return. true
 end.
@@ -503,7 +511,15 @@ export. class. ApiClient do.
 end.
 
 export. default App
+
+NB. Dynamic Imports
+async_fn. loadPlugin name do.
+  plugin =: @ (import `./plugins/${name}.cdn`)
+  return. plugin
+end.
 ```
+
+For full multi-file application structure, `codon.json` configuration, and project-wide compilation with `codon build`, see the **[Projects Guide](PROJECTS.md)**.
 
 ---
 

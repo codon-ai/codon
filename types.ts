@@ -12,6 +12,10 @@ export type Node =
     | ExportDefaultDeclaration
     | ExportNamedDeclaration
     | ExportAllDeclaration
+    | ExportSpecifier
+    | ExportNamespaceSpecifier
+    | ImportAttribute
+    | ImportExpression
     | ArrowFunctionExpression
     | CallExpression
     | MemberExpression
@@ -120,6 +124,13 @@ export interface ImportDeclaration {
     type: "ImportDeclaration";
     specifiers: (ImportSpecifier | ImportDefaultSpecifier | ImportNamespaceSpecifier)[];
     source: Literal;
+    attributes?: ImportAttribute[];
+}
+
+export interface ImportAttribute {
+    type: "ImportAttribute";
+    key: Identifier;
+    value: Literal;
 }
 
 export interface ImportSpecifier {
@@ -138,6 +149,12 @@ export interface ImportNamespaceSpecifier {
     local: Identifier;
 }
 
+export interface ImportExpression {
+    type: "ImportExpression";
+    source: Node;
+    options?: Node | null;
+}
+
 export interface ExportDefaultDeclaration {
     type: "ExportDefaultDeclaration";
     declaration: Node;
@@ -150,9 +167,21 @@ export interface ExportNamedDeclaration {
     source?: Literal | null;
 }
 
+export interface ExportSpecifier {
+    type: "ExportSpecifier";
+    local: Identifier;
+    exported: Identifier;
+}
+
+export interface ExportNamespaceSpecifier {
+    type: "ExportNamespaceSpecifier";
+    exported: Identifier;
+}
+
 export interface ExportAllDeclaration {
     type: "ExportAllDeclaration";
     source: Literal;
+    exported?: Identifier | null;
 }
 
 export interface ArrowFunctionExpression {

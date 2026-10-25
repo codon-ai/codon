@@ -12,11 +12,12 @@ Explore the comprehensive documentation guides:
 
 | Guide | Description |
 | :--- | :--- |
+| **[Multi-File Projects](PROJECTS.md)** | **Complete guide to authoring multi-file Codon projects**, `codon init`, `codon build` (tsc-like compiler), `codon.json`, relative imports, npm packages, and watch mode. |
 | **[Macros System](MACROS.md)** | **Exhaustive guide to Codon's Subtree-Hashing Macro System (`M!`)**, empirical `dict.json` dictionary, wyhash Level-2 code clone compaction, and catalog. |
 | **[Syntax Specification](SYNTAX.md)** | Complete specification of Codon syntax: array trains, forks, hooks, folds, classes, JSX, async verbs, and control structures. |
 | **[Runtime Library](RUNTIME.md)** | API reference for `codon-runtime.ts` combinators (`fork`, `hook`, `atop`, `rank`) and array verbs (`tally`, `range`, `gradeUp`, etc.). |
 | **[Programmatic API](API.md)** | TypeScript developer guide for `CodonToASTParser`, `CodonToJSCompiler`, `JSToCodonTranslator`, and `MacroDictionary`. |
-| **[CLI & Tooling](CLI.md)** | Manual for the Codon Command-Line Interface (`compile`, `translate`, `verify`), workflows, and file conventions. |
+| **[CLI & Tooling](CLI.md)** | Manual for the Codon Command-Line Interface (`build`, `init`, `compile`, `translate`, `verify`), workflows, and file conventions. |
 
 ---
 
@@ -97,7 +98,16 @@ bun install
 ### CLI Commands
 
 ```bash
-# Compile Codon (.cdn) to JavaScript (.js)
+# Bootstrap a new Codon project (Method B: package.json + codon.json + src/index.cdn)
+bun run index.ts init my-project
+
+# Compile an entire project directory to dist/ (like tsc)
+bun run index.ts build
+
+# Watch mode with incremental recompilation
+bun run index.ts build --watch
+
+# Compile a single Codon (.cdn) file to JavaScript (.js)
 bun run index.ts compile src/app.cdn
 
 # Translate JavaScript (.js / .jsx) to Codon (.cdn)

@@ -62,7 +62,19 @@ import type {
     CodonRankExpression,
 } from "./types";
 import generate from "@babel/generator";
+import * as fs from "fs";
+import * as path from "path";
 import { macroDictionary, resolveScopes, normalizeSubtree, type ScopeResolution } from "./macro-dict";
+
+export interface CompilerOptions {
+    rewriteImportExtensions?: boolean;
+    rootDir?: string;
+    currentFilePath?: string;
+    targetFilePath?: string;
+    outDir?: string;
+    autoImportRuntime?: boolean;
+    runtimeModule?: string;
+}
 
 export class JSToCodonTranslator {
     private resolution?: ScopeResolution;
@@ -164,17 +176,35 @@ export class JSToCodonTranslator {
                     } else if (n.type === "ExportDefaultDeclaration") {
                         exports.push(`export. default ${this.transpile(n.declaration)}`);
                     } else if (n.type === "ExportAllDeclaration") {
-                        const source = String((n.source as Literal).value).replace(/\|/g, "%7C").replace(/:/g, "%3A");
-                        exports.push(`NB. exAll|${source}`);
+                        const source = String((n.source as Literal).value);
+                        if ((n as any).exported) {
+                            exports.push(`export. * as ${(n as any).exported.name} from '${source}'`);
+                        } else {
+                            exports.push(`export. * from '${source}'`);
+                        }
                     } else if (n.type === "ExportNamedDeclaration") {
                         if (n.declaration) {
                             body.push(`export. ` + this.transpile(n.declaration));
                         } else if (n.specifiers && n.specifiers.length > 0) {
-                            const specNames = n.specifiers
-                                .map((s) => (s.exported ? s.exported.name : s.local.name))
-                                .join(",");
-                            const srcSuffix = n.source ? `:${String((n.source as Literal).value).replace(/\|/g, "%7C").replace(/:/g, "%3A")}` : "";
-                            exports.push(`NB. ex|${specNames}${srcSuffix}`);
+                            const hasNamespace = n.specifiers.find((s: any) => s.type === "ExportNamespaceSpecifier");
+                            if (hasNamespace) {
+                                const source = String((n.source as Literal).value);
+                                exports.push(`export. * as ${hasNamespace.exported.name} from '${source}'`);
+                            } else {
+                                const specList = n.specifiers
+                                    .map((s: any) => {
+                                        const local = s.local ? s.local.name : (s.exported ? s.exported.name : s.name);
+                                        const exp = s.exported ? s.exported.name : (s.local ? s.local.name : s.name);
+                                        return local !== exp ? `${local} as ${exp}` : local;
+                                    })
+                                    .join(", ");
+                                if (n.source) {
+                                    const source = String((n.source as Literal).value);
+                                    exports.push(`export. { ${specList} } from '${source}'`);
+                                } else {
+                                    exports.push(`export. { ${specList} }`);
+                                }
+                            }
                         }
                     } else {
                         body.push(this.transpile(n));
@@ -351,8 +381,11 @@ export class JSToCodonTranslator {
 
             case "ImportDeclaration": {
                 const src = String((node.source as Literal).value);
+                const attrStr = (node as any).attributes && (node as any).attributes.length > 0
+                    ? ` with { ${(node as any).attributes.map((a: any) => `${a.key.name || a.key.value}:'${a.value.value}'`).join(", ")} }`
+                    : "";
                 if (!node.specifiers || node.specifiers.length === 0) {
-                    return `import. '${src}'`;
+                    return `import. '${src}'${attrStr}`;
                 }
                 let defaultSpec = "";
                 let namespaceSpec = "";
@@ -375,7 +408,50 @@ export class JSToCodonTranslator {
                 if (namespaceSpec) specParts.push(namespaceSpec);
                 if (namedSpecs.length > 0) specParts.push(`{${namedSpecs.join(",")}}`);
 
-                return `import. ${specParts.join(",")} from '${src}'`;
+                return `import. ${specParts.join(",")} from '${src}'${attrStr}`;
+            }
+
+            case "ImportExpression": {
+                const src = this.transpile((node as any).source);
+                return `(import ${src})`;
+            }
+
+            case "ExportDefaultDeclaration":
+                return `export. default ${this.transpile((node as any).declaration)}`;
+
+            case "ExportAllDeclaration": {
+                const src = String(((node as any).source as Literal).value);
+                if ((node as any).exported) {
+                    return `export. * as ${(node as any).exported.name} from '${src}'`;
+                }
+                return `export. * from '${src}'`;
+            }
+
+            case "ExportNamedDeclaration": {
+                const n = node as any;
+                if (n.declaration) {
+                    return `export. ${this.transpile(n.declaration)}`;
+                }
+                if (n.specifiers && n.specifiers.length > 0) {
+                    const hasNamespace = n.specifiers.find((s: any) => s.type === "ExportNamespaceSpecifier");
+                    if (hasNamespace) {
+                        const src = String((n.source as Literal).value);
+                        return `export. * as ${hasNamespace.exported.name} from '${src}'`;
+                    }
+                    const specList = n.specifiers
+                        .map((s: any) => {
+                            const local = s.local ? s.local.name : (s.exported ? s.exported.name : s.name);
+                            const exp = s.exported ? s.exported.name : (s.local ? s.local.name : s.name);
+                            return local !== exp ? `${local} as ${exp}` : local;
+                        })
+                        .join(", ");
+                    if (n.source) {
+                        const src = String((n.source as Literal).value);
+                        return `export. { ${specList} } from '${src}'`;
+                    }
+                    return `export. { ${specList} }`;
+                }
+                return "";
             }
 
             case "FunctionDeclaration": {
@@ -632,8 +708,33 @@ export class JSToCodonTranslator {
 }
 
 export class CodonToJSCompiler {
-    public transpile(node: Node): string {
+    public transpile(node: Node, options?: CompilerOptions): string {
         if (!node) return "";
+
+        const rewriteModuleSpecifier = (spec: string): string => {
+            if (options?.rewriteImportExtensions === false) return spec;
+            if (typeof spec !== "string") return spec;
+            if (spec.startsWith("./") || spec.startsWith("../")) {
+                if (spec.endsWith(".cdn")) {
+                    return spec.slice(0, -4) + ".js";
+                }
+                if (options?.currentFilePath && !path.extname(spec)) {
+                    const dir = path.dirname(options.currentFilePath);
+                    const cdnTarget = path.resolve(dir, spec + ".cdn");
+                    if (fs.existsSync(cdnTarget)) {
+                        return spec + ".js";
+                    }
+                }
+            }
+            return spec;
+        };
+
+        const RUNTIME_FUNCS = new Set([
+            "fork", "hook", "atop", "rank", "sum", "product", "fold", "scan",
+            "div", "tally", "shape", "head", "tail", "behead", "curtail",
+            "take", "drop", "range", "from", "gradeUp", "gradeDown", "box", "open",
+        ]);
+        const usedRuntime = new Set<string>();
 
         const toBabel = (n: any): any => {
             if (Array.isArray(n)) return n.map(toBabel);
@@ -642,6 +743,7 @@ export class CodonToJSCompiler {
             // Handle Codon Train Expression (Forks and Hooks)
             if (n.type === "CodonTrainExpression") {
                 if (n.kind === "fork" && n.verbs.length === 3) {
+                    usedRuntime.add("fork");
                     return {
                         type: "CallExpression",
                         callee: { type: "Identifier", name: "fork" },
@@ -649,6 +751,7 @@ export class CodonToJSCompiler {
                     };
                 }
                 if (n.kind === "hook" && n.verbs.length === 2) {
+                    usedRuntime.add("hook");
                     return {
                         type: "CallExpression",
                         callee: { type: "Identifier", name: "hook" },
@@ -659,15 +762,18 @@ export class CodonToJSCompiler {
 
             // Handle Codon Fold / Reduction
             if (n.type === "CodonFoldExpression") {
+                const verbName = n.scan ? "scan" : "fold";
+                usedRuntime.add(verbName);
                 return {
                     type: "CallExpression",
-                    callee: { type: "Identifier", name: n.scan ? "scan" : "fold" },
+                    callee: { type: "Identifier", name: verbName },
                     arguments: [toBabel(n.verb), toBabel(n.target)],
                 };
             }
 
             // Handle Codon Rank
             if (n.type === "CodonRankExpression") {
+                usedRuntime.add("rank");
                 return {
                     type: "CallExpression",
                     callee: {
@@ -677,6 +783,100 @@ export class CodonToJSCompiler {
                     },
                     arguments: [toBabel(n.target)],
                 };
+            }
+
+            // Handle ImportDeclaration
+            if (n.type === "ImportDeclaration") {
+                const specifiers = (n.specifiers || []).map((s: any) => {
+                    if (s.type === "ImportDefaultSpecifier") {
+                        return {
+                            type: "ImportDefaultSpecifier",
+                            local: { type: "Identifier", name: s.local ? s.local.name : s.name },
+                        };
+                    }
+                    if (s.type === "ImportNamespaceSpecifier") {
+                        return {
+                            type: "ImportNamespaceSpecifier",
+                            local: { type: "Identifier", name: s.local ? s.local.name : s.name },
+                        };
+                    }
+                    return {
+                        type: "ImportSpecifier",
+                        imported: { type: "Identifier", name: s.imported ? s.imported.name : s.name },
+                        local: { type: "Identifier", name: s.local ? s.local.name : (s.imported ? s.imported.name : s.name) },
+                    };
+                });
+
+                let sourceVal = String(n.source ? (n.source.value ?? n.source) : "");
+                sourceVal = rewriteModuleSpecifier(sourceVal);
+
+                const attributes = (n.attributes || []).map((a: any) => ({
+                    type: "ImportAttribute",
+                    key: { type: "Identifier", name: a.key.name || a.key.value },
+                    value: { type: "StringLiteral", value: String(a.value.value) },
+                }));
+
+                return {
+                    type: "ImportDeclaration",
+                    specifiers,
+                    source: { type: "StringLiteral", value: sourceVal },
+                    attributes: attributes.length > 0 ? attributes : undefined,
+                };
+            }
+
+            // Handle ExportAllDeclaration
+            if (n.type === "ExportAllDeclaration") {
+                let sourceVal = String(n.source ? (n.source.value ?? n.source) : "");
+                sourceVal = rewriteModuleSpecifier(sourceVal);
+                return {
+                    type: "ExportAllDeclaration",
+                    source: { type: "StringLiteral", value: sourceVal },
+                    exported: n.exported ? { type: "Identifier", name: n.exported.name } : null,
+                };
+            }
+
+            // Handle ExportNamedDeclaration
+            if (n.type === "ExportNamedDeclaration") {
+                const sourceVal = n.source ? rewriteModuleSpecifier(String(n.source.value ?? n.source)) : null;
+                const specifiers = (n.specifiers || []).map((s: any) => {
+                    if (s.type === "ExportNamespaceSpecifier") {
+                        return {
+                            type: "ExportNamespaceSpecifier",
+                            exported: { type: "Identifier", name: s.exported.name },
+                        };
+                    }
+                    return {
+                        type: "ExportSpecifier",
+                        local: { type: "Identifier", name: s.local ? s.local.name : s.name },
+                        exported: { type: "Identifier", name: s.exported ? s.exported.name : (s.local ? s.local.name : s.name) },
+                    };
+                });
+
+                return {
+                    type: "ExportNamedDeclaration",
+                    declaration: n.declaration ? toBabel(n.declaration) : null,
+                    specifiers,
+                    source: sourceVal ? { type: "StringLiteral", value: sourceVal } : null,
+                };
+            }
+
+            // Handle ImportExpression (dynamic import)
+            if (n.type === "ImportExpression" || (n.type === "CallExpression" && n.callee && n.callee.name === "import")) {
+                const srcNode = n.type === "ImportExpression" ? n.source : n.arguments[0];
+                const optNode = n.type === "ImportExpression" ? n.options : n.arguments[1];
+                let babelSrc = toBabel(srcNode);
+                if (babelSrc.type === "StringLiteral" || babelSrc.type === "Literal") {
+                    babelSrc = { type: "StringLiteral", value: rewriteModuleSpecifier(String(babelSrc.value)) };
+                }
+                return {
+                    type: "ImportExpression",
+                    source: babelSrc,
+                    options: optNode ? toBabel(optNode) : null,
+                };
+            }
+
+            if (n.type === "CallExpression" && n.callee && n.callee.type === "Identifier" && RUNTIME_FUNCS.has(n.callee.name)) {
+                usedRuntime.add(n.callee.name);
             }
 
             const res: any = {};
@@ -758,6 +958,38 @@ export class CodonToJSCompiler {
 
         try {
             const babelAST = toBabel(node);
+            if (babelAST.type === "Program" && options?.autoImportRuntime && usedRuntime.size > 0) {
+                const hasRuntimeImport = babelAST.body.some((stmt: any) =>
+                    stmt.type === "ImportDeclaration" &&
+                    (stmt.source.value.includes("codon-runtime") || stmt.source.value === options?.runtimeModule)
+                );
+                if (!hasRuntimeImport) {
+                    let runtimePath = options?.runtimeModule || "./codon-runtime.js";
+                    if (!options?.runtimeModule && options?.outDir) {
+                        let targetDir = path.resolve(options.outDir);
+                        if (options.targetFilePath) {
+                            targetDir = path.dirname(path.resolve(options.targetFilePath));
+                        } else if (options.rootDir && options.currentFilePath) {
+                            const relFromRoot = path.relative(path.resolve(options.rootDir), path.dirname(path.resolve(options.currentFilePath)));
+                            targetDir = path.resolve(options.outDir, relFromRoot);
+                        } else if (options.currentFilePath) {
+                            targetDir = path.dirname(path.resolve(options.currentFilePath));
+                        }
+                        const rel = path.relative(targetDir, path.resolve(options.outDir, "codon-runtime.js")).replace(/\\/g, "/");
+                        runtimePath = rel.startsWith(".") ? rel : "./" + rel;
+                    }
+                    const runtimeSpecs = Array.from(usedRuntime).sort().map((name) => ({
+                        type: "ImportSpecifier",
+                        imported: { type: "Identifier", name },
+                        local: { type: "Identifier", name },
+                    }));
+                    babelAST.body.unshift({
+                        type: "ImportDeclaration",
+                        specifiers: runtimeSpecs,
+                        source: { type: "StringLiteral", value: runtimePath },
+                    });
+                }
+            }
             const result = generate(babelAST);
             return result.code;
         } catch (e) {

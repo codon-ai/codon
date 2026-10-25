@@ -10,6 +10,7 @@ Codon is designed from first principles to be **maximally token-efficient for La
 
 Comprehensive documentation is available in the **[`docs/`](docs/README.md)** directory:
 
+- 🏗️ **[Multi-File Projects Guide](docs/PROJECTS.md)**: **Complete manual for authoring multi-file applications**, `codon init`, `codon build` (tsc-like compiler), `codon.json`, relative imports, npm packages, and watch mode.
 - 🚀 **[Macros System Guide](docs/MACROS.md)**: **Deep dive into Codon's Subtree-Hashing Macro System (`M!`)**, empirical Level-2 code clone compaction (`dict.json`), wyhash AST matching, and catalog.
 - 📖 **[Syntax Specification](docs/SYNTAX.md)**: Complete language reference covering tacit trains, folds, monadic verbs, objects, classes, JSX, and control flow.
 - ⚡ **[Runtime Reference](docs/RUNTIME.md)**: API reference for `codon-runtime.ts` combinators (`fork`, `hook`, `atop`, `rank`) and array primitives.
@@ -76,12 +77,36 @@ bun install
 
 ## Usage
 
-### Compile Codon to JavaScript (`compile`)
+### Bootstrap a New Project (`init`)
+
+Initializes a ready-to-run Codon project (Method B: native ESM with `package.json` scripts, `codon.json`, and `src/index.cdn`):
+
+```bash
+codon init my-project
+cd my-project
+```
+
+### Build Multi-File Project (`build`)
+
+Compiles an entire project directory from `src/` to `dist/` with directory hierarchy preservation, import specifier rewriting, static asset copying, and runtime bundling:
+
+```bash
+# Full build
+codon build
+
+# Watch mode for fast incremental recompilation
+codon build -w
+
+# Clean build
+codon build --clean
+```
+
+### Single File Compilation (`compile`)
 
 Converts a `.cdn` file into standard JavaScript:
 
 ```bash
-bun run compile path/to/file.cdn
+codon compile path/to/file.cdn
 # or: bun run index.ts compile path/to/file.cdn
 ```
 
@@ -92,7 +117,7 @@ bun run compile path/to/file.cdn
 Parses a `.js` (or `.jsx`) file and emits Codon notation with automatic Level-2 code clone compaction:
 
 ```bash
-bun run translate path/to/file.js
+codon translate path/to/file.js
 # or: bun run index.ts translate path/to/file.js
 ```
 
@@ -110,16 +135,17 @@ bun test
 
 The project is structured into modular components:
 
-- **`index.ts`**: The CLI entrypoint. Handles file I/O, argument parsing, compilation, translation, and benchmark verification.
+- **`index.ts`**: The CLI entrypoint. Handles commands (`build`, `init`, `compile`, `translate`, `verify`), flags, and configuration loading.
+- **`project-compiler.ts`**: Project-wide compiler engine (`compileProject`, `watchProject`, `initProject`, `loadCodonConfig`), static asset syncer, and runtime packager.
 - **`codon-parser.ts`**: Recursive-descent parser that tokenizes and parses Codon notation, control structures, tacit trains, classes, and pattern destructuring into an ESTree-compatible Abstract Syntax Tree. Includes `parseMacroInvocation`.
 - **`macro-dict.ts`**: Implements `MacroDictionary`, lexical scope resolution (`resolveScopes`), canonical wyhash subtree normalization (`normalizeSubtree`), and template expansion (`expandToAST`).
 - **`dict.json`**: Empirical library of 721 Level-2 code clones mined from open-source repositories.
 - **`transpilers.ts`**:
   - `JSToCodonTranslator`: Walks modern JavaScript/JSX AST, recognizes clone subtrees, and emits concise Codon notation.
-  - `CodonToJSCompiler`: Normalizes AST nodes, maps tacit trains and Codon verbs, and uses `@babel/generator` to emit clean JavaScript.
+  - `CodonToJSCompiler`: Normalizes AST nodes, maps tacit trains and Codon verbs, rewrites import specifiers, and uses `@babel/generator` to emit clean JavaScript.
 - **`types.ts`**: Comprehensive TypeScript definitions for all supported AST nodes.
 - **`codon-runtime.ts`**: Zero-dependency library of combinators and array primitives supporting Codon semantics in JavaScript.
-- **`docs/`**: Comprehensive documentation suite ([README](docs/README.md), [Macros](docs/MACROS.md), [Syntax](docs/SYNTAX.md), [Runtime](docs/RUNTIME.md), [API](docs/API.md), [CLI](docs/CLI.md)).
+- **`docs/`**: Comprehensive documentation suite ([README](docs/README.md), [Projects](docs/PROJECTS.md), [Macros](docs/MACROS.md), [Syntax](docs/SYNTAX.md), [Runtime](docs/RUNTIME.md), [API](docs/API.md), [CLI](docs/CLI.md)).
 
 ---
 

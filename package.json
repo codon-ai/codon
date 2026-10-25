@@ -5,12 +5,15 @@
   "main": "index.ts",
   "scripts": {
     "test": "bun test",
+    "build": "bun run index.ts build",
+    "init": "bun run index.ts init",
     "compile": "bun run index.ts compile",
     "translate": "bun run index.ts translate",
     "verify": "bun run index.ts verify"
   },
   "bin": {
-      "codon": "index.ts"
+    "codon": "index.ts",
+    "codonc": "index.ts"
   },
   "dependencies": {
     "@babel/generator": "^8.0.6",
@@ -20,5 +23,8 @@
     "acorn-jsx": "^5.3.2",
     "angular": "^1.8.3",
     "fs": "^0.0.1-security"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.4"
   }
 }

@@ -329,27 +329,8 @@ export class CodonToASTParser {
                         body.push({ type: "ExportNamedDeclaration", declaration: nextStmt, specifiers: [] });
                     }
                 }
-            } else if (b.startsWith("export.")) {
-                const remainder = b.slice("export.".length).trim();
-                if (remainder.startsWith("default ")) {
-                    body.push({
-                        type: "ExportDefaultDeclaration",
-                        declaration: this.parseExpression(remainder.slice(8).trim()),
-                    });
-                } else if (remainder) {
-                    const parsed = this.parseStatement(remainder);
-                    if (parsed) body.push({ type: "ExportNamedDeclaration", declaration: parsed, specifiers: [] });
-                } else if (idx + 1 < blocks.length) {
-                    idx++;
-                    const nextStmt = this.parseStatement(blocks[idx]);
-                    if (nextStmt) {
-                        body.push({ type: "ExportNamedDeclaration", declaration: nextStmt, specifiers: [] });
-                    }
-                }
-            } else if (b.startsWith("export ") && (b.startsWith("export fn.") || b.startsWith("export async_fn.") || b.startsWith("export class."))) {
-                const remainder = b.slice(7).trim();
-                const parsed = this.parseStatement(remainder);
-                if (parsed) body.push({ type: "ExportNamedDeclaration", declaration: parsed, specifiers: [] });
+            } else if (b.startsWith("export.") || b.startsWith("export ")) {
+                body.push(this.parseExportDeclaration(b));
             } else if (b.startsWith("NB. exAll|")) {
                 const src = b.substring(10).trim().replace(/%7C/g, "|").replace(/%3A/g, ":");
                 body.push({
@@ -380,6 +361,9 @@ export class CodonToASTParser {
                     type: "ExportDefaultDeclaration",
                     declaration: this.parseExpression(b.substring(6).trim()),
                 });
+            } else if (b.startsWith("NB.")) {
+                // Ignore comments
+                continue;
             } else {
                 const parsed = this.parseStatement(b);
                 if (parsed) body.push(parsed);
@@ -454,6 +438,7 @@ export class CodonToASTParser {
 
         let specPart = "";
         let srcPart = "";
+        const attributes: any[] = [];
 
         const fromSplit = splitFirstAtLevel(raw, " from ");
         if (fromSplit) {
@@ -466,6 +451,26 @@ export class CodonToASTParser {
                 srcPart = colonSplit[1].trim();
             } else {
                 srcPart = raw;
+            }
+        }
+
+        // Check for import attributes / assertions: with { type: 'json' } or assert { type: 'json' }
+        const attrMatch = srcPart.match(/^(.*?)\s+(with|assert)\s*(\{.*\})\s*$/);
+        if (attrMatch) {
+            srcPart = attrMatch[1].trim();
+            const rawAttrs = attrMatch[3].trim().slice(1, -1).trim();
+            const attrPairs = splitAtLevel(rawAttrs, ",");
+            for (const pair of attrPairs) {
+                const colonIdx = pair.indexOf(":");
+                if (colonIdx !== -1) {
+                    const k = pair.slice(0, colonIdx).trim().replace(/^['"`]|['"`]$/g, "");
+                    const v = pair.slice(colonIdx + 1).trim().replace(/^['"`]|['"`]$/g, "");
+                    attributes.push({
+                        type: "ImportAttribute",
+                        key: { type: "Identifier", name: k },
+                        value: { type: "Literal", value: v },
+                    });
+                }
             }
         }
 
@@ -518,6 +523,112 @@ export class CodonToASTParser {
             type: "ImportDeclaration",
             specifiers,
             source: { type: "Literal", value: src },
+            attributes: attributes.length > 0 ? attributes : undefined,
+        };
+    }
+
+    public parseExportDeclaration(stmt: string): Node {
+        stmt = stmt.trim();
+        let raw = "";
+        if (stmt.startsWith("export.")) {
+            raw = stmt.slice("export.".length).trim();
+        } else if (stmt.startsWith("export ")) {
+            raw = stmt.slice("export".length).trim();
+        }
+
+        // Export default: export. default expr
+        if (raw.startsWith("default ") || raw === "default") {
+            const declExpr = raw.startsWith("default ") ? raw.slice(8).trim() : "";
+            return {
+                type: "ExportDefaultDeclaration",
+                declaration: this.parseExpression(declExpr),
+            };
+        }
+
+        // Export all / namespace re-export: export. * from 'source' or export. * as name from 'source'
+        if (raw.startsWith("*")) {
+            if (raw.startsWith("* as ")) {
+                const fromSplit = splitFirstAtLevel(raw.slice(5), " from ");
+                if (fromSplit) {
+                    const exportedName = fromSplit[0].trim();
+                    const src = fromSplit[1].trim().replace(/^['"`]|['"`]$/g, "");
+                    return {
+                        type: "ExportNamedDeclaration",
+                        declaration: null,
+                        specifiers: [
+                            {
+                                type: "ExportNamespaceSpecifier",
+                                exported: { type: "Identifier", name: exportedName },
+                            },
+                        ],
+                        source: { type: "Literal", value: src },
+                    };
+                }
+            } else if (raw.startsWith("* from ") || raw.startsWith("* : ") || raw.startsWith("* :")) {
+                const sep = raw.includes(" from ") ? " from " : raw.includes(" : ") ? " : " : ":";
+                const src = raw.slice(raw.indexOf(sep) + sep.length).trim().replace(/^['"`]|['"`]$/g, "");
+                return {
+                    type: "ExportAllDeclaration",
+                    source: { type: "Literal", value: src },
+                    exported: null,
+                };
+            }
+        }
+
+        // Export named specifiers: export. { a, b as c } [from 'source']
+        if (raw.startsWith("{")) {
+            const fromSplit = splitFirstAtLevel(raw, " from ");
+            let specPart = fromSplit ? fromSplit[0].trim() : "";
+            let srcPart = fromSplit ? fromSplit[1].trim() : "";
+
+            if (!fromSplit) {
+                const colonSplit = splitFirstAtLevel(raw, ":");
+                if (colonSplit && colonSplit[0].includes("}")) {
+                    specPart = colonSplit[0].trim();
+                    srcPart = colonSplit[1].trim();
+                } else {
+                    specPart = raw;
+                }
+            }
+
+            if (specPart.startsWith("{") && specPart.endsWith("}")) {
+                const inner = specPart.slice(1, -1).trim();
+                const items = splitAtLevel(inner, ",");
+                const specifiers: any[] = [];
+                for (const item of items) {
+                    const trimmed = item.trim();
+                    if (!trimmed) continue;
+                    if (trimmed.includes(" as ")) {
+                        const [local, exported] = trimmed.split(" as ").map((s) => s.trim());
+                        specifiers.push({
+                            type: "ExportSpecifier",
+                            local: { type: "Identifier", name: local },
+                            exported: { type: "Identifier", name: exported },
+                        });
+                    } else {
+                        specifiers.push({
+                            type: "ExportSpecifier",
+                            local: { type: "Identifier", name: trimmed },
+                            exported: { type: "Identifier", name: trimmed },
+                        });
+                    }
+                }
+                const src = srcPart ? srcPart.replace(/^['"`]|['"`]$/g, "") : null;
+                return {
+                    type: "ExportNamedDeclaration",
+                    declaration: null,
+                    specifiers,
+                    source: src ? { type: "Literal", value: src } : null,
+                };
+            }
+        }
+
+        // Otherwise: export declaration of a statement (fn., class., var assignment)
+        const parsed = this.parseStatement(raw);
+        return {
+            type: "ExportNamedDeclaration",
+            declaration: parsed,
+            specifiers: [],
         };
     }
 
@@ -534,6 +645,7 @@ export class CodonToASTParser {
     public parseStatement(stmt: string): Node | null {
         stmt = stmt.trim();
         if (!stmt) return null;
+        if (stmt.startsWith("NB.")) return null;
         if (stmt.endsWith(";")) stmt = stmt.slice(0, -1).trim();
 
         // Macro Invocation (Statement-level): M!name(...) or M!name
@@ -551,22 +663,8 @@ export class CodonToASTParser {
         }
 
         // Export Declaration
-        if (stmt.startsWith("export.")) {
-            const remainder = stmt.slice("export.".length).trim();
-            if (remainder.startsWith("default ")) {
-                return {
-                    type: "ExportDefaultDeclaration",
-                    declaration: this.parseExpression(remainder.slice(8).trim()),
-                };
-            }
-            const parsed = this.parseStatement(remainder);
-            if (parsed) {
-                return {
-                    type: "ExportNamedDeclaration",
-                    declaration: parsed,
-                    specifiers: [],
-                };
-            }
+        if (stmt.startsWith("export.") || stmt.startsWith("export ")) {
+            return this.parseExportDeclaration(stmt);
         }
 
         // Export Default (Legacy)
@@ -1457,6 +1555,25 @@ export class CodonToASTParser {
             }
         }
 
+        // Dynamic Import Expression: (import './path.cdn') or import('./path.cdn')
+        if (strippedExpr.startsWith("import(") && strippedExpr.endsWith(")")) {
+            const inner = strippedExpr.slice(7, -1).trim();
+            const args = splitAtLevel(inner, ",").map((p) => this.parseExpression(p.trim()));
+            return {
+                type: "ImportExpression",
+                source: args[0],
+                options: args[1] || null,
+            };
+        }
+        if (strippedExpr.startsWith("import ") && !strippedExpr.includes(" from ") && !strippedExpr.includes(":")) {
+            const inner = strippedExpr.slice(7).trim();
+            return {
+                type: "ImportExpression",
+                source: this.parseExpression(inner),
+                options: null,
+            };
+        }
+
         // Class Expression: (class. [Name] [extends Super] do. ... end.) or class. ... end.
         if (strippedExpr.startsWith("class.")) {
             const doIdx = strippedExpr.indexOf(" do.");
@@ -1636,7 +1753,7 @@ export class CodonToASTParser {
         }
 
         // Unary Expression: (!expr), (-expr), (+expr), (typeof expr)
-        if (wasWrapped) {
+        if (wasWrapped && !strippedExpr.startsWith("+/") && !strippedExpr.startsWith("*/") && !strippedExpr.startsWith("+\\") && !strippedExpr.startsWith("*\\")) {
             const unaryPrefixes = ["!", "-", "+", "~", "typeof ", "delete ", "void "];
             for (const prefix of unaryPrefixes) {
                 if (strippedExpr.startsWith(prefix)) {
@@ -2036,6 +2153,14 @@ export class CodonToASTParser {
                 const calleePart = spaceParts[0];
                 const isOptCall = calleePart.endsWith("?.");
                 const calleeNode = this.parseExpression(isOptCall ? calleePart.slice(0, -2) : calleePart);
+                if (calleeNode.type === "Identifier" && calleeNode.name === "import") {
+                    const callArgs = spaceParts.slice(1).map((a) => this.parseExpression(a));
+                    return {
+                        type: "ImportExpression",
+                        source: callArgs[0],
+                        options: callArgs[1] || null,
+                    };
+                }
                 return {
                     type: "CallExpression",
                     callee: calleeNode,

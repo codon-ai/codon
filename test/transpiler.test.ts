@@ -432,9 +432,24 @@ export { a, b } from "./math";
         const translator = new JSToCodonTranslator();
         const codonCode = translator.transpile(ast.program as any);
 
-        expect(codonCode).toContain("NB. exAll|./utils");
-        expect(codonCode).toContain("NB. ex|a,b:./math");
+        expect(codonCode).toContain("export. * from './utils'");
+        expect(codonCode).toContain("export. { a, b } from './math'");
 
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+        expect(roundtrippedJs).toContain('export * from "./utils";');
+        expect(roundtrippedJs).toContain('export { a, b } from "./math";');
+    });
+
+    test("Retains backward compatibility with legacy NB. exAll| and NB. ex| comments", () => {
+        const codonCode = `
+NB. exAll|./utils
+NB. ex|a,b:./math
+`;
         const astParser = new CodonToASTParser();
         const parsedAst = astParser.parse(codonCode);
         const compiler = new CodonToJSCompiler();
