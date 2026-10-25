@@ -1008,3 +1008,129 @@ end.
         expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
     });
 });
+
+describe("Concise Array Expressions (Bracket Notation [...], [], Spread) Support", () => {
+    test("Transpiles empty array [] and single-element array [elem]", () => {
+        const codonCode = `
+empty =: []
+single =: [42]
+objItem =: [O(id:1;title:'first')]
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("const empty = [];");
+        expect(js).toContain("const single = [42];");
+        expect(js).toContain('const objItem = [{\n  id: 1,\n  title: "first"\n}];');
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles multi-element arrays with comma and semicolon separators", () => {
+        const codonCode = `
+nums =: [1, 2, 3]
+semiList =: ['a'; 'b'; 'c']
+mixed =: [1, 2; 3, 4]
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("const nums = [1, 2, 3];");
+        expect(js).toContain('const semiList = ["a", "b", "c"];');
+        expect(js).toContain("const mixed = [1, 2, 3, 4];");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles prefix spread inside arrays and nested arrays", () => {
+        const codonCode = `
+combined =: [...prev, newItem]
+multiSpread =: [...header, ...rows, footer]
+matrix =: [[1, 2], [3, 4]]
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("const combined = [...prev, newItem];");
+        expect(js).toContain("const multiSpread = [...header, ...rows, footer];");
+        expect(js).toContain("const matrix = [[1, 2], [3, 4]];");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles array expressions in React hook initializers, state updaters, and return statements", () => {
+        const codonCode = `
+fn. ChatApp do.
+[messages,setMessages] =: (useState [O(id:1;user:'Alice';text:'Hello world!')])
+[items,setItems] =: (useState [])
+addItem =: {{item => (setItems {{prev => [...prev, item]}})}}
+return. []
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("const [items, setItems] = useState([]);");
+        expect(js).toContain("const addItem = item => setItems(prev => [...prev, item]);");
+        expect(js).toContain("return [];");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips JS array literals, spreads, and empty arrays with bracket notation", () => {
+        const jsCode = `
+const empty = [];
+const single = [1];
+const items = [1, 2, 3];
+const appended = [...prev, { id: 1, text: "hi" }];
+const grid = [[1, 2], [3, 4]];
+export default items;
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("empty =: []");
+        expect(codonCode).toContain("single =: [1]");
+        expect(codonCode).toContain("items =: [1,2,3]");
+        expect(codonCode).toContain("appended =: [...prev,O(id:1;text:'hi')]");
+        expect(codonCode).toContain("grid =: [[1,2],[3,4]]");
+        expect(codonCode).toContain("export. default items");
+        expect(codonCode).not.toContain("(0$0)");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+        expect(roundtrippedJs).toContain("const empty = [];");
+        expect(roundtrippedJs).toContain("const single = [1];");
+        expect(roundtrippedJs).toContain("const items = [1, 2, 3];");
+        expect(roundtrippedJs).toContain("const appended = [...prev, {\n  id: 1,\n  text: \"hi\"\n}];");
+        expect(roundtrippedJs).toContain("const grid = [[1, 2], [3, 4]];");
+        expect(roundtrippedJs).toContain("export default items;");
+    });
+
+    test("Retains backward compatibility with legacy (0$0), (,x), and (a;b;c) forms", () => {
+        const codonCode = `
+legacyEmpty =: (0$0)
+legacySingle =: (,42)
+legacyMulti =: ('foo';'bar';'baz')
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("const legacyEmpty = [];");
+        expect(js).toContain("const legacySingle = [42];");
+        expect(js).toContain('const legacyMulti = ["foo", "bar", "baz"];');
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+});
+

@@ -1,0 +1,39 @@
+import. Database from 'better-sqlite3'
+
+db =: (new Database ':memory:')
+
+(db.exec `
+  CREATE TABLE todos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    completed INTEGER DEFAULT 0
+  )
+`)
+
+insertStmt =: (db.prepare 'INSERT INTO todos (title) VALUES (?)')
+
+toggleStmt =: (db.prepare 'UPDATE todos SET completed = 1 - completed WHERE id = ?')
+
+selectAllStmt =: (db.prepare 'SELECT * FROM todos ORDER BY id ASC')
+
+export. fn. addTodo title do.
+result =: (insertStmt.run title)
+return. (Number result.lastInsertRowid)
+end.
+
+export. fn. toggleTodo id do.
+result =: (toggleStmt.run id)
+return. (result.changes > 0)
+end.
+
+export. fn. getTodos do.
+return. selectAllStmt.all()
+end.
+
+(addTodo 'Buy groceries')
+
+(addTodo 'Clean the kitchen')
+
+(toggleTodo 1)
+
+(console.log getTodos())

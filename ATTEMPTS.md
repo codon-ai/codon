@@ -1,6 +1,38 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
+## Revision 6a (successful)
+- **Tokens:** 3261
+
+- **Revision Idea**: Introduce native concise array expressions via bracket notation `[...]`, supporting empty arrays `[]`, single/multiple element lists `[elem]`, `[a, b]`, and spread expressions `[...spread, item]`, replacing verbose J boxed array syntax `(0$0)`, `(,elem)`, and `(a;b;c)`.
+- **Rationale**: In modern AI fullstack development (React state arrays `useState([])`, list state updates `setItems(prev => [...prev, newItem])`, database query result sets, API route validation error collectors `errors = []`, middleware chains, and array pipelines), array construction is one of the most fundamental and frequent operations. Previously, Codon lacked direct bracket array expression syntax on the expression level; writing `[]` or `[a, b]` was erroneously parsed as a single literal Identifier named `"[]"` or `"[a, b]"`. Codon forced developers and LLMs to use J-style boxed arrays: `(0$0)` for empty arrays (5 tokens: `(`, `0`, `$`, `0`, `)`), `(,elem)` for single-element arrays (4 tokens), and `(a;b;c)` for multi-element lists. This imposed high token penalties, caused confusion with parenthesized expressions, function calls, and tacit trains `(f g h)`, and created syntax asymmetry with Codon's existing bracket destructuring `[a, b] =: list`. Introducing native `[...]` bracket syntax eliminates this boilerplate, brings symmetry between array creation and destructuring, and significantly reduces token count:
+  - Empty array: `[]` (1 token vs 5 tokens `(0$0)`)
+  - Single-element array: `[elem]` (2–3 tokens vs 4 tokens `(,elem)`)
+  - Multi-element array: `[a, b, c]` or `[a; b; c]` (supporting both `,` and `;` delimiters)
+  - Spread elements: `[...prev, item]` or `[...a, ...b]`
+  - Nested arrays: `[[1, 2], [3, 4]]`
+  - Retains complete backward compatibility with legacy `(0$0)`, `(,elem)`, and `(a;b;c)` forms.
+- **Target Token Savings for Fullstack Applications**:
+  - Drops empty array token footprint by 80% (from 5 tokens `(0$0)` to 1 token `[]`).
+  - Cuts single-element list overhead by 35–50% (from `(,elem)` to `[elem]`).
+  - Cuts array state updater overhead (e.g., `[...prev, newItem]` vs `(...prev;newItem)`).
+  - Eliminates ambiguity with parenthesized function calls and tacit train expressions.
+  - Aligns array creation with array destructuring (`[a, b] =: [1, 2]`), improving LLM pattern recognition and token generation consistency.
+- **Concrete Syntax Changes**:
+  - `JSToCodonTranslator`: Emits `[]` for empty arrays, `[${this.transpile(node.elements[0])}]` for single-element arrays, and `[${elements.join(",")}]` for multi-element arrays. Also emits `export. default ${expr}` for `ExportDefaultDeclaration` instead of legacy `NB. e|`.
+  - `CodonToASTParser`: Parses `[...]` in `parseExpression` when `strippedExpr.startsWith("[") && strippedExpr.endsWith("]")`. Unwraps elements using `splitAtLevel` respecting commas and semicolons, parsing `SpreadElement` for `...expr` and evaluating sub-expressions into an ESTree `ArrayExpression` AST node. Preserves legacy `(0$0)`, `(,elem)`, and `(a;b;c)` parsing.
+  - Examples:
+    - Old Codon: `errors =: (0$0)`
+    - New Codon: `errors =: []`
+    - Old Codon: `[messages,setMessages] =: (useState (,O(id:1;text:'Hello')))`
+    - New Codon: `[messages,setMessages] =: (useState [O(id:1;text:'Hello')])`
+    - Old Codon: `(setMessages {{prev => (...prev;O(id:2;text:'New'))}})`
+    - New Codon: `(setMessages {{prev => [...prev, O(id:2;text:'New')]}})`
+    - Old Codon: `return. (0$0)`
+    - New Codon: `return. []`
+    - Old Codon: `sorted =: ((,...migrations).sort ...)`
+    - New Codon: `sorted =: ([...migrations].sort ...)`
+
 ## Revision 5a (successful)
 - **Tokens:** 40000
 

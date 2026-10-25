@@ -2026,6 +2026,28 @@ export class CodonToASTParser {
             }
         }
 
+        // Bracket Array Expression: [], [a, b], [a; b], [...spread]
+        if (strippedExpr.startsWith("[") && strippedExpr.endsWith("]")) {
+            let inner = strippedExpr.slice(1, -1).trim();
+            if (!inner) return { type: "ArrayExpression", elements: [] };
+            if (inner.endsWith(",") || inner.endsWith(";")) {
+                inner = inner.slice(0, -1).trim();
+            }
+            if (!inner) return { type: "ArrayExpression", elements: [] };
+            const rawParts = splitAtLevel(inner, ",").flatMap((p) => splitAtLevel(p, ";")).map((p) => p.trim());
+            const elements = rawParts.map((p) => {
+                if (!p) return null;
+                if (p.startsWith("...")) {
+                    return {
+                        type: "SpreadElement" as const,
+                        argument: this.parseExpression(p.slice(3).trim()),
+                    };
+                }
+                return this.parseExpression(p);
+            });
+            return { type: "ArrayExpression", elements };
+        }
+
         // Array Expression: (0$0), (,x), (a;b;c)
         if (strippedExpr === "0$0") return { type: "ArrayExpression", elements: [] };
         if (strippedExpr.startsWith(",") && wasWrapped) {
