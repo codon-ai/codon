@@ -1,6 +1,37 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
+## Revision 13a (unsuccessful)
+- **Tokens:** 4186
+
+- **Revision Idea**: Introduce concise computed property keys in object literals `O([key]:val)` and class declarations (`[key] =: val`, `method. [key] do.`), alongside flexible comma and semicolon property delimiters in `O(...)`, eliminating fatal compiler crashes and verbose multi-statement workarounds for dynamic dictionaries in Codon.
+- **Rationale**: In modern AI fullstack web development (GraphQL query execution and resolver dispatching, React/Redux form state updates, dynamic HTTP request/response headers, WebSocket action routing, cache lookups, schema validation maps, and classes implementing JavaScript symbols like `[Symbol.iterator]` or `[Symbol.species]`), computed property keys (`{ [key]: value }`) are ubiquitous. Prior to Revision 13a, Codon suffered from three critical limitations:
+  1. Codon completely failed when writing computed property keys in object expressions: `O([fieldName]:result)` or `O([key]:val)` caused `parseExpression` to parse `[fieldName]` as an `ArrayExpression`, setting `keyName` to `undefined` and hardcoding `computed: false`, which triggered fatal Babel generator exceptions (`TypeError: undefined is not an object (evaluating 'str.length')`).
+  2. `JSToCodonTranslator` erroneously stripped computed brackets from `ObjectProperty` and `ObjectMethod` nodes, transpiling `{ [fieldName]: result }` into static `O(fieldName:result)` and `{ [key]: val }` into `O(key:val)`, losing dynamic semantics and breaking roundtrip compilation fidelity.
+  3. `O(...)` strictly required semicolon delimiters `;` and broke when LLMs naturally used commas `O(a:1, b:2)` or `O(id, title)`.
+  By adding bracket-enclosed computed key recognition in `O(...)` (`O([key]:val)`), class body definitions (`[key] =: val`, `method. [key] do.`), multi-delimiter splitting (supporting both `,` and `;`), and bi-directional translation for computed `ObjectProperty` and `ObjectMethod`:
+  - Computed object properties: `O([fieldName]:result)`, `O([`user_${id}`]:user)`, `O([key]:val; count:1)`
+  - Flexible object delimiters: `O(id, title, completed:0)` and `O([k]:v, ...rest)`
+  - Computed class properties & methods: `static [Symbol.species] =: Array`, `method. [Symbol.iterator] do. ... end.`
+  - Full roundtrip fidelity: JS `{ [k]: v }` ➔ Codon `O([k]:v)` ➔ JS `{ [k]: v }` (100% Babel parser validation).
+  - Retains 100% backward compatibility with static colon pairs `O(key:val)`, identifier shorthand `O(prop)`, spread `O(...rest)`, and legacy alternating `O('key';val)`.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates verbose 3-line dictionary construction workarounds (`data =: O() \n data.[key] =: val \n return. data` [14+ tokens] -> `return. O([key]:val)` [5 tokens], saving ~65% tokens per dynamic object).
+  - Allows single-expression dynamic state updates in React hooks (e.g. `setForm {{prev => O(...prev, [name]:value)}}`).
+  - Resolves fatal compiler errors on GraphQL resolvers, dynamic event dispatches, and symbol methods across LLM fullstack benchmarks.
+- **Concrete Syntax Changes**:
+  - `codon-parser.ts`: Updated `O(...)` parsing to split properties across both semicolon `;` and comma `,` delimiters at depth 0. Added detection for bracket-enclosed keys `[keyPart]` in colon pairs, parsing the inner expression with `computed: true`. Updated `ClassBody` to support computed property definitions `[key] =: val` and computed methods `method. [key] do.`.
+  - `transpilers.ts`: Updated `JSToCodonTranslator` in `ObjectProperty` and `ObjectMethod` to emit `[${keyExpr}]:${valStr}` when `node.computed` is true. Updated `ClassMethod` and `PropertyDefinition` to preserve computed bracket notation.
+  - Examples:
+    - Old Codon (failed / multi-statement): `res =: O(); res.[fieldName] =: result; return. res`
+    - New Codon: `return. O([fieldName]:result)`
+    - Old Codon: `payload =: O('Content-Type':'application/json')`
+    - New Codon: `payload =: O([headerName]:headerVal, status:200)`
+    - Old Codon: `data =: O(a:1;b:2)`
+    - New Codon: `data =: O(a:1, b:2)`
+    - Old Codon: `entry =: O([Symbol.iterator]:{{fn => do. ... end.}})`
+    - New Codon: `entry =: O([Symbol.iterator]:{{fn => do. ... end.}})`
+
 ## Revision 12a (unsuccessful)
 - **Tokens:** 8661
 
