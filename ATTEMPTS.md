@@ -1,6 +1,40 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
+## Revision 18a (successful)
+- **Tokens:** 500
+
+- **Revision Idea**: Introduce concise unparenthesized variable reassignment statements (`id = expr`), unparenthesized monadic await in return statements (`return. @ expr`) and standalone expression statements (`@ expr`), alongside single-operand boundary protection for update expressions (`++`, `--`), eliminating mandatory outer wrapping parentheses `(id = expr)`, `return. (@ expr)`, and `(@ expr)`.
+- **Rationale**: In modern AI fullstack web development (React state machines, event handlers, Express/Koa API controllers, database query execution, network fetch pipelines, async background tasks, and iterative algorithms):
+  1. **Variable Reassignments**: Prior to Revision 18a, writing `id = expr` (plain `=` without pattern markers) was misclassified as a `VariableDeclaration` (`const id = expr;`), causing fatal Babel compiler errors (`Identifier 'id' has already been declared` or `Assignment to constant variable`) whenever variables were updated or reassigned in controllers, loops, and state reducers (such as `order = (transition order 'pay')` in state machines or `parsed = (parsed.replace ...)` in text parsing). By tracking declared identifiers in scope, initial declarations with `=:` (or first-time `=`) establish `const` bindings, while subsequent assignments with plain `=` cleanly construct statement-level `AssignmentExpression` nodes (`id = expr;`) without requiring outer wrapping parentheses `(id = expr)`.
+  2. **Unparenthesized Standalone and Return Await Expressions**: While Revision 1a introduced `@` and `@:` as prefix monadic await verbs, `JSToCodonTranslator` and expression generators still emitted redundant wrapping parentheses `(@ <arg>)` for standalone statements (`(@ (delay 50))`) and return statements (`return. (@ (res.json()))`), consuming 2–4 extra tokens per await call. Revision 18a unwraps outer parentheses for `AwaitExpression` in `ReturnStatement` (`return. @ expr`) and `ExpressionStatement` (`@ expr`), matching variable declaration initializers (`res =: @ expr`).
+  3. **Single-Operand Guard for Update Expressions**: In `codon-parser.ts`, update expression detection (`++`, `--`) now enforces single-operand boundaries (`splitAtLevel(inner, " ").length === 1`), preventing call expressions with update arguments (such as `(Math.pow 2 this.retryCount++)`) from greedily matching trailing `++` across spaces.
+  Together, these changes eliminate wrapping parentheses across variable updates and asynchronous return/standalone operations, while ensuring 100% roundtrip fidelity across all fullstack benchmark suites.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates 2 wrapping tokens `(` and `)` per variable reassignment statement (e.g. `(order = (transition order 'pay'))` [9 tokens] -> `order = (transition order 'pay')` [7 tokens], saving ~22%).
+  - Eliminates 2 wrapping tokens per return await expression (e.g. `return. (@ (res.json()))` [7 tokens] -> `return. @ (res.json())` [5 tokens], saving ~29%).
+  - Eliminates 2 wrapping tokens per standalone await statement (e.g. `(@ (delay 50))` [6 tokens] -> `@ (delay 50)` [4 tokens], saving ~33%).
+  - Resolves duplicate declaration syntax crashes across state machine and text transformation pipelines in fullstack benchmarks.
+- **Concrete Syntax Changes**:
+  - `codon-parser.ts`:
+    - Added `scopeVars: Set<string>` to `CodonToASTParser` to track declared identifiers across the parse run.
+    - Updated `parseStatement`: when `assignOp === "="` on a bare identifier that is already present in `scopeVars`, constructs an `ExpressionStatement` containing an `AssignmentExpression` (`operator: "="`). If not previously declared, declares with `const` and registers the identifier in `scopeVars`. Also registers bare identifier targets of `=:` in `scopeVars`.
+    - Updated `parseExpression`: in update expression parsing (`strippedExpr.endsWith("++")`, `strippedExpr.endsWith("--")`, `strippedExpr.startsWith("++")`, `strippedExpr.startsWith("--")`), added `splitAtLevel(inner, " ").length === 1` boundary check so call expressions with update arguments do not misparse.
+  - `transpilers.ts`:
+    - Updated `case "ReturnStatement"`: when `node.argument.type === "AwaitExpression"` and `argStr.startsWith("(@ ") && argStr.endsWith(")")`, unwraps to `return. @ ${argStr.slice(3, -1)}`.
+    - Updated `case "ExpressionStatement"`: when `node.expression.type === "AwaitExpression"`, unwraps `(@ ...)` to `@ ...`.
+  - Examples:
+    - Old Codon: `(order = (transition order 'pay'))`
+    - New Codon: `order = (transition order 'pay')`
+    - Old Codon: `(parsed = (parsed.replace regex ''))`
+    - New Codon: `parsed = (parsed.replace regex '')`
+    - Old Codon: `return. (@ (res.json()))`
+    - New Codon: `return. @ (res.json())`
+    - Old Codon: `(@ (delay 50))`
+    - New Codon: `@ (delay 50)`
+    - Old Codon: `delay =: (baseDelay * (Math.pow 2 retryCount++))`
+    - New Codon: `delay =: (baseDelay * (Math.pow 2 retryCount++))`
+
 ## Revision 17a (unsuccessful)
 - **Tokens:** 776
 
