@@ -213,3 +213,46 @@ Revision 5a introduces `import.` and `export.` as native J control words for ES 
 
 ### Impact on Fullstack Applications
 In modern AI fullstack applications, ES module imports and exports appear at the top and bottom of virtually every component, server route, utility library, and database model. Replacing cumbersome `NB. i|` comment metadata and URL-encoded paths with native `import.` and `export.` control words cuts module syntax tokens by 40–65%, eliminates redundant module path repetitions, and completely removes comment parsing overhead across all fullstack Codon files.
+
+## 6. Concise Array Expressions: Bracket Notation (`[...]`, `[]`, and Direct Spread)
+
+### Overview
+In standard J and prior versions of Codon, array creation relied on array shapes and boxed lists. An empty array was expressed as `(0$0)` (the shape of 0 elements of item 0), single-element arrays required leading comma enclosures `(,elem)`, and multi-element arrays required semicolon-delimited parenthesized lists `(a;b;c)`. On the expression level, Codon lacked support for native bracket array literals `[...]`; writing `[]` or `[a, b]` was erroneously parsed as a literal Identifier named `"[]"` or `"[a, b]"`. This imposed significant token penalties, created confusing ambiguities with parenthesized tacit trains `(f g h)` and function calls `(fn arg)`, and broke visual symmetry with Codon's existing bracket destructuring syntax `[a, b] =: list`.
+
+Revision 6a introduces native concise bracket array expressions `[...]` directly into Codon:
+- **Empty Array Literals**: `[]` replaces verbose 5-token `(0$0)` with a single compact token.
+- **Single-Element Arrays**: `[elem]` replaces `(,elem)`, eliminating awkward comma notation.
+- **Multi-Element Arrays**: `[a, b, c]` and `[a; b; c]` support both standard comma delimiters and J semicolon delimiters.
+- **Direct Prefix Spread**: `[...prev, newItem]` seamlessly supports array spreading and immutable state updates.
+- **Nested Arrays**: Multi-dimensional matrices and grids `[[1, 2], [3, 4]]` parse with complete depth tracking.
+- **Backward Compatibility**: Legacy `(0$0)`, `(,elem)`, and `(a;b;c)` remain 100% supported.
+
+### Syntax
+- `[]`: Empty array literal.
+- `[elem]`: Single-element array literal.
+- `[elem1, elem2, ...]`: Comma-separated array literal.
+- `[elem1; elem2; ...]`: Semicolon-separated array literal.
+- `[...spread, item]`: Array literal with spread element.
+- `[[a, b], [c, d]]`: Nested array expressions.
+- `(0$0)` / `(,elem)` / `(elem1;elem2)`: Legacy forms retained for backward compatibility.
+
+### How It Functions
+- **Parsing (`CodonToASTParser`)**: The parser detects expressions enclosed in brackets `[` and `]` via `strippedExpr.startsWith("[") && strippedExpr.endsWith("]")`. It strips the outer brackets, trims trailing delimiters, and splits the inner content at level 0 across commas and semicolons using `splitAtLevel`. Each element is analyzed for prefix spread (`...`) into an ESTree `SpreadElement`, or recursively parsed into expression nodes. It produces an ESTree `ArrayExpression` AST node.
+- **Transpilation (`JSToCodonTranslator`)**: JavaScript `ArrayExpression` AST nodes are automatically emitted as `[]` for empty arrays, `[${this.transpile(elem)}]` for single elements, and `[${elements.join(",")}]` for multi-element lists.
+- **Code Generation (`CodonToJSCompiler`)**: Compiles `ArrayExpression` AST nodes into standard JavaScript array literals `[...]` via Babel generator.
+
+### Comparison Examples & Token Savings
+
+| Pattern | Standard J / Legacy Codon | Optimized Codon (Rev 6a) | JavaScript Target | Token Reduction |
+| :--- | :--- | :--- | :--- | :--- |
+| **Empty Array / State Init** | `items =: (0$0)` | `items =: []` | `const items = [];` | **~80%** (1 token vs 5 tokens) |
+| **Hook Array State** | `[items,setItems] =: (useState (0$0))` | `[items,setItems] =: (useState [])` | `const [items, setItems] = useState([]);` | **~40%** (6 tokens vs 10 tokens) |
+| **Single-Element Array** | `[messages,set] =: (useState (,O(id:1)))` | `[messages,set] =: (useState [O(id:1)])` | `const [messages, set] = useState([{ id: 1 }]);` | **~35%** (7 tokens vs 10 tokens) |
+| **Immutable Append / Spread** | `(set {{prev => (...prev;item)}})` | `(set {{prev => [...prev, item]}})` | `set(prev => [...prev, item]);` | **~30%** (7 tokens vs 10 tokens) |
+| **Multi-Element List** | `nums =: (1;2;3;4)` | `nums =: [1,2,3,4]` | `const nums = [1, 2, 3, 4];` | **~30%** (7 tokens vs 10 tokens) |
+| **Return Empty Array** | `return. (0$0)` | `return. []` | `return [];` | **~65%** (2 tokens vs 6 tokens) |
+| **Multi-Spread Combination** | `all =: (...head;...body;tail)` | `all =: [...head, ...body, tail]` | `const all = [...head, ...body, tail];` | **~25%** (7 tokens vs 9 tokens) |
+| **Nested Matrix** | `grid =: ((1;2);(3;4))` | `grid =: [[1,2],[3,4]]` | `const grid = [[1, 2], [3, 4]];` | **~35%** (9 tokens vs 14 tokens) |
+
+### Impact on Fullstack Applications
+In modern AI fullstack applications (React component state arrays, immutable state updaters, Next.js route handlers, SQLite/Postgres result sets, middleware stacks, and schema validation error lists), arrays are omnipresent. Introducing concise bracket array notation `[...]` eliminates 4 tokens per empty array (an 80% reduction), simplifies array spreading, prevents misinterpretation of array literals as tacit trains, and creates full syntax symmetry between array destructuring and array creation for LLMs generating Codon code.

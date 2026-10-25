@@ -103,7 +103,7 @@ export class JSToCodonTranslator {
                             imports.push(`import. ${specParts.join(",")} from '${src}'`);
                         }
                     } else if (n.type === "ExportDefaultDeclaration") {
-                        exports.push(`NB. e|${this.transpile(n.declaration)}`);
+                        exports.push(`export. default ${this.transpile(n.declaration)}`);
                     } else if (n.type === "ExportAllDeclaration") {
                         const source = String((n.source as Literal).value).replace(/\|/g, "%7C").replace(/:/g, "%3A");
                         exports.push(`NB. exAll|${source}`);
@@ -352,11 +352,11 @@ export class JSToCodonTranslator {
                 return "super";
 
             case "ArrayExpression": {
-                if (node.elements.length === 0) return `(0$0)`;
+                if (node.elements.length === 0) return `[]`;
                 if (node.elements.length === 1) {
-                    return `(,${this.transpile(node.elements[0])})`;
+                    return `[${this.transpile(node.elements[0])}]`;
                 }
-                return `(${node.elements.map((n) => (n ? this.transpile(n) : "''")).join(";")})`;
+                return `[${node.elements.map((n) => (n ? this.transpile(n) : "''")).join(",")}]`;
             }
 
             case "ObjectExpression": {
