@@ -76,6 +76,27 @@ export interface CompilerOptions {
     runtimeModule?: string;
 }
 
+export function unwrapOuterParens(s: string): string {
+    const trimmed = s.trim();
+    if (trimmed.startsWith("(") && trimmed.endsWith(")")) {
+        let depth = 0;
+        let inStr = false;
+        let inTpl = false;
+        for (let i = 0; i < trimmed.length - 1; i++) {
+            const ch = trimmed[i];
+            if (ch === "'" && !inTpl) inStr = !inStr;
+            else if (ch === "`" && !inStr) inTpl = !inTpl;
+            else if (!inStr && !inTpl) {
+                if (ch === "(") depth++;
+                else if (ch === ")") depth--;
+                if (depth === 0) return trimmed;
+            }
+        }
+        return trimmed.slice(1, -1).trim();
+    }
+    return trimmed;
+}
+
 export class JSToCodonTranslator {
     private resolution?: ScopeResolution;
 
@@ -225,6 +246,12 @@ export class JSToCodonTranslator {
                         let initStr = d.init ? this.transpile(d.init) : "''";
                         if (d.init?.type === "AwaitExpression" && initStr.startsWith("(@ ") && initStr.endsWith(")")) {
                             initStr = "@ " + initStr.slice(3, -1);
+                        } else if (
+                            d.init?.type === "BinaryExpression" ||
+                            d.init?.type === "LogicalExpression" ||
+                            d.init?.type === "ConditionalExpression"
+                        ) {
+                            initStr = unwrapOuterParens(initStr);
                         }
                         return `${idStr} =: ${initStr}`;
                     })
@@ -237,7 +264,15 @@ export class JSToCodonTranslator {
                 }
                 if (node.expression.type === "AssignmentExpression") {
                     const assignNode = node.expression as AssignmentExpression;
-                    return `${this.transpile(assignNode.left)} ${assignNode.operator} ${this.transpile(assignNode.right)}`;
+                    let rightStr = this.transpile(assignNode.right);
+                    if (
+                        assignNode.right.type === "BinaryExpression" ||
+                        assignNode.right.type === "LogicalExpression" ||
+                        assignNode.right.type === "ConditionalExpression"
+                    ) {
+                        rightStr = unwrapOuterParens(rightStr);
+                    }
+                    return `${this.transpile(assignNode.left)} ${assignNode.operator} ${rightStr}`;
                 }
                 return this.transpile(node.expression);
 
@@ -245,14 +280,21 @@ export class JSToCodonTranslator {
                 return node.body.map((n) => this.transpile(n)).join("\n");
 
             case "IfStatement": {
-                const testStr = this.transpile(node.test);
+                let testStr = this.transpile(node.test);
+                if (node.test.type === "BinaryExpression" || node.test.type === "LogicalExpression") {
+                    testStr = unwrapOuterParens(testStr);
+                }
                 const consStr = this.transpile(node.consequent);
                 if (node.alternate) {
                     if (node.alternate.type === "IfStatement") {
                         let cur: any = node.alternate;
                         let chain = `if. ${testStr} do.\n${consStr}\n`;
                         while (cur && cur.type === "IfStatement") {
-                            chain += `elseif. ${this.transpile(cur.test)} do.\n${this.transpile(cur.consequent)}\n`;
+                            let curTestStr = this.transpile(cur.test);
+                            if (cur.test.type === "BinaryExpression" || cur.test.type === "LogicalExpression") {
+                                curTestStr = unwrapOuterParens(curTestStr);
+                            }
+                            chain += `elseif. ${curTestStr} do.\n${this.transpile(cur.consequent)}\n`;
                             cur = cur.alternate;
                         }
                         if (cur) {
@@ -292,11 +334,21 @@ export class JSToCodonTranslator {
                 return `for. ${initStr} ; ${testStr} ; ${updateStr} do.\n${this.transpile(node.body)}\nend.`;
             }
 
-            case "WhileStatement":
-                return `while. ${this.transpile(node.test)} do.\n${this.transpile(node.body)}\nend.`;
+            case "WhileStatement": {
+                let testStr = this.transpile(node.test);
+                if (node.test.type === "BinaryExpression" || node.test.type === "LogicalExpression") {
+                    testStr = unwrapOuterParens(testStr);
+                }
+                return `while. ${testStr} do.\n${this.transpile(node.body)}\nend.`;
+            }
 
-            case "DoWhileStatement":
-                return `whilst. ${this.transpile(node.test)} do.\n${this.transpile(node.body)}\nend.`;
+            case "DoWhileStatement": {
+                let testStr = this.transpile(node.test);
+                if (node.test.type === "BinaryExpression" || node.test.type === "LogicalExpression") {
+                    testStr = unwrapOuterParens(testStr);
+                }
+                return `whilst. ${testStr} do.\n${this.transpile(node.body)}\nend.`;
+            }
 
             case "TryStatement": {
                 const blockStr = this.transpile(node.block);
@@ -310,8 +362,20 @@ export class JSToCodonTranslator {
             case "ThrowStatement":
                 return `throw. ${this.transpile(node.argument)}`;
 
-            case "ReturnStatement":
-                return node.argument ? `return. ${this.transpile(node.argument)}` : "return.";
+            case "ReturnStatement": {
+                if (!node.argument) return "return.";
+                let argStr = this.transpile(node.argument);
+                if (
+                    node.argument.type === "BinaryExpression" ||
+                    node.argument.type === "LogicalExpression" ||
+                    node.argument.type === "ConditionalExpression"
+                ) {
+                    argStr = unwrapOuterParens(argStr);
+                } else if (node.argument.type === "AwaitExpression" && argStr.startsWith("(@ ") && argStr.endsWith(")")) {
+                    argStr = "@ " + argStr.slice(3, -1);
+                }
+                return `return. ${argStr}`;
+            }
 
             case "YieldExpression":
                 return (node as any).argument ? `yield. ${this.transpile((node as any).argument)}` : "yield.";
@@ -358,7 +422,15 @@ export class JSToCodonTranslator {
             case "ClassProperty": {
                 const pNode = node as PropertyDefinition | ClassProperty;
                 const keyStr = (pNode.key as any).type === "Identifier" ? (pNode.key as any).name : this.transpile(pNode.key);
-                const initStr = pNode.value ? this.transpile(pNode.value) : "''";
+                let initStr = pNode.value ? this.transpile(pNode.value) : "''";
+                if (
+                    pNode.value &&
+                    (pNode.value.type === "BinaryExpression" ||
+                     pNode.value.type === "LogicalExpression" ||
+                     pNode.value.type === "ConditionalExpression")
+                ) {
+                    initStr = unwrapOuterParens(initStr);
+                }
                 return `${pNode.static ? "static " : ""}${keyStr} =: ${initStr}`;
             }
 

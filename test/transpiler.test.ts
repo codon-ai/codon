@@ -1505,5 +1505,142 @@ end.
     });
 });
 
+describe("Concise Unparenthesized Binary, Logical, and Await Expressions (Rev 17a)", () => {
+    test("Transpiles unparenthesized binary, logical, conditional, and await expressions in return statements", () => {
+        const codonCode = `
+fn. checkStatus changes do.
+  return. changes > 0
+end.
+fn. computeSum a,b do.
+  return. a + b
+end.
+fn. fallbackVal keyResolver,fallback do.
+  return. keyResolver || fallback
+end.
+async_fn. fetchProfile api,id do.
+  return. @ (api.getUser id)
+end.
+fn. clamp count do.
+  return. count > 0 ? count : 0
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("return changes > 0;");
+        expect(js).toContain("return a + b;");
+        expect(js).toContain("return keyResolver || fallback;");
+        expect(js).toContain("return await api.getUser(id);");
+        expect(js).toContain("return count > 0 ? count : 0;");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles unparenthesized binary, logical, and conditional expressions in variable declarations and assignments", () => {
+        const codonCode = `
+fn. calculate items,fallback do.
+  idx =: items.length - 1
+  resolver =: customResolver || fallback
+  status =: idx > 0 ? 'valid' : 'empty'
+  this.heap.[idx] = parent - 1
+  return. idx
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("const idx = items.length - 1;");
+        expect(js).toContain("const resolver = customResolver || fallback;");
+        expect(js).toContain("const status = idx > 0 ? 'valid' : 'empty';");
+        expect(js).toContain("this.heap[idx] = parent - 1;");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles unparenthesized relational and logical conditions in if, elseif, and while blocks", () => {
+        const codonCode = `
+if. retryCount < maxRetries do.
+  count++
+elseif. status === 200 do.
+  valid =: true
+end.
+while. idx < limit do.
+  idx++
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("if (retryCount < maxRetries)");
+        expect(js).toContain("else if (status === 200)");
+        expect(js).toContain("while (idx < limit)");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips JS returns, variable initializers, and control flow conditions using concise unparenthesized notation", () => {
+        const jsCode = `
+function toggleTodo(result, a, b, keyResolver, fallback, count, items) {
+  const idx = items.length - 1;
+  const resolver = keyResolver || fallback;
+  if (count < 10) {
+    count++;
+  }
+  while (idx > 0) {
+    items.pop();
+  }
+  return result.changes > 0;
+}
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("idx =: items.length - 1");
+        expect(codonCode).toContain("resolver =: keyResolver || fallback");
+        expect(codonCode).toContain("if. count < 10 do.");
+        expect(codonCode).toContain("while. idx > 0 do.");
+        expect(codonCode).toContain("return. result.changes > 0");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(roundtrippedJs).toContain("const idx = items.length - 1;");
+        expect(roundtrippedJs).toContain("const resolver = keyResolver || fallback;");
+        expect(roundtrippedJs).toContain("if (count < 10)");
+        expect(roundtrippedJs).toContain("while (idx > 0)");
+        expect(roundtrippedJs).toContain("return result.changes > 0;");
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Retains backward compatibility with legacy parenthesized returns and initializers", () => {
+        const codonCode = `
+fn. legacyFunc a,b do.
+  res =: (a + b)
+  if. (a > b) do.
+    return. (a * 2)
+  end.
+  return. (b - a)
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("const res = a + b;");
+        expect(js).toContain("if (a > b)");
+        expect(js).toContain("return a * 2;");
+        expect(js).toContain("return b - a;");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+});
+
+
 
 

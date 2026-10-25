@@ -163,13 +163,21 @@ In Codon, assignment uses `=:` (transpiling to `const` for new declarations, or 
 ```codon
 total =: 100
 name =: 'Codon'
+idx =: this.heap.length - 1
+resolver =: keyResolver || fallback
+status =: idx > 0 ? 'valid' : 'empty'
 ```
 
 Transpiles to:
 ```javascript
 const total = 100;
 const name = "Codon";
+const idx = this.heap.length - 1;
+const resolver = keyResolver || fallback;
+const status = idx > 0 ? "valid" : "empty";
 ```
+
+Binary arithmetic (`-`, `+`, `*`, `/`), logical expressions (`||`, `&&`, `??`), and ternary conditionals (`? :`) in variable declarations can be written cleanly without enclosing parentheses.
 
 ### Member, Property, and Compound Assignments
 
@@ -542,26 +550,28 @@ end.)
 ### Conditionals (`if.` / `elseif.` / `else.`)
 
 ```codon
-if. (x === 1) do.
+if. x === 1 do.
   (console.log 'one')
-elseif. (x === 2) do.
+elseif. x === 2 do.
   (console.log 'two')
 else.
   (console.log 'other')
 end.
 ```
 
+Test conditions can be written cleanly without enclosing parentheses (e.g. `if. retryCount < maxRetries do.`, `if. !isClosed && retries < max do.`).
+
 ### Loops (`while.`, `whilst.`, `for.`, `for_in.`, `for_of.`)
 
 - **While Loop**:
   ```codon
-  while. (n > 0) do.
-    (n = n - 1)
+  while. n > 0 do.
+    n = n - 1
   end.
   ```
 - **For Loop (C-Style)**:
   ```codon
-  for. i =: 0 ; (i < 10) ; (i++) do.
+  for. i =: 0 ; i < 10 ; i++ do.
     (console.log i)
   end.
   ```
@@ -608,6 +618,11 @@ end.
 ```codon
 return. result
 return.
+return. a + b                     NB. Unparenthesized binary arithmetic
+return. result.changes > 0        NB. Unparenthesized relational/comparison
+return. keyResolver || fallback   NB. Unparenthesized logical expression
+return. @ (res.json())            NB. Unparenthesized monadic await return
+return. count > 0 ? count : 0     NB. Unparenthesized ternary conditional
 throw. (new Error 'Operation failed')
 ```
 
