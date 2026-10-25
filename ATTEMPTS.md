@@ -1,8 +1,8 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
-## Revision 24a (successful)
-- **Tokens:** 485
+## Revision 24a (unsuccessful)
+- **Tokens:** 686
 
 - **Revision Idea**: Introduce concise unparenthesized `new` object instantiation expressions (`new Callee`, `new Callee arg1 arg2`, `new Callee O(...)`) across variable declarations (`map =: new Map`), member assignments (`this.socket = new WebSocket this.url`), class properties (`resolvers =: new Map`), return statements (`return. new Promise {{...}}`), throw statements (`throw. new Error '...'`), and standalone statements, alongside single-operand boundary protection for update expressions (`++`, `--`) in function call arguments (`(Math.pow 2 this.retryCount++)`).
 - **Rationale**: In modern AI fullstack web development (React component refs, WebSocket clients, Node/Express HTTP servers, database drivers, async Promises, Maps, Sets, and error boundaries):
