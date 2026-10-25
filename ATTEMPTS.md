@@ -1,8 +1,8 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
-## Revision 22a (successful)
-- **Tokens:** 500
+## Revision 22a (unsuccessful)
+- **Tokens:** 3999
 
 - **Revision Idea**: Introduce concise unparenthesized function and method call statements (`callee arg1 arg2`, `this.socket.send data`, `this.messageListeners.push cb`, `setInput ''`, `setTimeout fn delay`), concise computed property keys in object literals (`O([key]:val)`, `O([fieldName]:result)`), and single-operand boundary protection for update expressions (`++`, `--`), eliminating mandatory outer wrapping parentheses across statement-level call expressions `(callee arg1 arg2)`, fatal compiler crashes in dynamic dictionaries, and syntax misparsing in call expressions with update arguments.
 - **Rationale**: In modern AI fullstack web development (React component state hooks, event dispatchers, Express/Koa route responses, GraphQL query resolvers, WebSocket client message streaming, database queries, and exponential retry backoff loops):
