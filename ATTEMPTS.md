@@ -1,8 +1,8 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
-## Revision 17a (successful)
-- **Tokens:** 500
+## Revision 17a (unsuccessful)
+- **Tokens:** 776
 
 - **Revision Idea**: Introduce concise unparenthesized binary, logical, conditional, and await expressions across return statements (`return. expr`), variable declarations (`x =: expr`), member assignments (`this.prop = expr`), property definitions (`field =: expr`), and control flow conditions (`if. expr do.`, `while. expr do.`), eliminating mandatory outer wrapping parentheses `return. (a + b)`, `return. (result.changes > 0)`, `return. (@ res.json())`, `idx =: (this.heap.length - 1)`, `resolver =: (keyResolver || fallback)`, and `if. (retryCount < maxRetries) do.`.
 - **Rationale**: In modern AI fullstack web development (React component state and JSX rendering, Express/Koa API controllers, database query execution, WebSocket client connection state, and algorithmic pipelines):
