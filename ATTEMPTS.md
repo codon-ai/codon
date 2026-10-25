@@ -1,8 +1,8 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
-## Revision 15a (successful)
-- **Tokens:** 772
+## Revision 15a (unsuccessful)
+- **Tokens:** 3970
 
 - **Revision Idea**: Introduce concise unparenthesized logical NOT expressions (`!expr`, `!obj.method()`) and unparenthesized update expressions (`expr++`, `expr--`, `++expr`, `--expr`) in Codon, eliminating mandatory outer wrapping parentheses `(! expr)` and `(expr++)`.
 - **Rationale**: In modern AI fullstack web development (React component state and JSX conditional rendering, form validation, event handling, API error checking, HTTP response handling, safe type checks, loop iterations, and auto-incrementing ID generators), logical NOT expressions (`!isValid`, `!response.ok`, `!input.trim()`, `!cache.has(key)`) and update expressions (`nextId.current++`, `i++`, `count++`) are among the most pervasive expressions. Prior to Revision 15a, Codon suffered from two critical limitations:
