@@ -991,7 +991,7 @@ export class CodonToASTParser {
         if (stmt === "break.") return { type: "BreakStatement" };
         if (stmt === "continue.") return { type: "ContinueStatement" };
 
-        // Destructuring / Variable Assignment: pattern =: expr or pattern =. expr or pattern = expr
+        // Destructuring / Variable Assignment / Member Assignment / Compound Mutation
         // Crucial: Only match unparenthesized declarations at depth 0 (outside {}, [], ())!
         if (!stmt.startsWith("(") && !stmt.startsWith("{{") && !stmt.startsWith("class.") && !stmt.startsWith("fn.") && !stmt.startsWith("async_fn.")) {
             let depth = 0;
@@ -1001,6 +1001,9 @@ export class CodonToASTParser {
             let inTpl = false;
             let assignIdx = -1;
             let assignOpLen = 0;
+            let assignOp = "";
+
+            const compoundOps = ["??=", "||=", "&&=", "+=", "-=", "*=", "/=", "%=", "**=", "&=", "|=", "^=", "<<=", ">>=", ">>>="];
 
             for (let i = 0; i < stmt.length; i++) {
                 const char = stmt[i];
@@ -1016,15 +1019,29 @@ export class CodonToASTParser {
                 else if (char === "]") bracketDepth = Math.max(0, bracketDepth - 1);
 
                 if (depth === 0 && braceDepth === 0 && bracketDepth === 0) {
+                    let matchedCompound = false;
+                    for (const op of compoundOps) {
+                        if (stmt.startsWith(op, i)) {
+                            assignIdx = i;
+                            assignOp = op;
+                            assignOpLen = op.length;
+                            matchedCompound = true;
+                            break;
+                        }
+                    }
+                    if (matchedCompound) break;
+
                     if (stmt.startsWith("=:", i) || stmt.startsWith("=.", i)) {
                         assignIdx = i;
+                        assignOp = stmt.slice(i, i + 2);
                         assignOpLen = 2;
                         break;
                     }
                     if (char === "=") {
-                        if (i > 0 && (stmt[i - 1] === "=" || stmt[i - 1] === "!" || stmt[i - 1] === "<" || stmt[i - 1] === ">")) continue;
+                        if (i > 0 && ["=", "!", "<", ">", "+", "-", "*", "/", "%", "&", "|", "^", "?"].includes(stmt[i - 1]!)) continue;
                         if (stmt[i + 1] === "=" || stmt[i + 1] === ":" || stmt[i + 1] === ".") continue;
                         assignIdx = i;
+                        assignOp = "=";
                         assignOpLen = 1;
                         break;
                     }
@@ -1034,6 +1051,33 @@ export class CodonToASTParser {
             if (assignIdx !== -1) {
                 const leftStr = stmt.substring(0, assignIdx).trim();
                 const rightStr = stmt.substring(assignIdx + assignOpLen).trim();
+
+                // If compound assignment, always emit ExpressionStatement with AssignmentExpression
+                if (compoundOps.includes(assignOp)) {
+                    return {
+                        type: "ExpressionStatement",
+                        expression: {
+                            type: "AssignmentExpression",
+                            operator: assignOp,
+                            left: this.parseExpression(leftStr),
+                            right: this.parseExpression(rightStr),
+                        },
+                    };
+                }
+
+                // If member assignment (target is property access on an object or this)
+                if (this.isMemberExpressionTarget(leftStr)) {
+                    return {
+                        type: "ExpressionStatement",
+                        expression: {
+                            type: "AssignmentExpression",
+                            operator: "=",
+                            left: this.parseExpression(leftStr),
+                            right: this.parseExpression(rightStr),
+                        },
+                    };
+                }
+
                 const patternNode = this.parsePattern(leftStr);
                 return {
                     type: "VariableDeclaration",
@@ -1052,6 +1096,27 @@ export class CodonToASTParser {
         const expr = this.parseExpression(stmt);
         if (expr.type === "FunctionDeclaration") return expr;
         return { type: "ExpressionStatement", expression: expr };
+    }
+
+    private isMemberExpressionTarget(target: string): boolean {
+        target = target.trim();
+        if (target.startsWith("this.") || target.startsWith("this[") || target.startsWith("this.[") || target === "this") {
+            return true;
+        }
+        if (target.startsWith("[") && target.endsWith("]")) {
+            return false;
+        }
+        if (target.startsWith("{") && target.endsWith("}")) {
+            return false;
+        }
+        const stripped = target.replace(/\.\.\./g, "");
+        if (stripped.includes(".")) {
+            return true;
+        }
+        if (target.includes("[") && target.endsWith("]")) {
+            return true;
+        }
+        return false;
     }
 
     private parseIfStatement(stmt: string): IfStatement {

@@ -1267,3 +1267,141 @@ TorusKnotCurve.prototype = Object.create(Curve.prototype);
     });
 });
 
+describe("Concise Unparenthesized Member & Compound Assignment Support", () => {
+    test("Transpiles unparenthesized member assignment this.prop = val and this.prop =: val", () => {
+        const codonCode = `
+class. Client do.
+  constructor. do.
+    this.socket = ''
+    this.retryCount =: 0
+    this.isClosedManually = false
+  end.
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain('this.socket = "";');
+        expect(js).toContain("this.retryCount = 0;");
+        expect(js).toContain("this.isClosedManually = false;");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles unparenthesized property assignment on objects headers.host and res.statusCode", () => {
+        const codonCode = `
+fn. handle req,res do.
+  headers.host = 'localhost:8080'
+  res.statusCode =: 200
+  memoized.cache = cache
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain('headers.host = "localhost:8080";');
+        expect(js).toContain("res.statusCode = 200;");
+        expect(js).toContain("memoized.cache = cache;");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles computed property assignments this.heap.[idx] = tmp and records[id] = row", () => {
+        const codonCode = `
+fn. swap idx,parentIdx do.
+  this.heap.[idx] = this.heap.[parentIdx]
+  this.heap[parentIdx] = tmp
+  records.[id] = row
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("this.heap[idx] = this.heap[parentIdx];");
+        expect(js).toContain("this.heap[parentIdx] = tmp;");
+        expect(js).toContain("records[id] = row;");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles unparenthesized compound assignments count += 1, len -= 1, total *= factor", () => {
+        const codonCode = `
+fn. update do.
+  count += 1
+  this.retryCount += 1
+  len -= 1
+  total *= 2
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("count += 1;");
+        expect(js).toContain("this.retryCount += 1;");
+        expect(js).toContain("len -= 1;");
+        expect(js).toContain("total *= 2;");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips JS member assignments and compound mutations using unparenthesized notation", () => {
+        const jsCode = `
+export class WebSocketWrapper {
+  constructor(url) {
+    this.url = url;
+    this.retryCount = 0;
+    this.isClosed = false;
+    this.socket = null;
+  }
+  reconnect() {
+    this.retryCount += 1;
+    this.isClosed = true;
+  }
+}
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("this.url = url");
+        expect(codonCode).toContain("this.retryCount = 0");
+        expect(codonCode).toContain("this.retryCount += 1");
+        expect(codonCode).toContain("this.isClosed = true");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(roundtrippedJs).toContain("this.url = url;");
+        expect(roundtrippedJs).toContain("this.retryCount = 0;");
+        expect(roundtrippedJs).toContain("this.retryCount += 1;");
+        expect(roundtrippedJs).toContain("this.isClosed = true;");
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Retains backward compatibility with parenthesized assignment expressions (this.prop = val)", () => {
+        const codonCode = `
+class. Legacy do.
+  constructor. do.
+    (this.count = 0)
+    (this.total = (this.total + 10))
+  end.
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("this.count = 0;");
+        expect(js).toContain("this.total = this.total + 10;");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+});
+
+

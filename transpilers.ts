@@ -235,6 +235,10 @@ export class JSToCodonTranslator {
                     const argStr = this.transpile((node.expression as any).argument);
                     return `@ ${argStr}`;
                 }
+                if (node.expression.type === "AssignmentExpression") {
+                    const assignNode = node.expression as AssignmentExpression;
+                    return `${this.transpile(assignNode.left)} ${assignNode.operator} ${this.transpile(assignNode.right)}`;
+                }
                 return this.transpile(node.expression);
 
             case "BlockStatement":

@@ -15,6 +15,7 @@ This document provides a comprehensive, rigorous specification of the Codon lang
    - [Arrays (`[...]`)](#arrays-)
 4. [Variable Declarations & Assignments](#4-variable-declarations--assignments)
    - [Right-to-Left Assignment (`=:`)](#right-to-left-assignment-)
+   - [Member, Property & Compound Assignments](#member-property-and-compound-assignments)
    - [Pattern Destructuring](#pattern-destructuring)
 5. [Monadic Verbs](#5-monadic-verbs)
    - [Await (`@` and `@:`)](#await--and-)
@@ -168,10 +169,56 @@ const total = 100;
 const name = "Codon";
 ```
 
-Standard `=` is also supported for reassignments:
-```codon
-(count = count + 1)
+### Member, Property, and Compound Assignments
+
+Codon supports native unparenthesized member assignments, property mutations, and compound in-place assignments without requiring wrapping parentheses:
+
+- **Instance Member Assignment**:
+  ```codon
+  this.socket = ''
+  this.retryCount =: 0
+  this.isClosedManually = false
+  ```
+- **Object Property Assignment**:
+  ```codon
+  headers.host = 'localhost:8080'
+  res.statusCode =: 200
+  memoized.cache = cache
+  ```
+- **Computed Property Assignment**:
+  ```codon
+  this.heap.[idx] = tmp
+  records.[id] = row
+  arr[k] = val
+  ```
+- **Compound In-place Mutation**:
+  ```codon
+  count += 1
+  this.retryCount += 1
+  len -= 1
+  total *= factor
+  cache[key] ??= compute()
+  ```
+
+Transpiles to:
+```javascript
+this.socket = "";
+this.retryCount = 0;
+this.isClosedManually = false;
+headers.host = "localhost:8080";
+res.statusCode = 200;
+memoized.cache = cache;
+this.heap[idx] = tmp;
+records[id] = row;
+arr[k] = val;
+count += 1;
+this.retryCount += 1;
+len -= 1;
+total *= factor;
+cache[key] ??= compute();
 ```
+
+Legacy parenthesized assignment expressions `(this.socket = null)` and `(count += 1)` remain fully supported.
 
 ### Pattern Destructuring
 
