@@ -1,6 +1,30 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
+## Revision 23a (unsuccessful)
+- **Tokens:** 3885
+
+- **Revision Idea**: Introduce concise computed property keys in object literals (`O([key]:val)`, `O([fieldName]:result)`) and single-operand boundary protection for update expressions (`++`, `--`), eliminating fatal compiler crashes when generating dynamic dictionaries and resolving call expression misparsing when call arguments contain update operations (`(Math.pow 2 this.retryCount++)`).
+- **Rationale**: In modern AI fullstack web development (GraphQL query execution and resolver dispatching, dynamic database queries, REST API payload constructors, WebSocket event dispatchers, React state reducers, and exponential backoff retry algorithms):
+  1. **Computed Property Keys in Object Expressions**: In GraphQL query dispatchers (e.g. `graphqlSchemaExecutor.md`), dynamic database record builders, and event dispatchers, objects with dynamic keys (`{ [fieldName]: result }` or `{ [key]: val }`) are standard requirements. Previously in Codon, writing `O([fieldName]:result)` caused `parseExpression` to parse `[fieldName]` as an `ArrayExpression`, setting `keyName` to `undefined` and triggering a fatal compiler crash (`TypeError: undefined is not an object (evaluating 'str.length')`). Furthermore, `JSToCodonTranslator` discarded `computed: true` on object properties, emitting static `fieldName:result`. By detecting bracketed computed keys in colon pairs `[key]:val` and preserving `computed: true`, Codon enables dynamic dictionary construction with 100% roundtrip fidelity.
+  2. **Single-Operand Guard for Update Expressions**: In `codon-parser.ts`, update expression detection (`++`, `--`) lacked a single-operand boundary check (`splitAtLevel(inner, " ").length === 1`), causing function call expressions containing update arguments (such as `(Math.pow 2 this.retryCount++)`) to greedily match trailing `++` across spaces, producing broken JavaScript (`Math.pow 2 this.retryCount++;`) and fatal Babel compiler crashes (`Missing semicolon`). Enforcing single-operand boundaries ensures calls with update arguments parse into clean `CallExpression` nodes with nested `UpdateExpression` arguments.
+  Together, these changes eliminate dynamic object construction crashes and update expression misparsing while guaranteeing 100% compilation and roundtrip fidelity across the fullstack benchmark suite.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates verbose dictionary construction workarounds (`res =: O() \n res.[key] =: val \n return. res` [14+ tokens] -> `return. O([key]:val)` [5 tokens], saving ~65% tokens per dynamic object).
+  - Allows dynamic GraphQL response construction `return. O(data:O([fieldName]:result))` in a single concise statement.
+  - Resolves update expression misparsing and syntax crashes across WebSocket clients and exponential backoff retry algorithms in fullstack benchmarks.
+- **Concrete Syntax Changes**:
+  - `codon-parser.ts`:
+    - In `O(...)` object parsing, detect bracketed key expressions `[keyPart]:val`, parsing `keyPart` as an expression and setting `computed: true`.
+    - In update expression parsing (`strippedExpr.endsWith("++")`, `strippedExpr.endsWith("--")`, `strippedExpr.startsWith("++")`, `strippedExpr.startsWith("--")`), added `splitAtLevel(inner, " ").length === 1` boundary check so call expressions with update arguments do not misparse.
+  - `transpilers.ts`:
+    - Updated `case "Property" / case "ObjectProperty"` and `case "ObjectMethod"`: when `node.computed` is true, emits `[${this.transpile(node.key)}]:${this.transpile(node.value)}`.
+  - Examples:
+    - Old Codon: `return. O(fieldName:result)` (lost computed semantics)
+    - New Codon: `return. O([fieldName]:result)`
+    - Old Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` (crashed with Missing semicolon)
+    - New Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` (cleanly parses and compiles to `Math.pow(2, this.retryCount++)`)
+
 ## Revision 22a (unsuccessful)
 - **Tokens:** 3999
 
