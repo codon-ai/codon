@@ -1,5 +1,5 @@
 # Attempts
-A running log of all successful and failed optimization attempts. (JavaScript: 3822)
+A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
 ## Revision 5a (successful)
 - **Tokens:** 40000
