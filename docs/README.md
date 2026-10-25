@@ -74,6 +74,7 @@ flowchart TD
 | **Subtree Macro (Titlecase)** | `word.charAt(0).toUpperCase() + word.slice(1)` | `M!m_binary_expr_32(word)` | **~75%** |
 | **Async Await** | `const data = await response.json();` | `data =: @ (response.json())` | **~50%** |
 | **Object Shorthand & Spread** | `{ ...options, active: true, port }` | `O(...options;active:true;port)` | **~40%** |
+| **Computed Property Key** | `{ [key]: val, ...rest }` | `O([key]:val, ...rest)` | **~50%** |
 | **Arrow Function** | `const double = (x) => x * 2;` | `double =: {{x => (x * 2)}}` | **~50%** |
 | **Tacit Fork (Average)** | `const avg = (arr) => sum(arr) / arr.length;` | `avg =: (fork sum div tally)` | **~40%** |
 | **Sum Reduction** | `const total = nums.reduce((a, b) => a + b, 0);` | `total =: +/ nums` | **~70%** |

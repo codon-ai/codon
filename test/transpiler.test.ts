@@ -1404,4 +1404,96 @@ end.
     });
 });
 
+describe("Concise Computed Property Keys & Flexible Delimiters in Objects and Classes (Rev 13a)", () => {
+    test("Transpiles computed property key in object literal O([key]:val)", () => {
+        const codonCode = `
+res =: O([fieldName]:result)
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("[fieldName]: result");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles dynamic expression keys and mixed object properties with comma and semicolon delimiters", () => {
+        const codonCode = `
+payload =: O(id, title, ['header_' + type]:val, active:true; count:10)
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("id,");
+        expect(js).toContain("title,");
+        expect(js).toContain('["header_" + type]: val');
+        expect(js).toContain("active: true");
+        expect(js).toContain("count: 10");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles computed class methods and computed class properties", () => {
+        const codonCode = `
+class. CustomList do.
+  static [Symbol.species] =: Array
+
+  method. [Symbol.iterator] do.
+    return. this
+  end.
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("static [Symbol.species] = Array;");
+        expect(js).toContain("[Symbol.iterator]() {");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips JS computed object properties, dynamic keys, and symbol methods", () => {
+        const jsSource = `
+const response = {
+  [fieldName]: result,
+  ['header_' + name]: value,
+  status: 200,
+  shorthand
+};
+class Registry {
+  static [Symbol.species] = Array;
+  [Symbol.iterator]() {
+    return this;
+  }
+}
+`;
+        const jsAst = parser.parse(jsSource, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(jsAst.program as any);
+
+        expect(codonCode).toContain("[fieldName]:result");
+        expect(codonCode).toContain("[('header_' + name)]:value");
+        expect(codonCode).toContain("status:200");
+        expect(codonCode).toContain("shorthand");
+        expect(codonCode).toContain("[Symbol.species] =: Array");
+        expect(codonCode).toContain("method. [Symbol.iterator] do.");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(roundtrippedJs).toContain("[fieldName]: result");
+        expect(roundtrippedJs).toContain('["header_" + name]: value');
+        expect(roundtrippedJs).toContain("status: 200");
+        expect(roundtrippedJs).toContain("shorthand");
+        expect(roundtrippedJs).toContain("static [Symbol.species] = Array;");
+        expect(roundtrippedJs).toContain("[Symbol.iterator]()");
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+    });
+});
+
 

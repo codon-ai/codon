@@ -118,20 +118,22 @@ floats   = 1.5 2.5 3.5      NB. const floats = [1.5, 2.5, 3.5];
 Codon provides ultra-compact object literals via `O(...)`:
 
 - **Colon Key-Value Pairs**: `O(key:val;key2:val2)`
+- **Computed Property Keys**: `O([key]:val)` or `O([expr]:val)` compiles to `{ [key]: val }`
 - **Identifier Property Shorthand**: `O(prop1;prop2)` compiles to `{ prop1, prop2 }`
+- **Flexible Delimiters**: Supports both commas `,` and semicolons `;` (`O(id, title, [key]:val)`)
 - **Prefix Spread**: `O(...rest;key:val)` compiles to `{ ...rest, key: val }`
 - **Quoted Keys**: `O('Content-Type':'application/json')` for special characters
 - **Empty Objects**: `O()` or `O''` compiles to `{}`
 - **Legacy Alternating Pairs**: `O('key';val)` remains supported for backward compatibility
 
 ```codon
-NB. Modern concise object literal
-config =: O(...baseConfig;port:8080;host:'localhost';timeout)
+NB. Modern concise object literal with computed key and shorthand
+config =: O(...baseConfig, [dynamicKey]:val, port:8080, host:'localhost', timeout)
 ```
 
 Transpiles to:
 ```javascript
-const config = { ...baseConfig, port: 8080, host: "localhost", timeout };
+const config = { ...baseConfig, [dynamicKey]: val, port: 8080, host: "localhost", timeout };
 ```
 
 ### Arrays (`[...]`)
@@ -429,8 +431,10 @@ class. Counter extends BaseCounter do.
     return. this.count
   end.
 
-  set. current val do.
-    (this.count = val)
+  static [Symbol.species] =: Array
+
+  method. [Symbol.iterator] do.
+    return. this
   end.
 end.
 ```

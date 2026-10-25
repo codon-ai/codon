@@ -1274,12 +1274,20 @@ export class CodonToASTParser {
                 if (doIdx !== -1 && trimmed.endsWith("end.")) {
                     const header = trimmed.substring(prefix.length, doIdx).trim();
                     const spaceIdx = header.indexOf(" ");
-                    const keyName = spaceIdx !== -1 ? header.substring(0, spaceIdx).trim() : header;
+                    let keyName = spaceIdx !== -1 ? header.substring(0, spaceIdx).trim() : header;
                     const paramsStr = spaceIdx !== -1 ? header.substring(spaceIdx + 1).trim() : "";
                     const mBody = trimmed.substring(doIdx + 4, trimmed.length - 4).trim();
+                    let isComputed = false;
+                    let keyNode: any;
+                    if (keyName.startsWith("[") && keyName.endsWith("]")) {
+                        isComputed = true;
+                        keyNode = this.parseExpression(keyName.slice(1, -1).trim());
+                    } else {
+                        keyNode = { type: "Identifier", name: keyName };
+                    }
                     body.push({
                         type: "MethodDefinition",
-                        key: { type: "Identifier", name: keyName },
+                        key: keyNode,
                         value: {
                             type: "FunctionExpression",
                             id: null,
@@ -1288,21 +1296,30 @@ export class CodonToASTParser {
                             async: isAsyncMethod,
                         },
                         kind: "method",
-                        computed: false,
+                        computed: isComputed,
                         static: false,
                     });
                     continue;
                 }
             }
 
-            // Property: [static] key =: init or key = init
-            const propMatch = trimmed.match(/^(static\s+)?([a-zA-Z_$][a-zA-Z0-9_$]*)\s*(?:=:|=\.|=(?!=))\s*([\s\S]*)$/);
+            // Property: [static] key =: init or key = init (supports computed [key] =: init)
+            const propMatch = trimmed.match(/^(static\s+)?(\[[^\]]+\]|[a-zA-Z_$][a-zA-Z0-9_$]*)\s*(?:=:|=\.|=(?!=))\s*([\s\S]*)$/);
             if (propMatch && propMatch[2] && propMatch[3]) {
+                const rawKey = propMatch[2].trim();
+                let isComputed = false;
+                let keyNode: any;
+                if (rawKey.startsWith("[") && rawKey.endsWith("]")) {
+                    isComputed = true;
+                    keyNode = this.parseExpression(rawKey.slice(1, -1).trim());
+                } else {
+                    keyNode = { type: "Identifier", name: rawKey };
+                }
                 body.push({
                     type: "PropertyDefinition",
-                    key: { type: "Identifier", name: propMatch[2] },
+                    key: keyNode,
                     value: this.parseExpression(propMatch[3].trim()),
-                    computed: false,
+                    computed: isComputed,
                     static: Boolean(propMatch[1]),
                 });
                 continue;
@@ -1999,7 +2016,7 @@ export class CodonToASTParser {
             if (isFullyWrapped(strippedO)) strippedO = strippedO.slice(1, -1);
             if (!strippedO.trim()) return { type: "ObjectExpression", properties: [] };
 
-            const parts = splitAtLevel(strippedO, ";");
+            const parts = splitAtLevel(strippedO, ";").flatMap((p) => splitAtLevel(p, ",")).map((p) => p.trim());
             const properties: any[] = [];
             let i = 0;
             while (i < parts.length) {
@@ -2039,22 +2056,40 @@ export class CodonToASTParser {
                     continue;
                 }
 
-                // Key-value pair with colon: key:val or 'key':val
+                // Key-value pair with colon: key:val, 'key':val, or [expr]:val
                 const colonSplit = splitFirstAtLevel(part, ":");
                 if (colonSplit) {
                     const [keyPart, valPart] = colonSplit;
-                    const keyNode = this.parseExpression(keyPart);
-                    const keyName = keyNode.type === "Literal" ? String(keyNode.value) : (keyNode as Identifier).name;
+                    const trimmedKey = keyPart.trim();
+                    let keyNode: any;
+                    let isComputed = false;
+
+                    if (trimmedKey.startsWith("[") && trimmedKey.endsWith("]")) {
+                        isComputed = true;
+                        keyNode = this.parseExpression(trimmedKey.slice(1, -1).trim());
+                    } else {
+                        keyNode = this.parseExpression(trimmedKey);
+                    }
+
                     const valNode = this.parseExpression(valPart);
                     const isMethod = valNode.type === "FunctionExpression" || (valNode as any).type === "ObjectMethod";
+
+                    let keyProp: any;
+                    if (isComputed) {
+                        keyProp = keyNode;
+                    } else {
+                        const keyName = keyNode.type === "Literal" ? String(keyNode.value) : (keyNode as Identifier).name;
+                        keyProp = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(keyName)
+                            ? { type: "Identifier", name: keyName }
+                            : { type: "Literal", value: keyName };
+                    }
+
                     properties.push({
                         type: "Property",
-                        key: /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(keyName)
-                            ? { type: "Identifier", name: keyName }
-                            : { type: "Literal", value: keyName },
+                        key: keyProp,
                         value: valNode,
                         kind: "init",
-                        computed: false,
+                        computed: isComputed,
                         method: isMethod,
                         shorthand: false,
                     });
