@@ -1,8 +1,8 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
-## Revision 13a (successful)
-- **Tokens:** 772
+## Revision 13a (unsuccessful)
+- **Tokens:** 4186
 
 - **Revision Idea**: Introduce concise computed property keys in object literals `O([key]:val)` and class declarations (`[key] =: val`, `method. [key] do.`), alongside flexible comma and semicolon property delimiters in `O(...)`, eliminating fatal compiler crashes and verbose multi-statement workarounds for dynamic dictionaries in Codon.
 - **Rationale**: In modern AI fullstack web development (GraphQL query execution and resolver dispatching, React/Redux form state updates, dynamic HTTP request/response headers, WebSocket action routing, cache lookups, schema validation maps, and classes implementing JavaScript symbols like `[Symbol.iterator]` or `[Symbol.species]`), computed property keys (`{ [key]: value }`) are ubiquitous. Prior to Revision 13a, Codon suffered from three critical limitations:
