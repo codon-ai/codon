@@ -580,12 +580,15 @@ export class JSToCodonTranslator {
                 return `(${this.transpile(node.left)} ${node.operator} ${this.transpile(node.right)})`;
 
             case "UnaryExpression":
+                if (node.operator === "!") {
+                    return `!${this.transpile(node.argument)}`;
+                }
                 return `(${node.operator} ${this.transpile(node.argument)})`;
 
             case "UpdateExpression":
                 return node.prefix
-                    ? `(${node.operator}${this.transpile(node.argument)})`
-                    : `(${this.transpile(node.argument)}${node.operator})`;
+                    ? `${node.operator}${this.transpile(node.argument)}`
+                    : `${this.transpile(node.argument)}${node.operator}`;
 
             case "ConditionalExpression":
                 return `(${this.transpile(node.test)} ? ${this.transpile(node.consequent)} : ${this.transpile(node.alternate)})`;

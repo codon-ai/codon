@@ -1508,6 +1508,12 @@ export class CodonToASTParser {
                             if (op === "<" || op === ">") {
                                 if (str[i + 1] === "=") continue;
                             }
+                            if (op === "+") {
+                                if (str[i + 1] === "+" || (i > 0 && str[i - 1] === "+")) continue;
+                            }
+                            if (op === "-") {
+                                if (str[i + 1] === "-" || (i > 0 && str[i - 1] === "-")) continue;
+                            }
                             if (op === "/") {
                                 if (i > 0 && str[i - 1] && ["+", "*", "<", ">", "-", "%", "|", "."].includes(str[i - 1]!)) continue;
                                 if (str[i + 1] === "/" || str[i + 1] === ".") continue;
@@ -1587,37 +1593,47 @@ export class CodonToASTParser {
             return node;
         }
 
-        // Update Expression: (++x), (--x), (x++), (x--)
-        if (wasWrapped) {
-            if (strippedExpr.endsWith("++")) {
+        // Update Expression: (++x), (--x), (x++), (x--), x++, x--, ++x, --x
+        if (strippedExpr.endsWith("++") && strippedExpr.length > 2) {
+            const inner = strippedExpr.slice(0, -2).trim();
+            if (inner && !inner.includes(",") && !inner.includes(";")) {
                 return {
                     type: "UpdateExpression",
                     operator: "++",
-                    argument: this.parseExpression(strippedExpr.slice(0, -2).trim()),
+                    argument: this.parseExpression(inner),
                     prefix: false,
                 };
             }
-            if (strippedExpr.endsWith("--")) {
+        }
+        if (strippedExpr.endsWith("--") && strippedExpr.length > 2) {
+            const inner = strippedExpr.slice(0, -2).trim();
+            if (inner && !inner.includes(",") && !inner.includes(";")) {
                 return {
                     type: "UpdateExpression",
                     operator: "--",
-                    argument: this.parseExpression(strippedExpr.slice(0, -2).trim()),
+                    argument: this.parseExpression(inner),
                     prefix: false,
                 };
             }
-            if (strippedExpr.startsWith("++")) {
+        }
+        if (strippedExpr.startsWith("++") && strippedExpr.length > 2) {
+            const inner = strippedExpr.slice(2).trim();
+            if (inner && !inner.includes(",") && !inner.includes(";")) {
                 return {
                     type: "UpdateExpression",
                     operator: "++",
-                    argument: this.parseExpression(strippedExpr.slice(2).trim()),
+                    argument: this.parseExpression(inner),
                     prefix: true,
                 };
             }
-            if (strippedExpr.startsWith("--")) {
+        }
+        if (strippedExpr.startsWith("--") && strippedExpr.length > 2) {
+            const inner = strippedExpr.slice(2).trim();
+            if (inner && !inner.includes(",") && !inner.includes(";")) {
                 return {
                     type: "UpdateExpression",
                     operator: "--",
-                    argument: this.parseExpression(strippedExpr.slice(2).trim()),
+                    argument: this.parseExpression(inner),
                     prefix: true,
                 };
             }
@@ -1735,6 +1751,19 @@ export class CodonToASTParser {
         // Binary or Assignment Expression
         const binNode = this.parseBinaryOrAssignment(strippedExpr);
         if (binNode) return binNode;
+
+        // Unparenthesized Logical NOT Unary Expression: !expr (placed AFTER binary/logical splitting so !a && !b binds correctly)
+        if (strippedExpr.startsWith("!") && !strippedExpr.startsWith("!=") && !strippedExpr.startsWith("!==")) {
+            const innerArg = strippedExpr.slice(1).trim();
+            if (innerArg.length > 0) {
+                return {
+                    type: "UnaryExpression",
+                    operator: "!",
+                    argument: this.parseExpression(innerArg),
+                    prefix: true,
+                };
+            }
+        }
 
         // Monadic Codon verbs: #, %, %:, |, +/, */
         if (strippedExpr === "#") return { type: "Identifier", name: "tally" };

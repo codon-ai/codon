@@ -353,7 +353,7 @@ for (let i = 0, j = 10; i < j; i++, j--) {
         const translator = new JSToCodonTranslator();
         const codonCode = translator.transpile(ast.program as any);
 
-        expect(codonCode).toContain("((i++), (j--))");
+        expect(codonCode).toContain("(i++, j--)");
 
         const astParser = new CodonToASTParser();
         const parsedAst = astParser.parse(codonCode);
@@ -1403,5 +1403,107 @@ end.
         expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
     });
 });
+
+describe("Concise Unparenthesized Logical NOT and Update Expressions", () => {
+    test("Transpiles unparenthesized logical NOT expressions !expr and !obj.method()", () => {
+        const codonCode = `
+fn. validate input do.
+  if. !input.trim() do.
+    return.
+  end.
+  isValid =: !error && !loading
+  isAuth =: !cache.has(userId)
+  return. isValid
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("if (!input.trim())");
+        expect(js).toContain("const isValid = !error && !loading;");
+        expect(js).toContain("const isAuth = !cache.has(userId);");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles unparenthesized update expressions expr++, expr--, ++expr, --expr", () => {
+        const codonCode = `
+i++
+count--
+++step
+--rank
+nextId.current++
+todo =: O(id:nextId.current++;title:text)
+for. idx =: 0 ; idx < 10 ; idx++ do.
+  (console.log idx)
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("i++;");
+        expect(js).toContain("count--;");
+        expect(js).toContain("++step;");
+        expect(js).toContain("--rank;");
+        expect(js).toContain("nextId.current++;");
+        expect(js).toContain("id: nextId.current++");
+        expect(js).toContain("for (const idx = 0; idx < 10; idx++)");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips JS logical NOT and update expressions", () => {
+        const jsCode = `
+function handler() {
+  if (!input.trim()) {
+    return;
+  }
+}
+nextId.current++;
+for (let i = 0; i < 10; i++) {
+  count++;
+}
+const valid = !error && !loading;
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("!input.trim()");
+        expect(codonCode).toContain("nextId.current++");
+        expect(codonCode).toContain("!error && !loading");
+        expect(codonCode).toContain("i++");
+        expect(codonCode).toContain("count++");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(roundtrippedJs).toContain("if (!input.trim())");
+        expect(roundtrippedJs).toContain("nextId.current++;");
+        expect(roundtrippedJs).toContain("!error && !loading");
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Retains backward compatibility with legacy parenthesized forms (! expr) and (x++)", () => {
+        const codonCode = `
+if. (! isValid) do.
+  (x++)
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("if (!isValid)");
+        expect(js).toContain("x++;");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+});
+
 
 
