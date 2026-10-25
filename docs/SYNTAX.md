@@ -16,6 +16,7 @@ This document provides a comprehensive, rigorous specification of the Codon lang
 4. [Variable Declarations & Assignments](#4-variable-declarations--assignments)
    - [Right-to-Left Assignment (`=:`)](#right-to-left-assignment-)
    - [Pattern Destructuring](#pattern-destructuring)
+   - [Logical Nullish Assignment (`??=`, `||=`, `&&=`)](#logical-nullish-assignment---)
 5. [Monadic Verbs](#5-monadic-verbs)
    - [Await (`@` and `@:`)](#await--and-)
    - [Tally (`#`)](#tally-)
@@ -36,6 +37,7 @@ This document provides a comprehensive, rigorous specification of the Codon lang
    - [Constructors, Methods, Getters, and Setters](#constructors-methods-getters-and-setters)
 9. [Control Flow Structures](#9-control-flow-structures)
    - [Conditionals (`if.` / `elseif.` / `else.`)](#conditionals-if--elseif--else)
+   - [Concise Ternary Expressions (`? :`)](#concise-ternary-expressions--)
    - [Loops (`while.`, `whilst.`, `for.`, `for_in.`, `for_of.`)](#loops-while-whilst-for-for_in-for_of)
    - [Pattern Matching & Switch (`select.` / `case.`)](#pattern-matching--switch-select--case)
    - [Exception Handling (`try.` / `catch.` / `finally.`)](#exception-handling-try--catch--finally)
@@ -187,6 +189,20 @@ Codon supports full ES6 destructuring:
   { name, age, active = true, ...rest } =: user
   { id: userId, title: taskTitle } =: task
   ```
+
+### Logical Nullish Assignment (`??=`, `||=`, `&&=`)
+
+Codon supports ECMAScript short-circuit assignment operators natively:
+
+- **Nullish Assignment (`??=`)**: Assigns only if target is `null` or `undefined` (ideal for memoization and caches).
+- **Logical OR Assignment (`||=`)**: Assigns only if target is falsy (default parameters, options).
+- **Logical AND Assignment (`&&=`)**: Assigns only if target is truthy (feature flags, status updates).
+
+```codon
+(cache.[key] ??= (compute key))
+(options.retries ||= 3)
+(feature.enabled &&= hasAccess)
+```
 
 ---
 
@@ -419,6 +435,36 @@ else.
   (console.log 'other')
 end.
 ```
+
+### Concise Ternary Expressions (`? :`)
+
+Codon supports concise, unparenthesized ternary expressions and right-associative chained multi-branch conditionals:
+
+```codon
+NB. Unparenthesized ternary in assignment
+status =: isAuth ? 'user' : 'guest'
+
+NB. Chained multi-branch ternary (right-associative)
+grade =: score >= 90 ? 'A' : score >= 80 ? 'B' : score >= 70 ? 'C' : 'F'
+
+NB. Ternary in return statements
+return. count > 0 ? count : 0
+
+NB. Ternary inside object literals and array expressions
+user =: O(status: active ? 'online' : 'offline'; role: 'admin')
+flags =: [active ? 1 : 0, false ? 'yes' : 'no']
+```
+
+Transpiles to:
+```javascript
+const status = isAuth ? "user" : "guest";
+const grade = score >= 90 ? "A" : score >= 80 ? "B" : score >= 70 ? "C" : "F";
+return count > 0 ? count : 0;
+const user = { status: active ? "online" : "offline", role: "admin" };
+const flags = [active ? 1 : 0, false ? "yes" : "no"];
+```
+
+Legacy parenthesized form `(test ? cons : alt)` remains fully supported.
 
 ### Loops (`while.`, `whilst.`, `for.`, `for_in.`, `for_of.`)
 

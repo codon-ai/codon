@@ -540,14 +540,19 @@ export class JSToCodonTranslator {
                 const cNode = node as CallExpression | OptionalCallExpression;
                 const isOpt = Boolean(cNode.optional) || cNode.type === "OptionalCallExpression";
                 const calleeStr = this.transpile(cNode.callee);
+                const transpileArg = (n: Node) => {
+                    const s = this.transpile(n);
+                    if (n.type === "ConditionalExpression") return `(${s})`;
+                    return s;
+                };
                 if (isOpt) {
                     if (cNode.arguments.length === 0) return calleeStr.endsWith("?.") ? `${calleeStr}()` : `${calleeStr}?.()`;
                     return calleeStr.endsWith("?.")
-                        ? `(${calleeStr} ${cNode.arguments.map((n) => this.transpile(n)).join(" ")})`
-                        : `(${calleeStr}?. ${cNode.arguments.map((n) => this.transpile(n)).join(" ")})`;
+                        ? `(${calleeStr} ${cNode.arguments.map(transpileArg).join(" ")})`
+                        : `(${calleeStr}?. ${cNode.arguments.map(transpileArg).join(" ")})`;
                 }
                 if (cNode.arguments.length === 0) return `${calleeStr}()`;
-                return `(${calleeStr} ${cNode.arguments.map((n) => this.transpile(n)).join(" ")})`;
+                return `(${calleeStr} ${cNode.arguments.map(transpileArg).join(" ")})`;
             }
 
             case "OptionalMemberExpression":
@@ -572,27 +577,38 @@ export class JSToCodonTranslator {
 
             case "AssignmentExpression":
             case "BinaryExpression":
-            case "LogicalExpression":
-                return `(${this.transpile(node.left)} ${node.operator} ${this.transpile(node.right)})`;
+            case "LogicalExpression": {
+                const leftStr = node.left.type === "ConditionalExpression" ? `(${this.transpile(node.left)})` : this.transpile(node.left);
+                const rightStr = node.right.type === "ConditionalExpression" ? `(${this.transpile(node.right)})` : this.transpile(node.right);
+                return `(${leftStr} ${node.operator} ${rightStr})`;
+            }
 
-            case "UnaryExpression":
-                return `(${node.operator} ${this.transpile(node.argument)})`;
+            case "UnaryExpression": {
+                const argStr = node.argument.type === "ConditionalExpression" ? `(${this.transpile(node.argument)})` : this.transpile(node.argument);
+                return `(${node.operator} ${argStr})`;
+            }
 
             case "UpdateExpression":
                 return node.prefix
                     ? `(${node.operator}${this.transpile(node.argument)})`
                     : `(${this.transpile(node.argument)}${node.operator})`;
 
-            case "ConditionalExpression":
-                return `(${this.transpile(node.test)} ? ${this.transpile(node.consequent)} : ${this.transpile(node.alternate)})`;
+            case "ConditionalExpression": {
+                const testStr = node.test.type === "ConditionalExpression"
+                    ? `(${this.transpile(node.test)})`
+                    : this.transpile(node.test);
+                return `${testStr} ? ${this.transpile(node.consequent)} : ${this.transpile(node.alternate)}`;
+            }
 
             case "SequenceExpression": {
                 const exprs = node.expressions.map((e) => this.transpile(e)).join(", ");
                 return `(${exprs})`;
             }
 
-            case "AwaitExpression":
-                return `(@ ${this.transpile(node.argument)})`;
+            case "AwaitExpression": {
+                const argStr = node.argument.type === "ConditionalExpression" ? `(${this.transpile(node.argument)})` : this.transpile(node.argument);
+                return `(@ ${argStr})`;
+            }
 
             case "TemplateLiteral": {
                 let tpl = "`";

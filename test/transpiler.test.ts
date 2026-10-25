@@ -1267,3 +1267,135 @@ TorusKnotCurve.prototype = Object.create(Curve.prototype);
     });
 });
 
+describe("Concise Conditional Expressions and Logical Assignment (Revision 8a) Support", () => {
+    test("Transpiles unparenthesized ternary expression res =: isAuth ? 'user' : 'guest' to JS", () => {
+        const codonCode = `
+isAuth =: true
+res =: isAuth ? 'user' : 'guest'
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("const res = isAuth ? \"user\" : \"guest\";");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+
+        const fn = new Function(`${js}; return res;`);
+        expect(fn()).toBe("user");
+    });
+
+    test("Transpiles unparenthesized right-associative chained ternary expressions", () => {
+        const codonCode = `
+fn. getGrade score do.
+return. score >= 90 ? 'A' : score >= 80 ? 'B' : score >= 70 ? 'C' : 'F'
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("function getGrade(score)");
+        expect(js).toContain("return score >= 90 ? \"A\" : score >= 80 ? \"B\" : score >= 70 ? \"C\" : \"F\";");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+
+        const fn = new Function(`${js}; return [getGrade(95), getGrade(85), getGrade(72), getGrade(50)];`);
+        expect(fn()).toEqual(["A", "B", "C", "F"]);
+    });
+
+    test("Transpiles ternary expressions inside object literals and array expressions", () => {
+        const codonCode = `
+active =: true
+user =: O(status: active ? 'online' : 'offline'; role: 'admin')
+flags =: [active ? 1 : 0, false ? 'yes' : 'no']
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain('status: active ? "online" : "offline"');
+        expect(js).toContain('active ? 1 : 0');
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+
+        const fn = new Function(`${js}; return { user, flags };`);
+        const res = fn();
+        expect(res.user.status).toBe("online");
+        expect(res.flags).toEqual([1, "no"]);
+    });
+
+    test("Transpiles logical nullish assignment operators (??=, ||=, &&=)", () => {
+        const codonCode = `
+cache =: O()
+(cache.key ??= 'computed')
+(cache.key ??= 'ignored')
+
+options =: O(retries: 0)
+(options.retries ||= 3)
+
+feature =: O(enabled: true)
+(feature.enabled &&= false)
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("cache.key ??= \"computed\";");
+        expect(js).toContain("options.retries ||= 3;");
+        expect(js).toContain("feature.enabled &&= false;");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+
+        const fn = new Function(`${js}; return { key: cache.key, retries: options.retries, enabled: feature.enabled };`);
+        const res = fn();
+        expect(res.key).toBe("computed");
+        expect(res.retries).toBe(3);
+        expect(res.enabled).toBe(false);
+    });
+
+    test("Roundtrips JS conditional expressions and logical assignments using concise Codon notation", () => {
+        const jsCode = `
+const status = isAuth ? "active" : "guest";
+const grade = score >= 90 ? "A" : score >= 80 ? "B" : "C";
+cache.item ??= fetchItem();
+config.debug ||= false;
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("status =: isAuth ? 'active' : 'guest'");
+        expect(codonCode).toContain("grade =: (score >= 90) ? 'A' : (score >= 80) ? 'B' : 'C'");
+        expect(codonCode).toContain("(cache.item ??= fetchItem())");
+        expect(codonCode).toContain("(config.debug ||= false)");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(roundtrippedJs).toContain("isAuth ? \"active\" : \"guest\"");
+        expect(roundtrippedJs).toContain("cache.item ??= fetchItem()");
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Retains backward compatibility with legacy parenthesized (test ? cons : alt) forms", () => {
+        const codonCode = `
+x =: 5
+res =: (x > 0 ? 'positive' : 'negative')
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("const res = x > 0 ? \"positive\" : \"negative\";");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+
+        const fn = new Function(`${js}; return res;`);
+        expect(fn()).toBe("positive");
+    });
+});
+
+

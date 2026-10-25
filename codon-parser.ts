@@ -1393,7 +1393,7 @@ export class CodonToASTParser {
         // Tier 5: Codon Arithmetic Verbs: +, -, *, /, %, | (strictly right-to-left evaluation: pick leftmost!)
 
         const tiers = [
-            { ops: ["+=", "-=", "*=", "/=", "="], rightAssoc: true },
+            { ops: ["??=", "||=", "&&=", "+=", "-=", "*=", "/=", "="], rightAssoc: true },
             { ops: ["||", "??"], rightAssoc: false },
             { ops: ["&&"], rightAssoc: false },
             { ops: ["===", "!==", "==", "!="], rightAssoc: false },
@@ -1425,8 +1425,14 @@ export class CodonToASTParser {
                             if (str[i + op.length] === "/" || str[i + op.length] === "\\") continue;
                             // Boundary checks: do not match inside larger operators or Codon adverbs
                             if (op === "=") {
-                                if (i > 0 && (str[i - 1] === "=" || str[i - 1] === "!" || str[i - 1] === "<" || str[i - 1] === ">" || str[i - 1] === "+" || str[i - 1] === "-" || str[i - 1] === "*" || str[i - 1] === "/")) continue;
+                                if (i > 0 && (str[i - 1] === "=" || str[i - 1] === "!" || str[i - 1] === "<" || str[i - 1] === ">" || str[i - 1] === "+" || str[i - 1] === "-" || str[i - 1] === "*" || str[i - 1] === "/" || str[i - 1] === "?" || str[i - 1] === "|" || str[i - 1] === "&")) continue;
                                 if (str[i + 1] === "=" || str[i + 1] === ":" || str[i + 1] === ".") continue;
+                            }
+                            if (op === "||" || op === "??") {
+                                if (str[i + 2] === "=") continue;
+                            }
+                            if (op === "&&") {
+                                if (str[i + 2] === "=") continue;
                             }
                             if (op === "instanceof" || op === "in") {
                                 const prevChar = (i > 0 ? str[i - 1] : " ") ?? " ";
@@ -1468,7 +1474,7 @@ export class CodonToASTParser {
                 const leftStr = str.substring(0, matchIdx).trim();
                 const rightStr = str.substring(matchIdx + matchedOp.length).trim();
 
-                if (["=", "+=", "-=", "*=", "/="].includes(matchedOp)) {
+                if (["=", "+=", "-=", "*=", "/=", "??=", "||=", "&&="].includes(matchedOp)) {
                     return {
                         type: "AssignmentExpression",
                         operator: matchedOp,
@@ -1501,6 +1507,89 @@ export class CodonToASTParser {
         }
 
         return null;
+    }
+
+    private parseTernaryExpression(str: string): ConditionalExpression | null {
+        // Find the first un-nested '?' at depth 0
+        let depth = 0;
+        let inStr = false;
+        let inTpl = false;
+        let qIdx = -1;
+
+        for (let i = 0; i < str.length; i++) {
+            const ch = str[i];
+            if (ch === "'" && !inTpl) inStr = !inStr;
+            if (ch === "`" && !inStr) inTpl = !inTpl;
+            if (inStr || inTpl) continue;
+
+            if (ch === "(" || ch === "[" || ch === "{") depth++;
+            else if (ch === ")" || ch === "]" || ch === "}") depth--;
+
+            if (depth === 0) {
+                // Ensure '?' is not part of '?.' or '??' or '??='
+                if (ch === "?") {
+                    if (str[i + 1] === "." || str[i + 1] === "?") continue;
+                    if (i > 0 && str[i - 1] === "?") continue;
+                    // Ensure left operand is non-empty
+                    if (str.substring(0, i).trim().length === 0) continue;
+                    qIdx = i;
+                    break;
+                }
+            }
+        }
+
+        if (qIdx === -1) return null;
+
+        // Now from qIdx + 1, find the matching ':' at depth 0
+        // We track ternary depth: each nested '?' increases ternaryDepth, each ':' decreases it.
+        // When ternaryDepth reaches 0 at a ':', that is our matching alternate delimiter.
+        let ternaryDepth = 1;
+        let colonIdx = -1;
+        depth = 0;
+        inStr = false;
+        inTpl = false;
+
+        for (let i = qIdx + 1; i < str.length; i++) {
+            const ch = str[i];
+            if (ch === "'" && !inTpl) inStr = !inStr;
+            if (ch === "`" && !inStr) inTpl = !inTpl;
+            if (inStr || inTpl) continue;
+
+            if (ch === "(" || ch === "[" || ch === "{") depth++;
+            else if (ch === ")" || ch === "]" || ch === "}") depth--;
+
+            if (depth === 0) {
+                if (ch === "?") {
+                    if (str[i + 1] === "." || str[i + 1] === "?") continue;
+                    if (i > 0 && str[i - 1] === "?") continue;
+                    ternaryDepth++;
+                } else if (ch === ":") {
+                    // Boundary check: not '::' or '=:' or J inflected verbs '%:', '@:'
+                    if (str[i + 1] === ":" || str[i + 1] === "=") continue;
+                    if (i > 0 && ["=", "@", "%", "+", "-", "*", "/", "|", "!"].includes(str[i - 1]!)) continue;
+                    ternaryDepth--;
+                    if (ternaryDepth === 0) {
+                        colonIdx = i;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (colonIdx === -1) return null;
+
+        const testStr = str.substring(0, qIdx).trim();
+        const consStr = str.substring(qIdx + 1, colonIdx).trim();
+        const altStr = str.substring(colonIdx + 1).trim();
+
+        if (!testStr || !consStr || !altStr) return null;
+
+        return {
+            type: "ConditionalExpression",
+            test: this.parseExpression(testStr),
+            consequent: this.parseExpression(consStr),
+            alternate: this.parseExpression(altStr),
+        };
     }
 
     public parseExpression(expr: string): Node {
@@ -1631,21 +1720,9 @@ export class CodonToASTParser {
             }
         }
 
-        // Conditional / Ternary Expression: (test ? cons : alt)
-        if (wasWrapped && strippedExpr.includes("?") && strippedExpr.includes(":")) {
-            const qParts = splitAtLevel(strippedExpr, "?");
-            if (qParts.length === 2 && qParts[0] && qParts[1]) {
-                const colonParts = splitAtLevel(qParts[1], ":");
-                if (colonParts.length === 2 && colonParts[0] && colonParts[1]) {
-                    return {
-                        type: "ConditionalExpression",
-                        test: this.parseExpression(qParts[0]),
-                        consequent: this.parseExpression(colonParts[0]),
-                        alternate: this.parseExpression(colonParts[1]),
-                    };
-                }
-            }
-        }
+        // Conditional / Ternary Expression: test ? cons : alt (supports unparenthesized & right-associative chained)
+        const ternaryNode = this.parseTernaryExpression(strippedExpr);
+        if (ternaryNode) return ternaryNode;
 
         // Codon Numeric Vector: 1 2 3 4 5 or _1 2 3
         const vecNode = this.parseNumericVector(strippedExpr);
