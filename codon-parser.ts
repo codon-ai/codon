@@ -1001,6 +1001,7 @@ export class CodonToASTParser {
             let inTpl = false;
             let assignIdx = -1;
             let assignOpLen = 0;
+            let assignOp = "";
 
             for (let i = 0; i < stmt.length; i++) {
                 const char = stmt[i];
@@ -1019,13 +1020,27 @@ export class CodonToASTParser {
                     if (stmt.startsWith("=:", i) || stmt.startsWith("=.", i)) {
                         assignIdx = i;
                         assignOpLen = 2;
+                        assignOp = stmt.substring(i, i + 2);
+                        break;
+                    }
+                    if (stmt.startsWith("??=", i) || stmt.startsWith("||=", i) || stmt.startsWith("&&=")) {
+                        assignIdx = i;
+                        assignOpLen = 3;
+                        assignOp = stmt.substring(i, i + 3);
+                        break;
+                    }
+                    if (stmt.startsWith("+=", i) || stmt.startsWith("-=", i) || stmt.startsWith("*=", i) || stmt.startsWith("/=", i) || stmt.startsWith("%=", i)) {
+                        assignIdx = i;
+                        assignOpLen = 2;
+                        assignOp = stmt.substring(i, i + 2);
                         break;
                     }
                     if (char === "=") {
-                        if (i > 0 && (stmt[i - 1] === "=" || stmt[i - 1] === "!" || stmt[i - 1] === "<" || stmt[i - 1] === ">")) continue;
+                        if (i > 0 && (stmt[i - 1] === "=" || stmt[i - 1] === "!" || stmt[i - 1] === "<" || stmt[i - 1] === ">" || stmt[i - 1] === "+" || stmt[i - 1] === "-" || stmt[i - 1] === "*" || stmt[i - 1] === "/" || stmt[i - 1] === "%" || stmt[i - 1] === "&" || stmt[i - 1] === "|" || stmt[i - 1] === "?")) continue;
                         if (stmt[i + 1] === "=" || stmt[i + 1] === ":" || stmt[i + 1] === ".") continue;
                         assignIdx = i;
                         assignOpLen = 1;
+                        assignOp = "=";
                         break;
                     }
                 }
@@ -1034,18 +1049,31 @@ export class CodonToASTParser {
             if (assignIdx !== -1) {
                 const leftStr = stmt.substring(0, assignIdx).trim();
                 const rightStr = stmt.substring(assignIdx + assignOpLen).trim();
-                const patternNode = this.parsePattern(leftStr);
-                return {
-                    type: "VariableDeclaration",
-                    kind: "const",
-                    declarations: [
-                        {
-                            type: "VariableDeclarator",
-                            id: patternNode,
-                            init: this.parseExpression(rightStr),
+                const isMemberAssign = assignOp === "=" && (leftStr.includes(".") || (!leftStr.startsWith("[") && leftStr.includes("[")) || leftStr.startsWith("this"));
+                if ((assignOp === "=:" || assignOp === "=." || assignOp === "=") && !isMemberAssign) {
+                    const patternNode = this.parsePattern(leftStr);
+                    return {
+                        type: "VariableDeclaration",
+                        kind: assignOp === "=." ? "let" : "const",
+                        declarations: [
+                            {
+                                type: "VariableDeclarator",
+                                id: patternNode,
+                                init: this.parseExpression(rightStr),
+                            },
+                        ],
+                    };
+                } else {
+                    return {
+                        type: "ExpressionStatement",
+                        expression: {
+                            type: "AssignmentExpression",
+                            operator: assignOp === "=:" || assignOp === "=." ? "=" : assignOp,
+                            left: this.parseExpression(leftStr),
+                            right: this.parseExpression(rightStr),
                         },
-                    ],
-                };
+                    };
+                }
             }
         }
 
@@ -1383,6 +1411,99 @@ export class CodonToASTParser {
         };
     }
 
+    private parseConditionalExpression(str: string): Node | null {
+        let parenDepth = 0;
+        let braceDepth = 0;
+        let bracketDepth = 0;
+        let inStr = false;
+        let inTpl = false;
+
+        for (let i = 0; i < str.length; i++) {
+            const char = str[i];
+            if ((char === "'" || char === '"') && !inTpl) {
+                inStr = !inStr;
+                continue;
+            }
+            if (char === "`" && !inStr) {
+                inTpl = !inTpl;
+                continue;
+            }
+            if (inStr || inTpl) continue;
+
+            if (char === "(") parenDepth++;
+            else if (char === ")") parenDepth = Math.max(0, parenDepth - 1);
+            else if (char === "{") braceDepth++;
+            else if (char === "}") braceDepth = Math.max(0, braceDepth - 1);
+            else if (char === "[") bracketDepth++;
+            else if (char === "]") bracketDepth = Math.max(0, bracketDepth - 1);
+
+            if (parenDepth === 0 && braceDepth === 0 && bracketDepth === 0) {
+                if (char === "?") {
+                    if (i > 0 && str[i - 1] === "?") continue;
+                    if (i + 1 < str.length && (str[i + 1] === "." || str[i + 1] === "?")) continue;
+
+                    const testStr = str.substring(0, i).trim();
+                    if (!testStr) continue;
+
+                    let subParen = 0;
+                    let subBrace = 0;
+                    let subBracket = 0;
+                    let subInStr = false;
+                    let subInTpl = false;
+                    let ternaryDepth = 0;
+                    let colonIdx = -1;
+
+                    for (let j = i + 1; j < str.length; j++) {
+                        const sc = str[j];
+                        if ((sc === "'" || sc === '"') && !subInTpl) {
+                            subInStr = !subInStr;
+                            continue;
+                        }
+                        if (sc === "`" && !subInStr) {
+                            subInTpl = !subInTpl;
+                            continue;
+                        }
+                        if (subInStr || subInTpl) continue;
+
+                        if (sc === "(") subParen++;
+                        else if (sc === ")") subParen = Math.max(0, subParen - 1);
+                        else if (sc === "{") subBrace++;
+                        else if (sc === "}") subBrace = Math.max(0, subBrace - 1);
+                        else if (sc === "[") subBracket++;
+                        else if (sc === "]") subBracket = Math.max(0, subBracket - 1);
+
+                        if (subParen === 0 && subBrace === 0 && subBracket === 0) {
+                            if (sc === "?") {
+                                if (j > 0 && str[j - 1] === "?") continue;
+                                if (j + 1 < str.length && (str[j + 1] === "." || str[j + 1] === "?")) continue;
+                                ternaryDepth++;
+                            } else if (sc === ":") {
+                                if (ternaryDepth > 0) {
+                                    ternaryDepth--;
+                                } else {
+                                    colonIdx = j;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    if (colonIdx !== -1) {
+                        const consStr = str.substring(i + 1, colonIdx).trim();
+                        const altStr = str.substring(colonIdx + 1).trim();
+                        return {
+                            type: "ConditionalExpression",
+                            test: this.parseExpression(testStr),
+                            consequent: this.parseExpression(consStr),
+                            alternate: this.parseExpression(altStr),
+                        };
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
     private parseBinaryOrAssignment(str: string): Node | null {
         // Tiers from lowest precedence (splits first, forms AST root) to highest precedence:
         // Tier 0: Assignment: = (right-associative: pick leftmost)
@@ -1393,7 +1514,7 @@ export class CodonToASTParser {
         // Tier 5: Codon Arithmetic Verbs: +, -, *, /, %, | (strictly right-to-left evaluation: pick leftmost!)
 
         const tiers = [
-            { ops: ["+=", "-=", "*=", "/=", "="], rightAssoc: true },
+            { ops: ["??=", "||=", "&&=", "+=", "-=", "*=", "/=", "%=", "="], rightAssoc: true },
             { ops: ["||", "??"], rightAssoc: false },
             { ops: ["&&"], rightAssoc: false },
             { ops: ["===", "!==", "==", "!="], rightAssoc: false },
@@ -1425,8 +1546,11 @@ export class CodonToASTParser {
                             if (str[i + op.length] === "/" || str[i + op.length] === "\\") continue;
                             // Boundary checks: do not match inside larger operators or Codon adverbs
                             if (op === "=") {
-                                if (i > 0 && (str[i - 1] === "=" || str[i - 1] === "!" || str[i - 1] === "<" || str[i - 1] === ">" || str[i - 1] === "+" || str[i - 1] === "-" || str[i - 1] === "*" || str[i - 1] === "/")) continue;
+                                if (i > 0 && (str[i - 1] === "=" || str[i - 1] === "!" || str[i - 1] === "<" || str[i - 1] === ">" || str[i - 1] === "+" || str[i - 1] === "-" || str[i - 1] === "*" || str[i - 1] === "/" || str[i - 1] === "%" || str[i - 1] === "&" || str[i - 1] === "|" || str[i - 1] === "?")) continue;
                                 if (str[i + 1] === "=" || str[i + 1] === ":" || str[i + 1] === ".") continue;
+                            }
+                            if (op === "??" || op === "||" || op === "&&") {
+                                if (str[i + 2] === "=") continue;
                             }
                             if (op === "instanceof" || op === "in") {
                                 const prevChar = (i > 0 ? str[i - 1] : " ") ?? " ";
@@ -1468,7 +1592,7 @@ export class CodonToASTParser {
                 const leftStr = str.substring(0, matchIdx).trim();
                 const rightStr = str.substring(matchIdx + matchedOp.length).trim();
 
-                if (["=", "+=", "-=", "*=", "/="].includes(matchedOp)) {
+                if (["=", "+=", "-=", "*=", "/=", "%=", "??=", "||=", "&&="].includes(matchedOp)) {
                     return {
                         type: "AssignmentExpression",
                         operator: matchedOp,
@@ -1631,20 +1755,10 @@ export class CodonToASTParser {
             }
         }
 
-        // Conditional / Ternary Expression: (test ? cons : alt)
-        if (wasWrapped && strippedExpr.includes("?") && strippedExpr.includes(":")) {
-            const qParts = splitAtLevel(strippedExpr, "?");
-            if (qParts.length === 2 && qParts[0] && qParts[1]) {
-                const colonParts = splitAtLevel(qParts[1], ":");
-                if (colonParts.length === 2 && colonParts[0] && colonParts[1]) {
-                    return {
-                        type: "ConditionalExpression",
-                        test: this.parseExpression(qParts[0]),
-                        consequent: this.parseExpression(colonParts[0]),
-                        alternate: this.parseExpression(colonParts[1]),
-                    };
-                }
-            }
+        // Conditional / Ternary Expression: test ? cons : alt (unwrapped, wrapped, or chained)
+        if (strippedExpr.includes("?") && strippedExpr.includes(":")) {
+            const condNode = this.parseConditionalExpression(strippedExpr);
+            if (condNode) return condNode;
         }
 
         // Codon Numeric Vector: 1 2 3 4 5 or _1 2 3

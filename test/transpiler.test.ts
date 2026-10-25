@@ -1267,3 +1267,111 @@ TorusKnotCurve.prototype = Object.create(Curve.prototype);
     });
 });
 
+describe("Concise Conditional Expressions & Logical Assignment Support", () => {
+    test("Transpiles unwrapped conditional expressions in variable declarations and returns", () => {
+        const codonCode = `
+status =: ok ? 200 : 500
+fn. getLabel active do.
+return. active ? 'active' : 'inactive'
+end.
+`;
+        const parserCodon = new CodonToASTParser();
+        const ast = parserCodon.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(ast);
+
+        expect(js).toContain("const status = ok ? 200 : 500;");
+        expect(js).toContain("return active ? \"active\" : \"inactive\";");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles chained and nested conditional expressions with right-associativity", () => {
+        const codonCode = `code =: role === 'admin' ? 1 : role === 'editor' ? 2 : 3`;
+        const parserCodon = new CodonToASTParser();
+        const ast = parserCodon.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(ast);
+
+        expect(js).toContain("const code = role === \"admin\" ? 1 : role === \"editor\" ? 2 : 3;");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles conditional expressions combined with optional chaining and nullish coalescing", () => {
+        const codonCode = `
+title =: user?.name ? user.name : 'Guest'
+tag =: (port ?? 3000) === 3000 ? 'default' : 'custom'
+`;
+        const parserCodon = new CodonToASTParser();
+        const ast = parserCodon.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(ast);
+
+        expect(js).toContain("const title = user?.name ? user.name : \"Guest\";");
+        expect(js).toContain("const tag = (port ?? 3000) === 3000 ? \"default\" : \"custom\";");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles conditional expressions in arrow functions, object properties, and arrays", () => {
+        const codonCode = `
+toSign =: {{x => x > 0 ? 'pos' : 'neg'}}
+data =: O(status:ok ? 200 : 500;items:[active ? 1 : 0])
+`;
+        const parserCodon = new CodonToASTParser();
+        const ast = parserCodon.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(ast);
+
+        expect(js).toContain("const toSign = x => x > 0 ? \"pos\" : \"neg\";");
+        expect(js).toContain("status: ok ? 200 : 500");
+        expect(js).toContain("items: [active ? 1 : 0]");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles logical assignment operators (??=, ||=, &&=)", () => {
+        const codonCode = `
+config.port ??= 3000
+options ||= O()
+flags.debug &&= false
+`;
+        const parserCodon = new CodonToASTParser();
+        const ast = parserCodon.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(ast);
+
+        expect(js).toContain("config.port ??= 3000;");
+        expect(js).toContain("options ||= {};");
+        expect(js).toContain("flags.debug &&= false;");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips JavaScript conditional expressions and logical assignments", () => {
+        const jsCode = `
+const status = ok ? 200 : 500;
+const label = active ? "active" : "inactive";
+const tier = a ? 1 : b ? 2 : 3;
+config.port ??= 8080;
+opts ||= {};
+function check(x) {
+  return x > 0 ? "positive" : "zero_or_negative";
+}
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("status =: ok ? 200 : 500");
+        expect(codonCode).toContain("config.port ??= 8080");
+        expect(codonCode).toContain("opts ||= O''");
+
+        const parserCodon = new CodonToASTParser();
+        const codonAst = parserCodon.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(codonAst);
+
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+        expect(roundtrippedJs).toContain("const status = ok ? 200 : 500;");
+        expect(roundtrippedJs).toContain("config.port ??= 8080;");
+    });
+});
+
+

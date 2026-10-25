@@ -16,6 +16,7 @@ This document provides a comprehensive, rigorous specification of the Codon lang
 4. [Variable Declarations & Assignments](#4-variable-declarations--assignments)
    - [Right-to-Left Assignment (`=:`)](#right-to-left-assignment-)
    - [Pattern Destructuring](#pattern-destructuring)
+   - [Logical Assignment Operators (`??=`, `||=`, `&&=`)](#logical-assignment-operators)
 5. [Monadic Verbs](#5-monadic-verbs)
    - [Await (`@` and `@:`)](#await--and-)
    - [Tally (`#`)](#tally-)
@@ -36,6 +37,7 @@ This document provides a comprehensive, rigorous specification of the Codon lang
    - [Constructors, Methods, Getters, and Setters](#constructors-methods-getters-and-setters)
 9. [Control Flow Structures](#9-control-flow-structures)
    - [Conditionals (`if.` / `elseif.` / `else.`)](#conditionals-if--elseif--else)
+   - [Concise Conditional Expressions (`test ? cons : alt`)](#concise-conditional-expressions-test--cons--alt)
    - [Loops (`while.`, `whilst.`, `for.`, `for_in.`, `for_of.`)](#loops-while-whilst-for-for_in-for_of)
    - [Pattern Matching & Switch (`select.` / `case.`)](#pattern-matching--switch-select--case)
    - [Exception Handling (`try.` / `catch.` / `finally.`)](#exception-handling-try--catch--finally)
@@ -187,6 +189,15 @@ Codon supports full ES6 destructuring:
   { name, age, active = true, ...rest } =: user
   { id: userId, title: taskTitle } =: task
   ```
+
+### Logical Assignment Operators
+Codon supports native logical nullish (`??=`), logical OR (`||=`), and logical AND (`&&=`) assignment operators:
+
+```codon
+config.port ??= 3000      NB. config.port ??= 3000;
+options ||= O()           NB. options ||= {};
+flags.debug &&= false     NB. flags.debug &&= false;
+```
 
 ---
 
@@ -418,6 +429,33 @@ elseif. (x === 2) do.
 else.
   (console.log 'other')
 end.
+```
+
+### Concise Conditional Expressions (`test ? cons : alt`)
+Codon supports unwrapped and chained conditional (ternary) expressions without requiring outer parentheses:
+
+```codon
+NB. Unwrapped variable initialization
+status =: ok ? 200 : 500
+
+NB. Unwrapped return expression
+return. active ? 'active' : 'inactive'
+
+NB. Right-associative multi-tier chaining
+tier =: role === 'admin' ? 1 : role === 'editor' ? 2 : 3
+
+NB. In arrow functions and object properties
+toSign =: {{x => x > 0 ? 'pos' : 'neg'}}
+data =: O(status:ok ? 200 : 500;tag:active ? 'yes' : 'no')
+```
+
+Transpiles to:
+```javascript
+const status = ok ? 200 : 500;
+return active ? "active" : "inactive";
+const tier = role === "admin" ? 1 : role === "editor" ? 2 : 3;
+const toSign = x => x > 0 ? "pos" : "neg";
+const data = { status: ok ? 200 : 500, tag: active ? "yes" : "no" };
 ```
 
 ### Loops (`while.`, `whilst.`, `for.`, `for_in.`, `for_of.`)

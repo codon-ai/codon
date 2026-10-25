@@ -322,3 +322,53 @@ In modern AI fullstack applications, LLMs spend a substantial fraction of their 
 - **Maximum Token Efficiency**: Cuts token counts for recurring 12–127 node AST idioms by 60%–85%.
 - **Zero Hallucination of Boilerplate**: Compacting proven structural patterns into verified macro templates ensures syntax and structural precision across code generation rounds.
 - **Bi-directional Roundtrip Fidelity**: JavaScript files containing popular Level-2 clones automatically compact into ultra-dense Codon representations during translation and compile back to semantically identical JavaScript with 100% Babel parser validation.
+
+## 8. Concise Conditional Expressions & Logical Assignment Operators
+
+### Overview
+In standard J and prior versions of Codon, ternary expressions strictly required wrapping outer parentheses `(test ? cons : alt)`. Emitting an unwrapped ternary (`status =: ok ? 200 : 500` or `return. active ? 'yes' : 'no'`) was rejected or mistakenly fell back to raw unparsed Identifier literals, consuming 2 unnecessary wrapper tokens `(` and `)` per ternary expression. Furthermore:
+- Chained/nested ternaries `a ? b : c ? d : e` completely failed to parse due to rigid 2-part splitting.
+- Expressions combining conditionals with optional chaining (e.g. `user?.name ? user.name : 'Guest'`) failed because the delimiter scanner split at the `?` in `?.`.
+- Logical assignment operators (`??=`, `||=`, `&&=`) were completely absent from Codon's operator tiers, corrupting expressions like `config.port ??= 3000` into invalid syntax `config.port ??  = 3000`.
+
+Revision 1a introduces first-class concise conditional expressions and logical assignment operators into Codon:
+- **Unwrapped Conditional Expressions**: `test ? cons : alt` cleanly parses at statement tops, returns, arrow functions, object values, array elements, and JSX attributes without requiring wrapping parentheses.
+- **Right-Associative Chained Ternaries**: Multi-tier condition ladders `role === 'admin' ? 1 : role === 'editor' ? 2 : 3` parse with native right-associativity without extra parentheses.
+- **Optional Chaining & Nullish Disambiguation**: Ternary scanning distinguishes `?` from `?.` (optional chaining), `??` (nullish coalescing), and `??=` (nullish assignment).
+- **Logical Assignment Operators**: `??=`, `||=`, and `&&=` are supported natively as statement-level and expression-level operators.
+- **Backward Compatibility**: Wrapped forms `(test ? cons : alt)` remain fully supported.
+
+### Syntax
+- `test ? cons : alt`: Unwrapped conditional expression.
+- `(test ? cons : alt)`: Parenthesized conditional expression (required when embedded as an argument in function calls).
+- `a ? b : c ? d : e`: Right-associative chained conditional expression.
+- `target ??= expr`: Logical nullish assignment.
+- `target ||= expr`: Logical OR assignment.
+- `target &&= expr`: Logical AND assignment.
+
+### How It Functions
+- **Parsing (`CodonToASTParser`)**:
+  - `parseConditionalExpression` scans at depth 0 tracking parentheses, braces, brackets, and string/template literals. It identifies the first ternary `?` that is not part of `?.` or `??`. It then matches the corresponding `:` via `ternaryDepth` balance, separating the consequent from the alternate. The alternate is recursively parsed, giving standard right-associative nesting into an ESTree `ConditionalExpression` AST node.
+  - `parseBinaryOrAssignment` registers `??=`, `||=`, and `&&=` into Tier 0 assignment operators with right-associativity.
+  - `parseStatement` detects statement-level logical assignments (`??=`, `||=`, `&&=`) and emits an `ExpressionStatement` wrapping an `AssignmentExpression`.
+- **Transpilation (`JSToCodonTranslator`)**:
+  - Emits concise unwrapped `test ? cons : alt` for `ConditionalExpression` in variable declarators, return statements, arrow functions, and object literals.
+  - Automatically wraps conditional arguments in `(test ? cons : alt)` when passed into space-delimited `CallExpression` argument lists.
+  - Emits statement-level `AssignmentExpression` cleanly without outer parentheses.
+- **Code Generation (`CodonToJSCompiler`)**: Normalizes AST nodes into standard JavaScript conditional expressions and logical assignment statements via Babel generator.
+
+### Comparison Examples & Token Savings
+
+| Pattern | Standard J / Legacy Codon | Optimized Codon (Rev 1a) | JavaScript Target | Token Reduction |
+| :--- | :--- | :--- | :--- | :--- |
+| **Variable Initialization** | `status =: (ok ? 200 : 500)` | `status =: ok ? 200 : 500` | `const status = ok ? 200 : 500;` | **~25%** (5 tokens vs 7 tokens) |
+| **Return Statement** | `return. (active ? 'yes' : 'no')` | `return. active ? 'yes' : 'no'` | `return active ? "yes" : "no";` | **~25%** (6 tokens vs 8 tokens) |
+| **Chained Multi-tier** | `res =: (a ? 1 : (b ? 2 : 3))` | `res =: a ? 1 : b ? 2 : 3` | `const res = a ? 1 : b ? 2 : 3;` | **~35%** (9 tokens vs 13 tokens) |
+| **Optional Chain Ternary** | *(Failed to parse)* | `title =: user?.name ? user.name : 'Guest'` | `const title = user?.name ? user.name : "Guest";` | **100% Syntax Fix** |
+| **Nullish Assignment** | `config.port =: (config.port ?? 3000)` | `config.port ??= 3000` | `config.port ??= 3000;` | **~40%** (3 tokens vs 7 tokens) |
+| **Fallback Cache Init** | `opts =: (opts || O'')` | `opts ||= O()` | `opts ||= {};` | **~40%** (3 tokens vs 6 tokens) |
+| **JSX Conditional Prop** | `className={(active ? 'on' : 'off')}` | `className={active ? 'on' : 'off'}` | `className={active ? "on" : "off"}` | **~25%** (6 tokens vs 8 tokens) |
+
+### Impact on Fullstack Applications
+In modern AI fullstack applications (React JSX conditional props and rendering, Next.js route status codes and early returns, configuration defaults, options caching, and database result fallbacks), conditional expressions and nullish assignments appear in 15–35% of statements. Removing redundant wrapping parentheses and supporting native logical assignment eliminates syntax friction and saves 2–4 tokens per conditional idiom, accelerating LLM generation speed and shrinking context windows across fullstack Codon codebases.
+

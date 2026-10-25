@@ -80,6 +80,8 @@ flowchart TD
 | **Numeric Vector** | `const primes = [2, 3, 5, 7, 11];` | `primes = 2 3 5 7 11` | **~50%** |
 | **Function Declaration** | `function add(a, b) { return a + b; }` | `fn. add a,b do. return. (a + b) end.` | **~35%** |
 | **ES Module Import** | `import { useState, useRef } from "react";` | `import. {useState,useRef} from 'react'` | **~45%** |
+| **Concise Conditional** | `const status = ok ? 200 : 500;` | `status =: ok ? 200 : 500` | **~25%** |
+| **Logical Assignment** | `config.port ??= 3000;` | `config.port ??= 3000` | **~40%** |
 
 ---
 
