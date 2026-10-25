@@ -1,6 +1,40 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
+## Revision 9a (unsuccessful)
+- **Tokens:** 4608
+
+- **Revision Idea**: Introduce concise unparenthesized unary expressions (`!expr`, `typeof expr`, `~expr`, `-expr`, `+expr`, `delete expr`, `void expr`) and update expressions (`expr++`, `expr--`, `++expr`, `--expr`) in Codon, eliminating mandatory outer wrapping parentheses `(! expr)`, `(typeof expr)`, and `(expr++)`.
+- **Rationale**: In modern AI fullstack web development (React component state and JSX conditional rendering, form validation, event handling, API error checking, HTTP response handling, safe type checks, loop iterations, and auto-incrementing ID generators), unary expressions (`!isValid`, `!response.ok`, `!input.trim()`, `typeof window !== 'undefined'`) and update expressions (`nextId.current++`, `i++`, `count++`) are among the most pervasive expressions. Prior to Revision 9a, Codon suffered from two major limitations:
+  1. Codon strictly required every unary expression to be wrapped in outer parentheses `(! expr)`, `(typeof expr)` and update expressions `(x++)`, `(++x)`. Omitting outer parentheses (such as `if. !input.trim() do.`, `return. !found`, `isValid =: !error && !loading`, or `id: nextId.current++`) caused the parser to misinterpret the expression as a raw Identifier token (`{ type: "Identifier", name: "!input.trim()" }`) or misparse update expressions as broken binary addition/subtraction `i + +` or `i - -`.
+  2. `JSToCodonTranslator` unconditionally emitted redundant wrapping parentheses and whitespace for all unary expressions `(! ${arg})` and update expressions `(${arg}++)`, inflating token counts across every conditional check and counter update in fullstack applications.
+  By enabling unparenthesized unary parsing at depth 0, preventing binary `+`/`-` from splitting update operators `++`/`--`, and emitting concise `!${arg}`, `typeof ${arg}`, and `${arg}++` directly:
+  - Unparenthesized logical NOT: `!isValid`, `!response.ok`, `!input.trim()`
+  - Unparenthesized type check: `typeof x === 'string'`, `typeof window !== 'undefined'`
+  - Unparenthesized update: `nextId.current++`, `i++`, `count--`
+  - React handlers & JSX: `if. !input.trim() do. return. end.`, `<button disabled={!isValid}>`
+  - Full roundtrip fidelity: JS ➔ Codon (concise unparenthesized unary & update emission) ➔ JS (100% Babel parser validation).
+  - Retains 100% backward compatibility with legacy parenthesized forms `(! expr)`, `(typeof expr)`, and `(x++)`.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates 2 wrapping tokens `(` and `)` plus redundant whitespace per unary expression (e.g. `(! isValid)` [5 tokens] -> `!isValid` [2 tokens], saving ~60% tokens per unary check).
+  - Eliminates 2 wrapping tokens per update expression (e.g. `(i++)` [4 tokens] -> `i++` [2 tokens], saving 50% tokens per increment/decrement).
+  - In compound logical conditions (e.g. `((! error) && (! loading))` [11 tokens] -> `!error && !loading` [5 tokens]), achieves over 54% token reduction.
+  - Prevents AST corruption, invalid identifier names (`!input`), and syntax hallucinations across LLM fullstack code generation.
+- **Concrete Syntax Changes**:
+  - `codon-parser.ts`: Updated `parseExpression` to parse prefix unary operators (`!`, `typeof `, `~`, `-`, `+`, `delete `, `void `) and update operators (`++`, `--` in both postfix and prefix positions) without requiring `wasWrapped`. Added boundary guards in `parseBinaryOrAssignment` so binary `+` and `-` operators do not match or split `++` and `--`.
+  - `transpilers.ts`: Updated `JSToCodonTranslator` to emit concise unparenthesized `!${arg}` and `typeof ${arg}` for `UnaryExpression`, and unparenthesized `${arg}++` / `++${arg}` for `UpdateExpression`.
+  - Examples:
+    - Old Codon: `if. (! input.trim()) do.`
+    - New Codon: `if. !input.trim() do.`
+    - Old Codon: `valid =: ((! error) && (! loading))`
+    - New Codon: `valid =: (!error && !loading)` or `valid =: !error && !loading`
+    - Old Codon: `if. ((typeof window) !== 'undefined') do.`
+    - New Codon: `if. (typeof window !== 'undefined') do.`
+    - Old Codon: `todo =: O(id:(nextId.current++);title:text)`
+    - New Codon: `todo =: O(id:nextId.current++;title:text)`
+    - Old Codon: `for. i =: 0 ; i < 10 ; (i++) do.`
+    - New Codon: `for. i =: 0 ; i < 10 ; i++ do.`
+
 ## Revision 8a (unsuccessful)
 - **Tokens:** 4593
 
