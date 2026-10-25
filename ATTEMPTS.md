@@ -1,7 +1,9 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
-## Revision 11a (successful)
+## Revision 11a (unsuccessful)
+- **Tokens:** 5014
+
 - **Revision Idea**: Introduce concise unparenthesized `new` instantiation expressions (`new Callee [args]`, `new Callee()`, `new Callee`) in Codon, eliminating mandatory outer wrapping parentheses `(new Callee args)` across variable assignments (`db =: new Database ':memory:'`), member assignments (`this.socket = new WebSocket this.url`), class property definitions (`cache =: new Map`), throw statements (`throw. new Error 'msg'`), return statements (`return. new Response 'ok'`), and standalone statements (`new Worker 'task.js'`).
 - **Rationale**: In modern AI fullstack web development (database connection pools and SQLite/Postgres clients, WebSocket client and server state management, HTTP requests/responses/headers in route handlers, in-memory caches using Maps and Sets, Promise construction, HTTP agent keep-alive management, and error throwing in controllers and validations), `new` object instantiation is one of the most frequent operations. Prior to Revision 11a, Codon suffered from two major limitations:
   1. Codon strictly required every `new` expression to be wrapped in outer parentheses `(new Database ':memory:')`, `(new WebSocket this.url)`, `(new Error 'msg')`, and `(new Map)`. Omitting outer parentheses (such as `db =: new Database ':memory:'`, `this.socket = new WebSocket this.url`, or `throw. new Error 'msg'`) caused `parseExpression` to fail because `new` was strictly gated behind `if (wasWrapped)`, falling through to parse as a malformed Identifier node with spaces in its name (`{ type: "Identifier", name: "new Database ':memory:'" }`), corrupting the AST and causing fatal Babel compilation errors.
