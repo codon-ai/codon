@@ -1,6 +1,41 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
+## Revision 1a (successful)
+- **Tokens:** 3245
+
+- **Revision Idea**: Introduce native concise conditional expressions (unwrapped right-associative ternaries `test ? cons : alt`, chained ternary expressions `a ? b : c ? d : e`) and first-class logical assignment operators (`??=`, `||=`, `&&=`), eliminating mandatory parenthesization and enabling compact fullstack state fallbacks.
+- **Rationale**: In AI fullstack development (React JSX conditional classes and component rendering, Express/Next.js API route status codes and error responses, configuration defaults, cache lookups, and options validation), conditional expressions and nullish assignments appear continuously. Previously in Codon:
+  - Conditional expressions strictly required outer parentheses `(test ? cons : alt)`. Unwrapped ternaries `mode =: isDev ? 'dev' : 'prod'` or `return. active ? 'yes' : 'no'` were rejected or incorrectly fallen back to raw unparsed Identifier literals, consuming 2 redundant wrapper tokens `(` and `)` per ternary.
+  - Chained / nested ternaries `a ? b : c ? d : e` completely failed to parse due to a flat 2-element split check.
+  - Conditionals involving optional chaining (e.g. `user?.name ? user.name : 'Guest'`) were broken because the delimiter splitter inadvertently split at `?.`.
+  - Logical assignment operators (`??=`, `||=`, `&&=`) were completely absent from Codon's operator tiers; attempting to write `config.port ??= 3000` resulted in malformed AST assignment `config.port ?? = 3000`.
+  Removing mandatory wrapping parentheses, adding robust level-0 right-associative ternary parsing with optional chaining disambiguation, and adding first-class logical assignment operators significantly compresses fullstack conditional code and eliminates syntax errors.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates 2 wrapper tokens `(` and `)` per ternary expression in assignments, returns, JSX attributes, and arrow functions.
+  - Saves 2–4 tokens per logical assignment by allowing unwrapped `obj.prop ??= val` instead of `(obj.prop = (obj.prop ?? val))`.
+  - Enables compact chained fallback logic (`role === 'admin' ? 1 : role === 'editor' ? 2 : 3`) with zero extra parentheses.
+  - Yields ~15–30% token reduction on conditional and fallback idioms across fullstack route handlers and UI components.
+- **Concrete Syntax Changes**:
+  - `codon-parser.ts`:
+    - Updated `parseExpression`: Implemented balanced level-0 ternary scanning that ignores `?.` and `??`, matches `:` by ternary depth balance, and parses `test`, `consequent`, and right-associative `alternate` without requiring `wasWrapped`.
+    - Updated `parseBinaryOrAssignment`: Added `??=`, `||=`, `&&=` to Tier 0 assignment operators.
+    - Updated `parseStatement`: Added statement-level support for logical assignment operators `??=`, `||=`, `&&=` and compound assignments without outer parentheses.
+  - `transpilers.ts`:
+    - Updated `JSToCodonTranslator`: Emits unwrapped `test ? cons : alt` for `ConditionalExpression` (parenthesizing only when nested within call arguments). Emits clean unwrapped `left ??= right`, `left ||= right`, `left &&= right` for statement-level assignments.
+    - Updated `CodonToJSCompiler`: Emits standard JavaScript conditional expressions and logical assignments with verified Babel AST generation.
+  - Examples:
+    - Old Codon: `status =: (ok ? 200 : 500)`
+    - New Codon: `status =: ok ? 200 : 500`
+    - Old Codon: `return. (active ? 'active' : 'inactive')`
+    - New Codon: `return. active ? 'active' : 'inactive'`
+    - Old Codon: `(config.port ??  = 3000)` (malformed)
+    - New Codon: `config.port ??= 3000`
+    - Old Codon: `(user?.name ? user.name : 'Guest')` (broken split at `?.`)
+    - New Codon: `user?.name ? user.name : 'Guest'`
+    - Old Codon: `res =: (a ? 1 : (b ? 2 : 3))`
+    - New Codon: `res =: a ? 1 : b ? 2 : 3`
+
 ## Revision 7a (successful)
 - **Tokens:** 3260
 
