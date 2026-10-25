@@ -1,8 +1,8 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
-## Revision 18a (successful)
-- **Tokens:** 500
+## Revision 18a (unsuccessful)
+- **Tokens:** 4799
 
 - **Revision Idea**: Introduce concise unparenthesized variable reassignment statements (`id = expr`), unparenthesized monadic await in return statements (`return. @ expr`) and standalone expression statements (`@ expr`), alongside single-operand boundary protection for update expressions (`++`, `--`), eliminating mandatory outer wrapping parentheses `(id = expr)`, `return. (@ expr)`, and `(@ expr)`.
 - **Rationale**: In modern AI fullstack web development (React state machines, event handlers, Express/Koa API controllers, database query execution, network fetch pipelines, async background tasks, and iterative algorithms):
