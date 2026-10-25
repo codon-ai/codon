@@ -1,8 +1,8 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
-## Revision 19a (successful)
-- **Tokens:** 500
+## Revision 19a (unsuccessful)
+- **Tokens:** 4089
 
 - **Revision Idea**: Introduce concise unparenthesized monadic await in return statements (`return. @ expr`), member assignments (`this.prop = @ expr`), class property definitions (`field =: @ expr`), and arrow closures (`{{async () => @ expr}}`), alongside single-operand boundary protection for update expressions (`++`, `--`), eliminating mandatory outer wrapping parentheses `return. (@ expr)`, `this.prop = (@ expr)`, and `(@ expr)`.
 - **Rationale**: In modern AI fullstack web development (Express/Koa API controllers, Next.js server actions, async database query pipelines, REST client response handlers, React event dispatchers, and WebSocket client reconnection handlers):
