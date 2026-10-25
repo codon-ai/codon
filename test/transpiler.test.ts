@@ -1404,4 +1404,136 @@ end.
     });
 });
 
+describe("Concise Unparenthesized Statement-Level Function & Method Calls Support", () => {
+    test("Transpiles unparenthesized statement-level calls console.log 'hello' and addTodo 'item'", () => {
+        const codonCode = `
+console.log 'hello'
+addTodo 'Buy groceries'
+toggleTodo 1
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain('console.log("hello");');
+        expect(js).toContain('addTodo("Buy groceries");');
+        expect(js).toContain("toggleTodo(1);");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles unparenthesized API response calls and state updaters", () => {
+        const codonCode = `
+res.json O(counter:10)
+res.writeHead 502 O('Content-Type':'application/json')
+setInput ''
+setMessages {{prev => [...prev, O(id:1;text:'hi')]}}
+observer.observe sentinelRef.current
+req.pipe proxyReq
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("res.json({");
+        expect(js).toContain("counter: 10");
+        expect(js).toContain("res.writeHead(502, {");
+        expect(js).toContain('"Content-Type": "application/json"');
+        expect(js).toContain('setInput("");');
+        expect(js).toContain("setMessages(prev => [...prev, {");
+        expect(js).toContain('text: "hi"');
+        expect(js).toContain("observer.observe(sentinelRef.current);");
+        expect(js).toContain("req.pipe(proxyReq);");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles unparenthesized method calls on this and super", () => {
+        const codonCode = `
+class. Emitter extends Base do.
+  constructor. id do.
+    super id
+    this.emit 'ready' id
+  end.
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("super(id);");
+        expect(js).toContain('this.emit("ready", id);');
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles callee(arg1, arg2) syntax in statements and expressions", () => {
+        const codonCode = `
+result =: Number(result.lastInsertRowid)
+payload =: JSON.stringify(data)
+resolve(res)
+console.log('done')
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("const result = Number(result.lastInsertRowid);");
+        expect(js).toContain("const payload = JSON.stringify(data);");
+        expect(js).toContain("resolve(res);");
+        expect(js).toContain('console.log("done");');
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips JS statement-level calls using unparenthesized notation", () => {
+        const jsCode = `
+function handleRequest(req, res) {
+  console.log("incoming", req.url);
+  res.writeHead(200, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ ok: true }));
+}
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("console.log 'incoming' req.url");
+        expect(codonCode).toContain("res.writeHead 200");
+        expect(codonCode).toContain("res.end (JSON.stringify O(ok:true))");
+        expect(codonCode).not.toContain("(console.log");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(roundtrippedJs).toContain('console.log("incoming", req.url);');
+        expect(roundtrippedJs).toContain("res.writeHead(200, {");
+        expect(roundtrippedJs).toContain('"Content-Type": "application/json"');
+        expect(roundtrippedJs).toContain("res.end(JSON.stringify({");
+        expect(roundtrippedJs).toContain("ok: true");
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Retains backward compatibility with parenthesized statement-level calls and 0-arg calls", () => {
+        const codonCode = `
+(console.log 'legacy')
+(db.exec 'CREATE TABLE test')
+e.preventDefault()
+selectAllStmt.all()
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain('console.log("legacy");');
+        expect(js).toContain('db.exec("CREATE TABLE test");');
+        expect(js).toContain("e.preventDefault();");
+        expect(js).toContain("selectAllStmt.all();");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+});
+
 

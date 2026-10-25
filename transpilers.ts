@@ -239,6 +239,15 @@ export class JSToCodonTranslator {
                     const assignNode = node.expression as AssignmentExpression;
                     return `${this.transpile(assignNode.left)} ${assignNode.operator} ${this.transpile(assignNode.right)}`;
                 }
+                if (node.expression.type === "CallExpression") {
+                    const cNode = node.expression as CallExpression;
+                    const calleeStr = this.transpile(cNode.callee);
+                    if (cNode.arguments.length === 0) {
+                        return `${calleeStr}()`;
+                    }
+                    const argsStr = cNode.arguments.map((n) => this.transpile(n)).join(" ");
+                    return `${calleeStr} ${argsStr}`;
+                }
                 return this.transpile(node.expression);
 
             case "BlockStatement":

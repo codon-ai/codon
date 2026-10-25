@@ -31,6 +31,7 @@ This document provides a comprehensive, rigorous specification of the Codon lang
    - [Named Function Declarations (`fn.` / `async_fn.`)](#named-function-declarations-fn--async_fn)
    - [Direct Definition Arrow Functions (`{{params => expr}}`)](#direct-definition-arrow-functions-params--expr)
    - [Anonymous Function Expressions (`{{fn ...}}`)](#anonymous-function-expressions-fn-)
+   - [Unparenthesized Function & Method Calls](#unparenthesized-function--method-calls)
 8. [Classes & Object-Oriented Programming](#8-classes--object-oriented-programming)
    - [Class Declarations](#class-declarations)
    - [Class Expressions](#class-expressions)
@@ -397,8 +398,58 @@ To emit `function(params) { ... }`:
 
 ```codon
 (app.get '/health' {{fn req,res => do.
-  (res.json O(status:'ok'))
+  res.json O(status:'ok')
 end.}})
+```
+
+### Unparenthesized Function & Method Calls
+
+In Codon, statement-level function and method invocations can be written cleanly without enclosing parentheses:
+
+- **Unparenthesized Statement Calls**:
+  ```codon
+  console.log 'Server running on port' 8080
+  addTodo 'Buy groceries'
+  toggleTodo 1
+  res.json O(counter:10)
+  ```
+- **React State Updaters**:
+  ```codon
+  setInput ''
+  setMessages {{prev => [...prev, newItem]}}
+  ```
+- **Method Invocations on `this` and `super`**:
+  ```codon
+  this.emit 'ready' data
+  super id name
+  ```
+- **Standard Comma-Delimited Call Syntax (`callee(args)`)**:
+  Both statement-level and expression-level calls support standard parentheses call syntax:
+  ```codon
+  result =: Number(result.lastInsertRowid)
+  payload =: JSON.stringify(data)
+  resolve(res)
+  ```
+- **Parameterless Invocations**:
+  ```codon
+  e.preventDefault()
+  res.end()
+  selectAllStmt.all()
+  ```
+
+Transpiles to:
+```javascript
+console.log("Server running on port", 8080);
+addTodo("Buy groceries");
+toggleTodo(1);
+res.json({ counter: 10 });
+setInput("");
+setMessages(prev => [...prev, newItem]);
+this.emit("ready", data);
+super(id, name);
+const result = Number(result.lastInsertRowid);
+const payload = JSON.stringify(data);
+resolve(res);
 ```
 
 ---

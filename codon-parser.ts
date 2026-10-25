@@ -1093,6 +1093,27 @@ export class CodonToASTParser {
             }
         }
 
+        // Unparenthesized statement-level call: callee arg1 arg2 ...
+        if (!stmt.startsWith("(") && !stmt.startsWith("{{") && !stmt.startsWith("[") && !stmt.startsWith("{") && !stmt.startsWith("@") && !stmt.startsWith("await ")) {
+            const spaceParts = splitAtLevel(stmt, " ");
+            if (spaceParts.length >= 2) {
+                const calleeCandidate = spaceParts[0]!.trim();
+                if (this.isValidCallee(calleeCandidate)) {
+                    const isOpt = calleeCandidate.endsWith("?.");
+                    const actualCallee = isOpt ? calleeCandidate.slice(0, -2) : calleeCandidate;
+                    return {
+                        type: "ExpressionStatement",
+                        expression: {
+                            type: "CallExpression",
+                            callee: this.parseExpression(actualCallee),
+                            arguments: spaceParts.slice(1).map((a) => this.parseExpression(a)),
+                            optional: isOpt,
+                        },
+                    };
+                }
+            }
+        }
+
         const expr = this.parseExpression(stmt);
         if (expr.type === "FunctionDeclaration") return expr;
         return { type: "ExpressionStatement", expression: expr };
@@ -1117,6 +1138,21 @@ export class CodonToASTParser {
             return true;
         }
         return false;
+    }
+
+    private isValidCallee(str: string): boolean {
+        str = str.trim();
+        if (!str) return false;
+        if (str === "super") return true;
+        // Must not start with digit, quote, bracket, brace, operator, or minus
+        if (/^['"`0-9\[{+\-*\/%=!~<>&|^?]/.test(str)) return false;
+        const disallowedKeywords = new Set([
+            "return", "throw", "yield", "class", "const", "let", "var",
+            "if", "else", "elseif", "while", "for", "select", "case",
+            "try", "catch", "finally", "import", "export", "break", "continue"
+        ]);
+        if (disallowedKeywords.has(str)) return false;
+        return /^[a-zA-Z_$][a-zA-Z0-9_$.?\[\]]*$/.test(str);
     }
 
     private parseIfStatement(stmt: string): IfStatement {
@@ -2325,6 +2361,38 @@ export class CodonToASTParser {
                 callee: this.parseExpression(calleeStr),
                 arguments: [],
             };
+        }
+
+        // Call with arguments: callee(arg1, arg2) or callee(arg)
+        if (strippedExpr.endsWith(")") && !wasWrapped) {
+            let depth = 0;
+            let openParenIdx = -1;
+            for (let i = strippedExpr.length - 1; i >= 0; i--) {
+                const char = strippedExpr[i];
+                if (char === ")") depth++;
+                else if (char === "(") {
+                    depth--;
+                    if (depth === 0) {
+                        openParenIdx = i;
+                        break;
+                    }
+                }
+            }
+            if (openParenIdx > 0) {
+                const calleeStr = strippedExpr.slice(0, openParenIdx).trim();
+                const innerArgs = strippedExpr.slice(openParenIdx + 1, -1).trim();
+                if (calleeStr && this.isValidCallee(calleeStr)) {
+                    const isOpt = calleeStr.endsWith("?.");
+                    const actualCallee = isOpt ? calleeStr.slice(0, -2) : calleeStr;
+                    const argParts = innerArgs ? splitAtLevel(innerArgs, ",").map((a) => a.trim()).filter(Boolean) : [];
+                    return {
+                        type: "CallExpression",
+                        callee: this.parseExpression(actualCallee),
+                        arguments: argParts.map((a) => this.parseExpression(a)),
+                        optional: isOpt,
+                    };
+                }
+            }
         }
 
         // Literals & Keywords
