@@ -16,6 +16,7 @@ This document provides a comprehensive, rigorous specification of the Codon lang
 4. [Variable Declarations & Assignments](#4-variable-declarations--assignments)
    - [Right-to-Left Assignment (`=:`)](#right-to-left-assignment-)
    - [Member, Property & Compound Assignments](#member-property-and-compound-assignments)
+   - [Object Instantiation (`new`)](#object-instantiation-new)
    - [Pattern Destructuring](#pattern-destructuring)
 5. [Monadic Verbs](#5-monadic-verbs)
    - [Await (`@` and `@:`)](#await--and-)
@@ -219,6 +220,38 @@ cache[key] ??= compute();
 ```
 
 Legacy parenthesized assignment expressions `(this.socket = null)` and `(count += 1)` remain fully supported.
+
+### Object Instantiation (`new`)
+
+Codon supports native concise unparenthesized `new` instantiation expressions without requiring outer wrapping parentheses:
+
+```codon
+NB. Variable initialization
+db =: new Database ':memory:'
+cache =: new Map
+seen =: new Set
+url =: new URL 'http://localhost:3000'
+
+NB. Member assignment and class properties
+this.socket = new WebSocket this.url
+this.agent = new http.Agent O(keepAlive:true)
+
+NB. Promises and async workflows
+p =: new Promise {{resolve => (setTimeout resolve 50)}}
+```
+
+Transpiles to:
+```javascript
+const db = new Database(":memory:");
+const cache = new Map();
+const seen = new Set();
+const url = new URL("http://localhost:3000");
+this.socket = new WebSocket(this.url);
+this.agent = new http.Agent({ keepAlive: true });
+const p = new Promise(resolve => setTimeout(resolve, 50));
+```
+
+Legacy parenthesized expressions `(new Database ':memory:')` and `(new Map)` remain fully supported.
 
 ### Pattern Destructuring
 
@@ -524,7 +557,8 @@ end.
 ```codon
 return. result
 return.
-throw. (new Error 'Operation failed')
+return. new Response 'OK'
+throw. new Error 'Operation failed'
 ```
 
 ---

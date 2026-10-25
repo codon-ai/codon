@@ -2170,6 +2170,37 @@ export class CodonToASTParser {
             };
         }
 
+        // New Expression: new Callee [args] or (new Callee [args])
+        if (strippedExpr.startsWith("new ")) {
+            const rest = strippedExpr.slice(4).trim();
+            const parenIdx = rest.indexOf("(");
+            if (parenIdx !== -1 && rest.endsWith(")")) {
+                const calleeStr = rest.slice(0, parenIdx).trim();
+                const innerArgs = rest.slice(parenIdx + 1, -1).trim();
+                if (calleeStr && !calleeStr.includes(" ")) {
+                    const argParts = innerArgs ? splitAtLevel(innerArgs, ",").map((a) => a.trim()).filter(Boolean) : [];
+                    return {
+                        type: "NewExpression",
+                        callee: this.parseExpression(calleeStr),
+                        arguments: argParts.map((a) => this.parseExpression(a)),
+                    };
+                }
+            }
+
+            const spaceParts = splitAtLevel(strippedExpr, " ");
+            if (spaceParts.length >= 2 && spaceParts[0] === "new" && spaceParts[1]) {
+                let calleeStr = spaceParts[1];
+                if (calleeStr.endsWith("()")) {
+                    calleeStr = calleeStr.slice(0, -2);
+                }
+                return {
+                    type: "NewExpression",
+                    callee: this.parseExpression(calleeStr),
+                    arguments: spaceParts.slice(2).map((a) => this.parseExpression(a)),
+                };
+            }
+        }
+
         // Function Calls, New, or Codon Verb Trains (Forks & Hooks)
         if (wasWrapped) {
             const spaceParts = splitAtLevel(strippedExpr, " ");

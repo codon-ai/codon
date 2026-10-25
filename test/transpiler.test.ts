@@ -1404,4 +1404,155 @@ end.
     });
 });
 
+describe("Concise Unparenthesized New Instantiation Expressions Support", () => {
+    test("Transpiles unparenthesized new instantiation db =: new Database ':memory:' and cache =: new Map", () => {
+        const codonCode = `
+db =: new Database ':memory:'
+cache =: new Map
+seen =: new Set
+url =: new URL 'http://localhost:3000'
+`;
+        const astParser = new CodonToASTParser();
+        const ast = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(ast);
+
+        expect(js).toContain('const db = new Database(":memory:");');
+        expect(js).toContain("const cache = new Map();");
+        expect(js).toContain("const seen = new Set();");
+        expect(js).toContain('const url = new URL("http://localhost:3000");');
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles unparenthesized new instantiation with object and function arguments", () => {
+        const codonCode = `
+wss =: new WebSocketServer O(port:8081;host:'127.0.0.1')
+delay =: new Promise {{resolve => (setTimeout resolve 50)}}
+agent =: new http.Agent O(keepAlive:true)
+`;
+        const astParser = new CodonToASTParser();
+        const ast = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(ast);
+
+        expect(js).toContain("const wss = new WebSocketServer({");
+        expect(js).toContain("port: 8081");
+        expect(js).toContain("const delay = new Promise(resolve =>");
+        expect(js).toContain("const agent = new http.Agent({");
+        expect(js).toContain("keepAlive: true");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles unparenthesized new in throw. and return. statements", () => {
+        const codonCode = `
+fn. fail message do.
+  throw. new Error message
+end.
+
+fn. createResponse data do.
+  return. new Response data
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const ast = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(ast);
+
+        expect(js).toContain("throw new Error(message);");
+        expect(js).toContain("return new Response(data);");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles unparenthesized new in member assignments and class properties", () => {
+        const codonCode = `
+class. ClientManager do.
+  cache =: new Map
+  subscribers =: new Set
+
+  constructor. url do.
+    this.socket = new WebSocket url
+    this.agent = new http.Agent O(keepAlive:true)
+  end.
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const ast = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(ast);
+
+        expect(js).toContain("cache = new Map();");
+        expect(js).toContain("subscribers = new Set();");
+        expect(js).toContain("this.socket = new WebSocket(url);");
+        expect(js).toContain("this.agent = new http.Agent({");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips JS new expressions using concise unparenthesized notation", () => {
+        const originalJs = `
+const db = new Database(":memory:");
+const cache = new Map();
+const wss = new WebSocketServer({ port: 8080 });
+
+class Server {
+  agent = new http.Agent({ keepAlive: true });
+
+  connect(url) {
+    this.socket = new WebSocket(url);
+  }
+
+  respond(data) {
+    return new Response(data);
+  }
+
+  handleError(msg) {
+    throw new Error(msg);
+  }
+}
+`;
+        const jsAst = parser.parse(originalJs, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(jsAst.program as any);
+
+        expect(codonCode).toContain("db =: new Database ':memory:'");
+        expect(codonCode).toContain("cache =: new Map");
+        expect(codonCode).toContain("wss =: new WebSocketServer O(port:8080)");
+        expect(codonCode).toContain("this.socket = new WebSocket url");
+        expect(codonCode).toContain("return. new Response data");
+        expect(codonCode).toContain("throw. new Error msg");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(roundtrippedJs).toContain('const db = new Database(":memory:");');
+        expect(roundtrippedJs).toContain("const cache = new Map();");
+        expect(roundtrippedJs).toContain("this.socket = new WebSocket(url);");
+        expect(roundtrippedJs).toContain("return new Response(data);");
+        expect(roundtrippedJs).toContain("throw new Error(msg);");
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Retains backward compatibility with legacy parenthesized new expressions (new Callee ...)", () => {
+        const codonCode = `
+db =: (new Database ':memory:')
+cache =: (new Map)
+throw. (new Error 'fail')
+fn. getResp do.
+  return. (new Response 'ok')
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain('const db = new Database(":memory:");');
+        expect(js).toContain("const cache = new Map();");
+        expect(js).toContain('throw new Error("fail");');
+        expect(js).toContain('return new Response("ok");');
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+});
+
 
