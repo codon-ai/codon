@@ -1505,5 +1505,105 @@ end.
     });
 });
 
+describe("Concise Computed Property Keys, Flexible Delimiters & Update Operand Protection (Rev 21a)", () => {
+    test("Transpiles computed property keys in object literals: O([fieldName]:result)", () => {
+        const codonCode = `
+fn. formatResult key,val do.
+  res =: O([key]:val;status:200)
+  return. res
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("[key]: val");
+        expect(js).toContain("status: 200");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles nested computed object properties in GraphQL query dispatcher pattern", () => {
+        const codonCode = `
+async_fn. execute query do.
+  return. O(data:O([fieldName]:result))
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("[fieldName]: result");
+        expect(js).toContain("data: {");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles flexible comma and semicolon delimiters in O(...) object literals", () => {
+        const codonCode = `
+a =: O(x:1, y:2)
+b =: O(id, title, completed:0)
+c =: O([k]:v, status:200)
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("x: 1");
+        expect(js).toContain("y: 2");
+        expect(js).toContain("id,");
+        expect(js).toContain("title,");
+        expect(js).toContain("completed: 0");
+        expect(js).toContain("[k]: v");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Correctly parses function calls with update arguments without greedy suffix collision", () => {
+        const codonCode = `
+delay =: (baseDelay * (Math.pow 2 this.retryCount++))
+result =: (compute a b++)
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("const delay = baseDelay * Math.pow(2, this.retryCount++);");
+        expect(js).toContain("const result = compute(a, b++);");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips JS computed object properties and call expressions with update arguments", () => {
+        const jsCode = `
+export async function queryData(url, fieldName) {
+  const res = await fetch(url);
+  const result = await res.json();
+  return { data: { [fieldName]: result } };
+}
+export class Client {
+  reconnect() {
+    const delay = baseDelay * Math.pow(2, this.retryCount++);
+  }
+}
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("[fieldName]:result");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(roundtrippedJs).toContain("[fieldName]: result");
+        expect(roundtrippedJs).toContain("Math.pow(2, this.retryCount++)");
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+    });
+});
+
+
 
 

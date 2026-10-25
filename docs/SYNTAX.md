@@ -120,20 +120,22 @@ floats   = 1.5 2.5 3.5      NB. const floats = [1.5, 2.5, 3.5];
 Codon provides ultra-compact object literals via `O(...)`:
 
 - **Colon Key-Value Pairs**: `O(key:val;key2:val2)`
-- **Identifier Property Shorthand**: `O(prop1;prop2)` compiles to `{ prop1, prop2 }`
+- **Computed Property Keys**: `O([key]:val)` or `O([fieldName]:result)` for dynamic dictionary keys
+- **Flexible Delimiters**: Properties may be delimited by commas or semicolons (`O(a:1, b:2)` or `O(id, title)`)
+- **Identifier Property Shorthand**: `O(prop1;prop2)` or `O(prop1, prop2)` compiles to `{ prop1, prop2 }`
 - **Prefix Spread**: `O(...rest;key:val)` compiles to `{ ...rest, key: val }`
 - **Quoted Keys**: `O('Content-Type':'application/json')` for special characters
 - **Empty Objects**: `O()` or `O''` compiles to `{}`
 - **Legacy Alternating Pairs**: `O('key';val)` remains supported for backward compatibility
 
 ```codon
-NB. Modern concise object literal
-config =: O(...baseConfig;port:8080;host:'localhost';timeout)
+NB. Modern concise object literal with computed keys & spread
+config =: O(...baseConfig;[dynamicKey]:value;host:'localhost';timeout)
 ```
 
 Transpiles to:
 ```javascript
-const config = { ...baseConfig, port: 8080, host: "localhost", timeout };
+const config = { ...baseConfig, [dynamicKey]: value, host: "localhost", timeout };
 ```
 
 ### Arrays (`[...]`)
