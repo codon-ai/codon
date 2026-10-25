@@ -1134,3 +1134,121 @@ legacyMulti =: ('foo';'bar';'baz')
     });
 });
 
+describe("Subtree Hashing Macro System (dict.json Level-2 Clone Compaction) Support", () => {
+    test("Transpiles expression-level macro invocation M!m_call_expr_11 to JS", () => {
+        const codonCode = `idx =: M!m_call_expr_11(items)`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("Math.floor(Math.random() * items.length)");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles statement-level macro invocation M!m_expression_stmt_17 to JS", () => {
+        const codonCode = `M!m_expression_stmt_17(Child;Parent)`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("Child.prototype = Object.create(Parent.prototype)");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles arrow function macro with literal and capture parameters M!m_arrow_function_expr_5", () => {
+        const codonCode = `testFn =: M!m_arrow_function_expr_5('js';'file.js';getLanguage)`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toMatch(/expect\(getLanguage\(["']file\.js["']\)\)\.toBe\(["']js["']\)/);
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles parameterless macro invocation M!m_variable_decl_4", () => {
+        const codonCode = `M!m_variable_decl_4()`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("var");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Throws error on unknown macro invocation", () => {
+        const codonCode = `bad =: M!nonexistent_macro_xyz(foo)`;
+        const astParser = new CodonToASTParser();
+        expect(() => astParser.parse(codonCode)).toThrow("Unknown macro");
+    });
+
+    test("Roundtrips JS functions containing popular clone subtrees via macro compaction", () => {
+        const jsCode = `
+function pickRandom(items) {
+  return Math.floor(Math.random() * items.length);
+}
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("M!m_call_expr_11(items)");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(roundtrippedJs).toContain("Math.floor(Math.random() * items.length)");
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips statement-level prototype inheritance clone via macro compaction", () => {
+        const jsCode = `
+function Curve() {}
+function TorusKnotCurve() {}
+TorusKnotCurve.prototype = Object.create(Curve.prototype);
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("M!m_expression_stmt_17(TorusKnotCurve;Curve)");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(roundtrippedJs).toContain("TorusKnotCurve.prototype = Object.create(Curve.prototype)");
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles string capitalization binary expression macro M!m_binary_expr_32", () => {
+        const codonCode = `capitalized =: M!m_binary_expr_32(word)`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("word.charAt(0).toUpperCase() + word.slice(1)");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles object expression macro M!m_object_expr_1 with numeric literals", () => {
+        const codonCode = `loc =: M!m_object_expr_1(10;20)`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain('"line": 1');
+        expect(js).toContain('"column": 10');
+        expect(js).toContain('"column": 20');
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+});
+

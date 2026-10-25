@@ -62,10 +62,69 @@ import type {
     CodonRankExpression,
 } from "./types";
 import generate from "@babel/generator";
+import { macroDictionary, resolveScopes, normalizeSubtree, type ScopeResolution } from "./macro-dict";
 
 export class JSToCodonTranslator {
+    private resolution?: ScopeResolution;
+
+    public tryMacroMatch(node: Node): string | null {
+        try {
+            if (macroDictionary.size === 0) macroDictionary.load();
+            if (macroDictionary.entriesForNodeType(node.type).length === 0) {
+                return null;
+            }
+
+            const { canonical, hash, placeholderArgs } = normalizeSubtree(node as any, this.resolution);
+            const macro = macroDictionary.lookupByHash(hash);
+            if (!macro) return null;
+            if (macro.canonical && macro.canonical !== canonical) return null;
+
+            const args: string[] = [];
+            for (const param of macro.parameters) {
+                const argNode = placeholderArgs[param.name];
+                if (!argNode) {
+                    args.push(param.kind === "literal" ? "null" : "undefined");
+                    continue;
+                }
+                if (argNode.type === "Identifier") {
+                    args.push(argNode.name);
+                } else if (
+                    argNode.type === "Literal" ||
+                    argNode.type === "StringLiteral" ||
+                    argNode.type === "NumericLiteral" ||
+                    argNode.type === "BooleanLiteral" ||
+                    argNode.type === "NullLiteral"
+                ) {
+                    if (typeof argNode.value === "string") {
+                        args.push(`'${argNode.value}'`);
+                    } else {
+                        args.push(String(argNode.value));
+                    }
+                } else {
+                    args.push(this.transpile(argNode));
+                }
+            }
+
+            if (args.length === 0) {
+                return `M!${macro.name}()`;
+            }
+            return `M!${macro.name}(${args.join(";")})`;
+        } catch {
+            return null;
+        }
+    }
+
     public transpile(node: Node | null | undefined): string {
         if (!node) return "";
+
+        if (node.type === "Program") {
+            this.resolution = resolveScopes(node);
+        } else {
+            const macroMatch = this.tryMacroMatch(node);
+            if (macroMatch !== null) {
+                return macroMatch;
+            }
+        }
 
         switch (node.type) {
             case "Program": {

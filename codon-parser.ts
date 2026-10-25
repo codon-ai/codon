@@ -44,6 +44,7 @@ import type {
     ArrayPattern,
     AssignmentPattern,
 } from "./types";
+import { macroDictionary } from "./macro-dict";
 
 export function splitCodonStatements(code: string): string[] {
     const statements: string[] = [];
@@ -534,6 +535,15 @@ export class CodonToASTParser {
         stmt = stmt.trim();
         if (!stmt) return null;
         if (stmt.endsWith(";")) stmt = stmt.slice(0, -1).trim();
+
+        // Macro Invocation (Statement-level): M!name(...) or M!name
+        if (stmt.startsWith("M!")) {
+            const node = this.parseMacroInvocation(stmt);
+            if (node.type.endsWith("Expression")) {
+                return { type: "ExpressionStatement", expression: node };
+            }
+            return node;
+        }
 
         // Import Declaration
         if (stmt.startsWith("import.") || stmt.startsWith("import ")) {
@@ -1400,6 +1410,15 @@ export class CodonToASTParser {
         if (isFullyWrapped(strippedExpr)) {
             strippedExpr = strippedExpr.slice(1, -1).trim();
             wasWrapped = true;
+        }
+
+        // Macro Invocation (Expression-level): M!name(...) or M!name
+        if (strippedExpr.startsWith("M!")) {
+            const node = this.parseMacroInvocation(strippedExpr);
+            if (node.type === "ExpressionStatement") {
+                return (node as any).expression;
+            }
+            return node;
         }
 
         // Update Expression: (++x), (--x), (x++), (x--)
@@ -2360,6 +2379,45 @@ export class CodonToASTParser {
             children.push({ type: "JSXText", value: textBuf });
         }
         return children;
+    }
+
+    public parseMacroInvocation(raw: string): Node {
+        raw = raw.trim();
+        if (isFullyWrapped(raw)) {
+            raw = raw.slice(1, -1).trim();
+        }
+        if (!raw.startsWith("M!")) {
+            throw new Error(`Invalid macro invocation: ${raw}`);
+        }
+
+        const body = raw.slice(2).trim();
+        const parenIdx = body.indexOf("(");
+        let name = body;
+        let args: string[] = [];
+
+        if (parenIdx !== -1) {
+            name = body.slice(0, parenIdx).trim();
+            if (body.endsWith(")")) {
+                const argsContent = body.slice(parenIdx + 1, -1).trim();
+                if (argsContent) {
+                    args = splitAtLevel(argsContent, ",")
+                        .flatMap((p) => splitAtLevel(p, ";"))
+                        .map((p) => p.trim())
+                        .filter(Boolean);
+                }
+            }
+        }
+
+        const macro = macroDictionary.lookupByName(name) || macroDictionary.lookupByHash(name);
+        if (!macro) {
+            throw new Error(`Unknown macro: ${name}`);
+        }
+
+        const formattedArgs = args.map((arg) => {
+            return arg;
+        });
+
+        return macroDictionary.expandToAST(macro, formattedArgs);
     }
 }
 

@@ -1,6 +1,39 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
+## Revision 7a (successful)
+- **Tokens:** 2890
+
+- **Revision Idea**: Introduce a Subtree Hashing Macro System in Codon (`M!name(...)` and `M!name()`) leveraging popularity metadata of Level 2 code clones in `dict.json`, allowing Codon to compact common verbose AST subtrees into token-dense macro invocations.
+- **Rationale**: Codon is designed to be maximally token efficient for LLMs without concern for human readability. Real-world fullstack JavaScript repositories exhibit repetitive structural patterns (Level 2 code clones — syntactically identical AST subtrees with variations only in parameter identifiers, literals, and local variable names). For example:
+  - Random array indexing: `Math.floor(Math.random() * arr.length)` (12 AST nodes, 10–15 tokens)
+  - String manipulation idioms: `str.charAt(0).toUpperCase() + str.slice(1)` (13 AST nodes, 12–16 tokens)
+  - Prototype inheritance: `Child.prototype = Object.create(Parent.prototype)` (12 AST nodes, 10–14 tokens)
+  - Assertion closures: `() => { expect(fn(input)).toBe(expected); }` (12 AST nodes, 14–18 tokens)
+  - Complex object shapes and validation pipelines
+  Prior to Revision 7a, Codon had to express every node of these recurring patterns verbatim in Codon syntax. By analyzing hundreds of open-source repositories and clustering subtrees using wyhash hashing on canonicalized AST representations (`dict.json`), we identified 721 high-scoring clone patterns (each ranging from 12 to 127 AST nodes). By assigning stable, compact macro identifiers (`M!m_call_expr_11(arr)`), Codon replaces 10–30 verbose tokens with 2–4 tokens per recurring pattern:
+  - Expression macros: `x =: M!m_call_expr_11(items)` (replaces `Math.floor(Math.random() * items.length)`)
+  - Statement macros: `M!m_expression_stmt_17(Child;Parent)` (replaces `Child.prototype = Object.create(Parent.prototype)`)
+  - Arrow function / closure macros: `M!m_arrow_function_expr_5('js';'file.js';getLanguage)`
+  - Parameterless declaration/statement macros: `M!m_variable_decl_4()`
+  - Full roundtrip fidelity: JS ➔ Codon (automatic clone recognition & macro emission) ➔ JS (macro expansion & semantic equivalence).
+- **Target Token Savings for Fullstack Applications**:
+  - Replaces 12–127 AST node subtrees (10–50 tokens) with a compact `M!name(args)` invocation (2–5 tokens).
+  - Yields 60%–85% token reduction on popular recurring JavaScript boilerplate, test assertions, and data manipulation idioms.
+  - Zero ambiguity with existing Codon verbs, control structures, and array expressions due to the dedicated `M!` prefix.
+  - Semicolon `;` and comma `,` delimiters provide LLMs maximum generation flexibility.
+- **Concrete Syntax Changes**:
+  - `macro-dict.ts`: Implements `MacroDictionary` with lazy index loading of 721 entries from `dict.json`, lexical scope resolution `resolveScopes()`, AST subtree normalization and canonical wyhash computation `normalizeSubtree()`, and macro template expansion `expandToAST()`.
+  - `JSToCodonTranslator`: Automatically detects matching Level-2 clone subtrees via lexical scope resolution and subtree canonical hashing, extracting concrete argument bindings and emitting `M!name(arg1;arg2;...)` or `M!name()`.
+  - `CodonToASTParser`: Parses `M!name(...)` and `M!name()` at both statement level (`parseStatement`) and expression level (`parseExpression`), expanding the macro template with supplied arguments into standard ESTree AST subtrees.
+  - Examples:
+    - JavaScript: `const idx = Math.floor(Math.random() * items.length);`
+    - Codon: `idx =: M!m_call_expr_11(items)`
+    - JavaScript: `Child.prototype = Object.create(Parent.prototype);`
+    - Codon: `M!m_expression_stmt_17(Child;Parent)`
+    - JavaScript: `const capitalize = word.charAt(0).toUpperCase() + word.slice(1);`
+    - Codon: `capitalize =: M!m_binary_expr_32(word)`
+
 ## Revision 6a (successful)
 - **Tokens:** 3261
 

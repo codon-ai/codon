@@ -580,3 +580,5 @@ export interface CodonRankExpression {
     rank: number | string;
     target: Node;
 }
+
+export type { MacroParameter, MacroEntry, MacroLocal } from "./macro-dict";
