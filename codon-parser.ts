@@ -1596,7 +1596,7 @@ export class CodonToASTParser {
         // Update Expression: (++x), (--x), (x++), (x--), x++, x--, ++x, --x
         if (strippedExpr.endsWith("++") && strippedExpr.length > 2) {
             const inner = strippedExpr.slice(0, -2).trim();
-            if (inner && !inner.includes(",") && !inner.includes(";")) {
+            if (inner && !inner.includes(",") && !inner.includes(";") && splitAtLevel(inner, " ").length === 1) {
                 return {
                     type: "UpdateExpression",
                     operator: "++",
@@ -1607,7 +1607,7 @@ export class CodonToASTParser {
         }
         if (strippedExpr.endsWith("--") && strippedExpr.length > 2) {
             const inner = strippedExpr.slice(0, -2).trim();
-            if (inner && !inner.includes(",") && !inner.includes(";")) {
+            if (inner && !inner.includes(",") && !inner.includes(";") && splitAtLevel(inner, " ").length === 1) {
                 return {
                     type: "UpdateExpression",
                     operator: "--",
@@ -1618,7 +1618,7 @@ export class CodonToASTParser {
         }
         if (strippedExpr.startsWith("++") && strippedExpr.length > 2) {
             const inner = strippedExpr.slice(2).trim();
-            if (inner && !inner.includes(",") && !inner.includes(";")) {
+            if (inner && !inner.includes(",") && !inner.includes(";") && splitAtLevel(inner, " ").length === 1) {
                 return {
                     type: "UpdateExpression",
                     operator: "++",
@@ -1629,7 +1629,7 @@ export class CodonToASTParser {
         }
         if (strippedExpr.startsWith("--") && strippedExpr.length > 2) {
             const inner = strippedExpr.slice(2).trim();
-            if (inner && !inner.includes(",") && !inner.includes(";")) {
+            if (inner && !inner.includes(",") && !inner.includes(";") && splitAtLevel(inner, " ").length === 1) {
                 return {
                     type: "UpdateExpression",
                     operator: "--",
@@ -1759,6 +1759,32 @@ export class CodonToASTParser {
                 return {
                     type: "UnaryExpression",
                     operator: "!",
+                    argument: this.parseExpression(innerArg),
+                    prefix: true,
+                };
+            }
+        }
+
+        // Unparenthesized Typeof Unary Expression: typeof expr (placed AFTER binary/logical splitting so typeof x === 'string' binds correctly)
+        if (strippedExpr.startsWith("typeof ")) {
+            const innerArg = strippedExpr.slice(7).trim();
+            if (innerArg.length > 0) {
+                return {
+                    type: "UnaryExpression",
+                    operator: "typeof",
+                    argument: this.parseExpression(innerArg),
+                    prefix: true,
+                };
+            }
+        }
+
+        // Unparenthesized Bitwise NOT Unary Expression: ~expr
+        if (strippedExpr.startsWith("~") && !strippedExpr.startsWith("~:")) {
+            const innerArg = strippedExpr.slice(1).trim();
+            if (innerArg.length > 0) {
+                return {
+                    type: "UnaryExpression",
+                    operator: "~",
                     argument: this.parseExpression(innerArg),
                     prefix: true,
                 };

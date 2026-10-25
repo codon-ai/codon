@@ -82,6 +82,8 @@ flowchart TD
 | **ES Module Import** | `import { useState, useRef } from "react";` | `import. {useState,useRef} from 'react'` | **~45%** |
 | **Logical NOT Expression** | `if (!input.trim()) return;` | `if. !input.trim() do. return. end.` | **~40%** |
 | **Update Expression** | `nextId.current++;` | `nextId.current++` | **~40%** |
+| **Type Checking** | `typeof x === "string"` | `typeof x === 'string'` | **~30%** |
+| **Negative Number Literal** | `const notFound = -1;` | `notFound =: _1` | **~75%** |
 
 ---
 

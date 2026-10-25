@@ -21,6 +21,7 @@ This document provides a comprehensive, rigorous specification of the Codon lang
 5. [Monadic Verbs](#5-monadic-verbs)
    - [Await (`@` and `@:`)](#await--and-)
    - [Logical NOT (`!`)](#logical-not-)
+   - [Type Checking (`typeof`) & Bitwise NOT (`~`)](#type-checking-typeof--bitwise-not-)
    - [Tally (`#`)](#tally-)
    - [Reciprocal (`%`)](#reciprocal-)
    - [Square Root (`%:`)](#square-root-)
@@ -97,9 +98,15 @@ floats   = 1.5 2.5 3.5      NB. const floats = [1.5, 2.5, 3.5];
   ```codon
   negatives = _1 _2 3 _4    NB. const negatives = [-1, -2, 3, -4];
   singleNeg = _42           NB. const singleNeg = -42;
+  notFound =: _1            NB. const notFound = -1;
+  slice =: (arr.slice 1 _1)  NB. const slice = arr.slice(1, -1);
+  if. (parenIdx !== _1) do. NB. if (parenIdx !== -1)
   ```
-- **Infinity (`_`)**: A standalone underscore represents `Infinity`:
+  Using `_1` directly saves 3 tokens over legacy parenthesized negation `(- 1)`.
+- **Infinity (`_` and `__`)**: A standalone underscore `_` represents `Infinity`, and double underscore `__` represents `-Infinity`:
   ```codon
+  posInf = _                NB. const posInf = Infinity;
+  negInf = __               NB. const negInf = -Infinity;
   mixed = _ 10 20           NB. const mixed = [Infinity, 10, 20];
   ```
 
@@ -347,6 +354,47 @@ const canRetry = !this.isClosed && this.retryCount < this.maxRetries;
 ```
 
 Legacy parenthesized form `(! expr)` remains fully supported.
+
+### Type Checking (`typeof`) & Bitwise NOT (`~`)
+
+Codon natively supports unparenthesized prefix `typeof` and bitwise negation `~`:
+
+- **Type Guards in Comparisons**:
+  ```codon
+  if. (typeof x === 'string') do.
+    (console.log 'String value')
+  end.
+
+  if. (typeof cb === 'function') do.
+    (cb msg)
+  end.
+  ```
+- **Runtime Environment & Existence Checks**:
+  ```codon
+  hasWindow =: typeof window !== 'undefined'
+  isObject =: typeof target === 'object'
+  ```
+- **Bitwise Negation (`~`)**:
+  ```codon
+  found =: ~items.indexOf(needle)
+  mask =: ~flags
+  ```
+
+Transpiles to:
+```javascript
+if (typeof x === "string") {
+  console.log("String value");
+}
+if (typeof cb === "function") {
+  cb(msg);
+}
+const hasWindow = typeof window !== "undefined";
+const isObject = typeof target === "object";
+const found = ~items.indexOf(needle);
+const mask = ~flags;
+```
+
+Legacy parenthesized form `((typeof x) === 'string')` remains fully supported.
 
 ### Tally (`#`)
 Calculates the length of an array or string:

@@ -1505,5 +1505,96 @@ end.
     });
 });
 
+describe("Concise Unparenthesized Unary Expressions, Native Negative Literals, and Update Guard (Rev 26a)", () => {
+    test("Transpiles unparenthesized typeof and bitwise NOT expressions", () => {
+        const codonCode = `
+isStr =: (typeof x === 'string')
+isFn =: typeof cb === 'function'
+isDef =: typeof window !== 'undefined'
+mask =: ~flags
+found =: ~items.indexOf(needle)
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain('const isStr = typeof x === "string";');
+        expect(js).toContain('const isFn = typeof cb === "function";');
+        expect(js).toContain('const isDef = typeof window !== "undefined";');
+        expect(js).toContain("const mask = ~flags;");
+        expect(js).toContain("const found = ~items.indexOf(needle);");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles native J negative numeric literals (_n) in indexing, slicing, and comparisons", () => {
+        const codonCode = `
+negOne =: _1
+negFortyTwo =: _42
+negFloat =: _0.5
+parenIdx =: _1
+if. (parenIdx !== _1) do.
+  slice =: (inner.slice 1 _1)
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("const negOne = -1;");
+        expect(js).toContain("const negFortyTwo = -42;");
+        expect(js).toContain("const negFloat = -0.5;");
+        expect(js).toContain("if (parenIdx !== -1)");
+        expect(js).toContain("const slice = inner.slice(1, -1);");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles function call with nested update expression (Math.pow 2 this.retryCount++) without boundary corruption", () => {
+        const codonCode = `
+delay =: (this.baseDelayMs * (Math.pow 2 this.retryCount++))
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("Math.pow(2, this.retryCount++)");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips JS typeof, negative numbers, and update expressions with concise notation", () => {
+        const jsCode = `
+const isString = typeof val === "string";
+const hasWindow = typeof window !== "undefined";
+const slice = arr.slice(1, -1);
+const notFound = idx === -1;
+const delay = base * Math.pow(2, retryCount++);
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("typeof val");
+        expect(codonCode).toContain("typeof window");
+        expect(codonCode).toContain("_1");
+        expect(codonCode).not.toContain("(- 1)");
+        expect(codonCode).toContain("retryCount++");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(roundtrippedJs).toContain('typeof val === "string"');
+        expect(roundtrippedJs).toContain('typeof window !== "undefined"');
+        expect(roundtrippedJs).toContain("arr.slice(1, -1)");
+        expect(roundtrippedJs).toContain("idx === -1");
+        expect(roundtrippedJs).toContain("Math.pow(2, retryCount++)");
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+    });
+});
+
+
 
 

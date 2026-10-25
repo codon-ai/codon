@@ -583,6 +583,19 @@ export class JSToCodonTranslator {
                 if (node.operator === "!") {
                     return `!${this.transpile(node.argument)}`;
                 }
+                if (
+                    node.operator === "-" &&
+                    (node.argument.type === "NumericLiteral" ||
+                        (node.argument.type === "Literal" && typeof (node.argument as any).value === "number"))
+                ) {
+                    return `_${(node.argument as any).value}`;
+                }
+                if (node.operator === "typeof") {
+                    return `typeof ${this.transpile(node.argument)}`;
+                }
+                if (node.operator === "~") {
+                    return `~${this.transpile(node.argument)}`;
+                }
                 return `(${node.operator} ${this.transpile(node.argument)})`;
 
             case "UpdateExpression":
