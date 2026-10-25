@@ -1,0 +1,19 @@
+import. http from 'node:http'
+
+export. fn. createKeepAliveAgent maxSockets=10,keepAliveMsecs=30000 do.
+return. (new http.Agent O(keepAlive:true;maxSockets;keepAliveMsecs))
+end.
+
+export. fn. getWithAgent urlStr,agent do.
+return. (new Promise {{resolve,reject => do.
+((http.get urlStr O(agent) {{res => do.
+body =: ''
+(res.on 'data' {{chunk => do.
+(body += chunk)
+}})
+(res.on 'end' {{ => do.
+(resolve O(statusCode:(res.statusCode || 200);body))
+}})
+}}).on 'error' reject)
+}})
+end.

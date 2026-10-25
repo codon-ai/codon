@@ -1,0 +1,16 @@
+import. {useRef,useEffect} from 'react'
+
+export. fn. useInterval callback,delayMs do.
+savedCallback =: (useRef callback)
+(useEffect {{ => do.
+(savedCallback.current = callback)
+}} (,callback))
+(useEffect {{ => do.
+if. (delayMs !== '') do.
+id =: (setInterval {{ => do.
+savedCallback.current()
+}} delayMs)
+return. {{ => (clearInterval id)}}
+end.
+}} (,delayMs))
+end.

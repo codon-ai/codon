@@ -220,6 +220,9 @@ export class JSToCodonTranslator {
             case "ReturnStatement":
                 return node.argument ? `return. ${this.transpile(node.argument)}` : "return.";
 
+            case "YieldExpression":
+                return (node as any).argument ? `yield. ${this.transpile((node as any).argument)}` : "yield.";
+
             case "BreakStatement":
                 return "break.";
 
@@ -319,7 +322,9 @@ export class JSToCodonTranslator {
             case "FunctionDeclaration": {
                 const fdParams = node.params.map((p) => this.transpilePattern(p)).join(",");
                 const fnName = node.id ? node.id.name : "";
-                const prefix = node.async ? "async_fn." : "fn.";
+                const prefix = node.async
+                    ? (node.generator ? "async_gen_fn." : "async_fn.")
+                    : (node.generator ? "gen_fn." : "fn.");
                 const header = fnName ? (fdParams ? `${fnName} ${fdParams}` : fnName) : (fdParams || "");
                 return `${prefix}${header ? " " + header : ""} do.\n${this.transpile(node.body)}\nend.`;
             }
@@ -348,7 +353,7 @@ export class JSToCodonTranslator {
 
             case "ArrayExpression": {
                 if (node.elements.length === 0) return `(0$0)`;
-                if (node.elements.length === 1 && node.elements[0]?.type !== "SpreadElement") {
+                if (node.elements.length === 1) {
                     return `(,${this.transpile(node.elements[0])})`;
                 }
                 return `(${node.elements.map((n) => (n ? this.transpile(n) : "''")).join(";")})`;

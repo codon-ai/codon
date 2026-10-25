@@ -1,0 +1,40 @@
+export. class. CircularBuffer do.
+constructor. capacity do.
+if. (capacity <= 0) do.
+throw. (new Error 'Capacity must be positive')
+end.
+(this.capacity = capacity)
+(this.buffer = (new Array capacity))
+(this.head = 0)
+(this.tail = 0)
+(this.count = 0)
+end.
+method. write item do.
+if. this.isFull() do.
+return. false
+end.
+(this.buffer.[this.tail] = item)
+(this.tail = ((this.tail + 1) % this.capacity))
+(this.count++)
+return. true
+end.
+method. read  do.
+if. this.isEmpty() do.
+return. undefined
+end.
+item =: this.buffer.[this.head]
+(this.buffer.[this.head] = undefined)
+(this.head = ((this.head + 1) % this.capacity))
+(this.count--)
+return. item
+end.
+method. isFull  do.
+return. (this.count === this.capacity)
+end.
+method. isEmpty  do.
+return. (this.count === 0)
+end.
+get. size do.
+return. this.count
+end.
+end.

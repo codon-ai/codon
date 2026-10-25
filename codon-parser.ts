@@ -69,6 +69,8 @@ export function splitCodonStatements(code: string): string[] {
         "constructor.",
         "async_method.",
         "method.",
+        "async_gen_fn.",
+        "gen_fn.",
         "async_fn.",
         "fn.",
         "get.",
@@ -95,14 +97,19 @@ export function splitCodonStatements(code: string): string[] {
             continue;
         }
 
-        // Strings: '...' with '' escape
-        if (!inTpl && char === "'") {
+        // Strings: '...' with '' escape, and "..." with \" escape
+        if (!inTpl && (char === "'" || char === '"')) {
+            const quote = char;
             current += char;
             i++;
             while (i < code.length) {
                 current += code[i];
-                if (code[i] === "'") {
-                    if (code[i + 1] === "'") {
+                if (code[i] === "\\") {
+                    if (i + 1 < code.length) {
+                        current += code[++i];
+                    }
+                } else if (code[i] === quote) {
+                    if (quote === "'" && code[i + 1] === "'") {
                         current += code[++i];
                     } else {
                         i++;
@@ -190,7 +197,7 @@ export function splitAtLevel(str: string, delimiter: string): string[] {
 
     for (let i = 0; i < str.length; i++) {
         const char = str[i];
-        if (char === "'" && !inTpl) {
+        if ((char === "'" || char === '"') && !inTpl) {
             inString = !inString;
             current += char;
             continue;
@@ -238,7 +245,7 @@ export function splitFirstAtLevel(
 
     for (let i = 0; i < str.length; i++) {
         const char = str[i];
-        if (char === "'" && !inTpl) {
+        if ((char === "'" || char === '"') && !inTpl) {
             inString = !inString;
             continue;
         }
@@ -560,11 +567,13 @@ export class CodonToASTParser {
             };
         }
 
-        // Function Declaration: [async_]fn. [name] [params] do. ... end.
+        // Function Declaration: [async_][gen_]fn. [name] [params] do. ... end.
+        const isAsyncGenFn = stmt.startsWith("async_gen_fn.");
+        const isGenFn = stmt.startsWith("gen_fn.");
         const isAsyncFn = stmt.startsWith("async_fn.");
         const isSyncFn = stmt.startsWith("fn.");
-        if (isAsyncFn || isSyncFn) {
-            const prefix = isAsyncFn ? "async_fn." : "fn.";
+        if (isAsyncGenFn || isGenFn || isAsyncFn || isSyncFn) {
+            const prefix = isAsyncGenFn ? "async_gen_fn." : isGenFn ? "gen_fn." : isAsyncFn ? "async_fn." : "fn.";
             const doIdx = stmt.indexOf(" do.");
             if (doIdx !== -1 && stmt.endsWith("end.")) {
                 const header = stmt.substring(prefix.length, doIdx).trim();
@@ -591,7 +600,8 @@ export class CodonToASTParser {
                     id: fnName ? { type: "Identifier", name: fnName } : null,
                     params: paramsStr ? this.parseParamList(paramsStr) : [],
                     body: this.parseBlock(fnBody),
-                    async: isAsyncFn,
+                    async: isAsyncFn || isAsyncGenFn,
+                    generator: isGenFn || isAsyncGenFn,
                 };
             }
         }
@@ -850,6 +860,19 @@ export class CodonToASTParser {
             return {
                 type: "ReturnStatement",
                 argument: argStr ? this.parseExpression(argStr) : null,
+            };
+        }
+
+        // Yield Statement: yield. [expr]
+        if (stmt.startsWith("yield.")) {
+            const argStr = stmt.slice(6).trim();
+            return {
+                type: "ExpressionStatement",
+                expression: {
+                    type: "YieldExpression",
+                    argument: argStr ? this.parseExpression(argStr) : null,
+                    delegate: false,
+                },
             };
         }
 
@@ -1259,11 +1282,11 @@ export class CodonToASTParser {
         // Tier 5: Codon Arithmetic Verbs: +, -, *, /, %, | (strictly right-to-left evaluation: pick leftmost!)
 
         const tiers = [
-            { ops: ["="], rightAssoc: true },
+            { ops: ["+=", "-=", "*=", "/=", "="], rightAssoc: true },
             { ops: ["||", "??"], rightAssoc: false },
             { ops: ["&&"], rightAssoc: false },
             { ops: ["===", "!==", "==", "!="], rightAssoc: false },
-            { ops: ["<=", ">=", "<", ">"], rightAssoc: false },
+            { ops: ["instanceof", "in", "<=", ">=", "<", ">"], rightAssoc: false },
             { ops: ["+", "-", "*", "/", "%", "|"], rightAssoc: true },
         ];
 
@@ -1291,8 +1314,13 @@ export class CodonToASTParser {
                             if (str[i + op.length] === "/" || str[i + op.length] === "\\") continue;
                             // Boundary checks: do not match inside larger operators or Codon adverbs
                             if (op === "=") {
-                                if (i > 0 && (str[i - 1] === "=" || str[i - 1] === "!" || str[i - 1] === "<" || str[i - 1] === ">")) continue;
+                                if (i > 0 && (str[i - 1] === "=" || str[i - 1] === "!" || str[i - 1] === "<" || str[i - 1] === ">" || str[i - 1] === "+" || str[i - 1] === "-" || str[i - 1] === "*" || str[i - 1] === "/")) continue;
                                 if (str[i + 1] === "=" || str[i + 1] === ":" || str[i + 1] === ".") continue;
+                            }
+                            if (op === "instanceof" || op === "in") {
+                                const prevChar = i > 0 ? str[i - 1] : " ";
+                                const nextChar = i + op.length < str.length ? str[i + op.length] : " ";
+                                if (!/[\s\(\)\[\]\{\}]/.test(prevChar) || !/[\s\(\)\[\]\{\}]/.test(nextChar)) continue;
                             }
                             if (op === "==") {
                                 if (i > 0 && (str[i - 1] === "=" || str[i - 1] === "!")) continue;
@@ -1329,10 +1357,10 @@ export class CodonToASTParser {
                 const leftStr = str.substring(0, matchIdx).trim();
                 const rightStr = str.substring(matchIdx + matchedOp.length).trim();
 
-                if (matchedOp === "=") {
+                if (["=", "+=", "-=", "*=", "/="].includes(matchedOp)) {
                     return {
                         type: "AssignmentExpression",
-                        operator: "=",
+                        operator: matchedOp,
                         left: this.parseExpression(leftStr),
                         right: this.parseExpression(rightStr),
                     };
@@ -1573,6 +1601,18 @@ export class CodonToASTParser {
             return {
                 type: "AwaitExpression",
                 argument: this.parseExpression(innerArg),
+            };
+        }
+
+        // Yield Expression: yield. expr or (yield. expr)
+        if (strippedExpr.startsWith("yield.") || strippedExpr.startsWith("yield ")) {
+            const innerArg = strippedExpr.startsWith("yield.")
+                ? strippedExpr.slice(6).trim()
+                : strippedExpr.slice(6).trim();
+            return {
+                type: "YieldExpression",
+                argument: innerArg ? this.parseExpression(innerArg) : null,
+                delegate: false,
             };
         }
 
@@ -1989,9 +2029,16 @@ export class CodonToASTParser {
         // Array Expression: (0$0), (,x), (a;b;c)
         if (strippedExpr === "0$0") return { type: "ArrayExpression", elements: [] };
         if (strippedExpr.startsWith(",") && wasWrapped) {
+            const inner = strippedExpr.slice(1).trim();
+            if (inner.startsWith("...")) {
+                return {
+                    type: "ArrayExpression",
+                    elements: [{ type: "SpreadElement", argument: this.parseExpression(inner.slice(3).trim()) }],
+                };
+            }
             return {
                 type: "ArrayExpression",
-                elements: [this.parseExpression(strippedExpr.slice(1).trim())],
+                elements: [this.parseExpression(inner)],
             };
         }
         const semiParts = splitAtLevel(strippedExpr, ";");
@@ -2091,28 +2138,27 @@ export class CodonToASTParser {
             }
         }
 
-        // Computed Member Expression: obj.[prop]
-        const compDotMatch = strippedExpr.match(/^([\s\S]+?)\.\[([\s\S]+)\]$/);
-        if (compDotMatch) {
-            return {
-                type: "MemberExpression",
-                object: this.parseExpression(compDotMatch[1]),
-                property: this.parseExpression(compDotMatch[2]),
-                computed: true,
-            };
-        }
-
-        // Standard Member Expression: obj.prop
+        // Standard and Computed Member Expressions: obj.prop, obj.[prop], obj.[0].prop
         const dotParts = splitAtLevel(strippedExpr, ".");
         if (dotParts.length > 1) {
             let node: Node = this.parseExpression(dotParts[0]);
             for (let i = 1; i < dotParts.length; i++) {
-                node = {
-                    type: "MemberExpression",
-                    object: node,
-                    property: { type: "Identifier", name: dotParts[i] },
-                    computed: false,
-                };
+                const part = dotParts[i].trim();
+                if (part.startsWith("[") && part.endsWith("]")) {
+                    node = {
+                        type: "MemberExpression",
+                        object: node,
+                        property: this.parseExpression(part.slice(1, -1).trim()),
+                        computed: true,
+                    };
+                } else {
+                    node = {
+                        type: "MemberExpression",
+                        object: node,
+                        property: { type: "Identifier", name: part },
+                        computed: false,
+                    };
+                }
             }
             return node;
         }

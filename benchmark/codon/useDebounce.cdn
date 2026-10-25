@@ -1,0 +1,14 @@
+import. {useState,useEffect} from 'react'
+
+export. fn. useDebounce value,delayMs do.
+[debouncedValue,setDebouncedValue] =: (useState value)
+(useEffect {{ => do.
+timer =: (setTimeout {{ => do.
+(setDebouncedValue value)
+}} delayMs)
+return. {{ => do.
+(clearTimeout timer)
+}}
+}} (value;delayMs))
+return. debouncedValue
+end.

@@ -1,0 +1,11 @@
+export. fn. pipe ...fns do.
+return. {{initial => (fns.reduce {{acc,fn => (fn acc)}} initial)}}
+end.
+
+export. fn. compose ...fns do.
+return. {{initial => (fns.reduceRight {{acc,fn => (fn acc)}} initial)}}
+end.
+
+double =: {{x => (x * 2)}}
+
+inc =: {{x => (x + 1)}}

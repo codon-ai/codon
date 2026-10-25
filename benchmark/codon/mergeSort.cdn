@@ -1,0 +1,29 @@
+fn. merge left,right,compare do.
+result =: (0$0)
+i =: 0
+j =: 0
+while. ((i < left.length) && (j < right.length)) do.
+if. ((compare left.[i] right.[j]) <= 0) do.
+(result.push left.[(i++)])
+else.
+(result.push right.[(j++)])
+end.
+end.
+while. (i < left.length) do.
+(result.push left.[(i++)])
+end.
+while. (j < right.length) do.
+(result.push right.[(j++)])
+end.
+return. result
+end.
+
+export. fn. mergeSort arr,compare={{a,b => ((a < b) ? (- 1) : ((a > b) ? 1 : 0))}} do.
+if. (arr.length <= 1) do.
+return. (,...arr)
+end.
+mid =: (Math.floor (arr.length / 2))
+left =: (mergeSort (arr.slice 0 mid) compare)
+right =: (mergeSort (arr.slice mid) compare)
+return. (merge left right compare)
+end.

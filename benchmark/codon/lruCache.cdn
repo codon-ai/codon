@@ -1,0 +1,33 @@
+export. class. LruCache do.
+constructor. capacity do.
+if. (capacity <= 0) do.
+throw. (new Error 'Capacity must be greater than 0')
+end.
+(this.capacity = capacity)
+(this.map = (new Map))
+end.
+method. get key do.
+if. (! (this.map.has key)) do.
+return. undefined
+end.
+val =: (this.map.get key)
+(this.map.delete key)
+(this.map.set key val)
+return. val
+end.
+method. put key,value do.
+if. (this.map.has key) do.
+(this.map.delete key)
+elseif. (this.map.size >= this.capacity) do.
+oldestKey =: (this.map.keys()).next().value
+(this.map.delete oldestKey)
+end.
+(this.map.set key value)
+end.
+method. has key do.
+return. (this.map.has key)
+end.
+get. size do.
+return. this.map.size
+end.
+end.

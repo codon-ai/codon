@@ -1,0 +1,14 @@
+import. React,{useState} from 'react'
+
+export. fn. Accordion {items} do.
+[openId,setOpenId] =: (useState '')
+toggleItem =: {{id => do.
+(setOpenId ((openId === id) ? '' : id))
+}}
+return. (<div>
+      {items.map(item => <div key={item.id}>
+          <button onClick={() => toggleItem(item.id)}>{item.title}</button>
+          {openId === item.id && <div>{item.content}</div>}
+        </div>)}
+    </div>)
+end.

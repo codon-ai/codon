@@ -1,0 +1,17 @@
+import. fs from 'node:fs'
+
+export. async_gen_fn. readLines filePath do.
+stream =: (fs.createReadStream filePath O(encoding:'utf8'))
+remainder =: ''
+for_of. chunk : stream do.
+(remainder += chunk)
+lines =: (remainder.split "\n")
+(remainder = (lines.pop() || ''))
+for_of. line : lines do.
+yield. line
+end.
+end.
+if. (remainder.length > 0) do.
+yield. remainder.trim()
+end.
+end.

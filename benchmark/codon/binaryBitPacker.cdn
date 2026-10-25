@@ -1,0 +1,35 @@
+export. class. BitPacker do.
+constructor. byteLength do.
+len =: ((byteLength === undefined) ? 16 : byteLength)
+(this.buffer = (new ArrayBuffer len))
+(this.view = (new DataView this.buffer))
+(this.bytes = (new Uint8Array this.buffer))
+end.
+method. setUint8 offset,value do.
+(this.view.setUint8 offset value)
+end.
+method. getUint8 offset do.
+return. (this.view.getUint8 offset)
+end.
+method. setBit byteOffset,bitIndex,val do.
+mask =: (Math.pow 2 bitIndex)
+current =: this.bytes.[byteOffset]
+isSet =: (((Math.floor (current / mask)) % 2) === 1)
+if. val do.
+if. (! isSet) do.
+(this.bytes.[byteOffset] = (current + mask))
+end.
+else.
+if. isSet do.
+(this.bytes.[byteOffset] = (current - mask))
+end.
+end.
+end.
+method. getBit byteOffset,bitIndex do.
+mask =: (Math.pow 2 bitIndex)
+return. (((Math.floor (this.bytes.[byteOffset] / mask)) % 2) === 1)
+end.
+method. getBuffer  do.
+return. this.buffer
+end.
+end.

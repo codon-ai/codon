@@ -1,0 +1,24 @@
+import. React,{useRef,useEffect} from 'react'
+
+export. fn. InfiniteList {items,onLoadMore,hasMore} do.
+sentinelRef =: (useRef '')
+(useEffect {{ => do.
+observer =: (new IntersectionObserver {{entries => do.
+if. (entries.[0].isIntersecting && hasMore) do.
+onLoadMore()
+end.
+}})
+if. sentinelRef.current do.
+(observer.observe sentinelRef.current)
+end.
+return. {{ => observer.disconnect()}}
+}} (hasMore;onLoadMore))
+return. (<div>
+      <ul>
+        {items.map((item, idx) => <li key={idx}>{item}</li>)}
+      </ul>
+      <div ref={sentinelRef}>
+        {hasMore ? "Loading more..." : "No more items"}
+      </div>
+    </div>)
+end.

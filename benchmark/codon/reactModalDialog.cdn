@@ -1,0 +1,26 @@
+import. React,{useEffect} from 'react'
+
+export. fn. Modal {isOpen,onClose,title,children} do.
+(useEffect {{ => do.
+if. (! isOpen) do.
+return.
+end.
+handleKeyDown =: {{e => do.
+if. (e.key === 'Escape') do.
+onClose()
+end.
+}}
+(window.addEventListener 'keydown' handleKeyDown)
+return. {{ => (window.removeEventListener 'keydown' handleKeyDown)}}
+}} (isOpen;onClose))
+if. (! isOpen) do.
+return. ''
+end.
+return. (<div onClick={onClose}>
+      <div onClick={e => e.stopPropagation()}>
+        <h3>{title}</h3>
+        <div>{children}</div>
+        <button onClick={onClose}>Close</button>
+      </div>
+    </div>)
+end.

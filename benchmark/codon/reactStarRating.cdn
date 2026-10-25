@@ -1,0 +1,11 @@
+import. React,{useState} from 'react'
+
+export. fn. StarRating {totalStars=5,value,onChange} do.
+[hoverValue,setHoverValue] =: (useState '')
+stars =: (Array.from O(length:totalStars) {{_,i => (i + 1)}})
+return. (<div>
+      {stars.map(star => <button key={star} onClick={() => onChange(star)} onMouseEnter={() => setHoverValue(star)} onMouseLeave={() => setHoverValue(null)}>
+          {(hoverValue ?? value) >= star ? "★" : "☆"}
+        </button>)}
+    </div>)
+end.

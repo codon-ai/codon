@@ -1,0 +1,23 @@
+import. {useState} from 'react'
+
+export. fn. useLocalStorage key,initialValue do.
+[storedValue,setStoredValue] =: (useState {{ => do.
+try. do.
+item =: (window.localStorage.getItem key)
+return. (item ? (JSON.parse item) : initialValue)
+catch. e do.
+(console.error e)
+return. initialValue
+end.
+}})
+setValue =: {{value => do.
+try. do.
+valueToStore =: (((typeof value) === 'function') ? (value storedValue) : value)
+(setStoredValue valueToStore)
+(window.localStorage.setItem key (JSON.stringify valueToStore))
+catch. e do.
+(console.error e)
+end.
+}}
+return. (storedValue;setValue)
+end.

@@ -1,0 +1,81 @@
+class. TreeNode do.
+constructor. value do.
+(this.value = value)
+(this.left = '')
+(this.right = '')
+end.
+end.
+
+export. class. BinarySearchTree do.
+constructor. compare={{a,b => ((a < b) ? (- 1) : ((a > b) ? 1 : 0))}} do.
+(this.root = '')
+(this.compare = compare)
+end.
+method. insert value do.
+newNode =: (new TreeNode value)
+if. (! this.root) do.
+(this.root = newNode)
+return.
+end.
+cur =: this.root
+while. true do.
+if. ((this.compare value cur.value) < 0) do.
+if. (! cur.left) do.
+(cur.left = newNode)
+return.
+end.
+(cur = cur.left)
+else.
+if. (! cur.right) do.
+(cur.right = newNode)
+return.
+end.
+(cur = cur.right)
+end.
+end.
+end.
+method. contains value do.
+cur =: this.root
+while. cur do.
+cmp =: (this.compare value cur.value)
+if. (cmp === 0) do.
+return. true
+end.
+(cur = ((cmp < 0) ? cur.left : cur.right))
+end.
+return. false
+end.
+method. inOrder  do.
+result =: (0$0)
+traverse =: {{node => do.
+if. (! node) do.
+return.
+end.
+(traverse node.left)
+(result.push node.value)
+(traverse node.right)
+}}
+(traverse this.root)
+return. result
+end.
+method. min  do.
+if. (! this.root) do.
+return. undefined
+end.
+cur =: this.root
+while. cur.left do.
+(cur = cur.left)
+end.
+return. cur.value
+end.
+method. max  do.
+if. (! this.root) do.
+return. undefined
+end.
+cur =: this.root
+while. cur.right do.
+(cur = cur.right)
+end.
+return. cur.value
+end.
+end.

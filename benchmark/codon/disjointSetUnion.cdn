@@ -1,0 +1,31 @@
+export. class. DisjointSetUnion do.
+constructor. size do.
+(this.parent = (Array.from O(length:size) {{_,i => i}}))
+(this.rank = ((new Array size).fill 0))
+end.
+method. find i do.
+if. (this.parent.[i] !== i) do.
+(this.parent.[i] = (this.find this.parent.[i]))
+end.
+return. this.parent.[i]
+end.
+method. union i,j do.
+rootI =: (this.find i)
+rootJ =: (this.find j)
+if. (rootI === rootJ) do.
+return. false
+end.
+if. (this.rank.[rootI] < this.rank.[rootJ]) do.
+(this.parent.[rootI] = rootJ)
+elseif. (this.rank.[rootI] > this.rank.[rootJ]) do.
+(this.parent.[rootJ] = rootI)
+else.
+(this.parent.[rootJ] = rootI)
+(this.rank.[rootI]++)
+end.
+return. true
+end.
+method. connected i,j do.
+return. ((this.find i) === (this.find j))
+end.
+end.

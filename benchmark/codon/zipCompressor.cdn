@@ -1,0 +1,14 @@
+import. fs from 'node:fs'
+
+import. zlib from 'node:zlib'
+
+import. {pipeline} from 'node:stream/promises'
+
+export. async_fn. gzipFile sourcePath,destPath do.
+readStream =: (fs.createReadStream sourcePath)
+gzipStream =: zlib.createGzip()
+writeStream =: (fs.createWriteStream destPath)
+@ (pipeline readStream gzipStream writeStream)
+stats =: @ (fs.promises.stat destPath)
+return. stats.size
+end.

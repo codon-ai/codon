@@ -1,0 +1,41 @@
+import. http from 'node:http'
+
+clients =: (new Set)
+
+export. fn. broadcastEvent event,data do.
+payload =: `event: ${event}\ndata: ${(JSON.stringify data)}\n\n`
+for_of. client : clients do.
+(client.write payload)
+end.
+end.
+
+server =: (http.createServer {{req,res => do.
+if. ((req.method === 'GET') && (req.url === '/events')) do.
+(res.writeHead 200 O('Content-Type':'text/event-stream';'Cache-Control':'no-cache';Connection:'keep-alive'))
+(clients.add res)
+(req.on 'close' {{ => do.
+(clients.delete res)
+}})
+return.
+end.
+if. ((req.method === 'POST') && (req.url === '/broadcast')) do.
+body =: ''
+(req.on 'data' {{chunk => do.
+(body += chunk)
+}})
+(req.on 'end' {{ => do.
+try. do.
+{event,data} =: (JSON.parse body)
+(broadcastEvent event data)
+(res.writeHead 200 O('Content-Type':'application/json'))
+(res.end (JSON.stringify O(sent:true;clientCount:clients.size)))
+catch. err do.
+(res.writeHead 400).end()
+end.
+}})
+return.
+end.
+(res.writeHead 404).end()
+}})
+
+(server.listen 8083)

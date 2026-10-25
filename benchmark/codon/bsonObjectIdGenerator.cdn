@@ -1,0 +1,45 @@
+import. crypto from 'node:crypto'
+
+objectIdCounter =: (Math.floor (Math.random() * 16777216))
+
+export. class. ObjectId do.
+constructor. id do.
+if. ((typeof id) === 'string') do.
+if. (! (ObjectId.isValid id)) do.
+throw. (new Error 'Invalid ObjectId hex string')
+end.
+(this.bytes = (Buffer.from id 'hex'))
+elseif. (Buffer.isBuffer id) do.
+(this.bytes = id)
+else.
+timeBuf =: (Buffer.alloc 4)
+(timeBuf.writeUInt32BE (Math.floor (Date.now() / 1000)) 0)
+randomBuf =: (crypto.randomBytes 5)
+countBuf =: (Buffer.alloc 3)
+(objectIdCounter = ((objectIdCounter + 1) % 16777216))
+(countBuf.writeUIntBE objectIdCounter 0 3)
+(this.bytes = (Buffer.concat (timeBuf;randomBuf;countBuf)))
+end.
+end.
+method. toString  do.
+return. (this.bytes.toString 'hex')
+end.
+method. getTimestamp  do.
+return. (new Date ((this.bytes.readUInt32BE 0) * 1000))
+end.
+method. isValid id do.
+if. (((typeof id) !== 'string') || (id.length !== 24)) do.
+return. false
+end.
+for. i =: 0 ; (i < id.length) ; (i++) do.
+ch =: (id.charCodeAt i)
+isNum =: ((ch >= 48) && (ch <= 57))
+isLower =: ((ch >= 97) && (ch <= 102))
+isUpper =: ((ch >= 65) && (ch <= 70))
+if. (((! isNum) && (! isLower)) && (! isUpper)) do.
+return. false
+end.
+end.
+return. true
+end.
+end.

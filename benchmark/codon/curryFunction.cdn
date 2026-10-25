@@ -1,0 +1,13 @@
+export. fn. curry targetFn do.
+fn. curried ...args do.
+if. (args.length >= targetFn.length) do.
+return. (targetFn ...args)
+end.
+return. {{...nextArgs => (curried ...args ...nextArgs)}}
+end.
+return. curried
+end.
+
+add3 =: {{a,b,c => ((a + b) + c)}}
+
+curriedAdd =: (curry add3)

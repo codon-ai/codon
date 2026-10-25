@@ -1,0 +1,7 @@
+export. fn. withTimeout promise,timeoutMs,errorMessage='Operation timed out' do.
+timeoutPromise =: (new Promise {{_,reject => do.
+timer =: (setTimeout {{ => (reject (new Error errorMessage))}} timeoutMs)
+(promise.finally {{ => (clearTimeout timer)}})
+}})
+return. (Promise.race (promise;timeoutPromise))
+end.

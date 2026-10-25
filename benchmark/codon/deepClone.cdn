@@ -1,0 +1,31 @@
+export. fn. deepClone val,hash do.
+if. (hash === undefined) do.
+(hash = (new WeakMap))
+end.
+if. ((val === '') || ((typeof val) !== 'object')) do.
+return. val
+end.
+if. (val.constructor === Date) do.
+return. (new Date val.getTime())
+end.
+if. (val.constructor === RegExp) do.
+return. (new RegExp val.source val.flags)
+end.
+if. (hash.has val) do.
+return. (hash.get val)
+end.
+if. (Array.isArray val) do.
+arr =: (0$0)
+(hash.set val arr)
+for_of. item : val do.
+(arr.push (deepClone item hash))
+end.
+return. arr
+end.
+clone =: (Object.create (Object.getPrototypeOf val))
+(hash.set val clone)
+for_of. [key,value] : (Object.entries val) do.
+(clone.[key] = (deepClone value hash))
+end.
+return. clone
+end.

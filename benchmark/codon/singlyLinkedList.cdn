@@ -1,0 +1,81 @@
+class. ListNode do.
+constructor. value do.
+(this.value = value)
+(this.next = '')
+end.
+end.
+
+export. class. SinglyLinkedList do.
+constructor.  do.
+(this.head = '')
+(this.tail = '')
+(this.length = 0)
+end.
+method. append value do.
+node =: (new ListNode value)
+if. (! this.head) do.
+(this.head = node)
+(this.tail = node)
+else.
+(this.tail.next = node)
+(this.tail = node)
+end.
+(this.length++)
+end.
+method. prepend value do.
+node =: (new ListNode value)
+if. (! this.head) do.
+(this.head = node)
+(this.tail = node)
+else.
+(node.next = this.head)
+(this.head = node)
+end.
+(this.length++)
+end.
+method. delete value do.
+if. (! this.head) do.
+return. false
+end.
+if. (this.head.value === value) do.
+(this.head = this.head.next)
+if. (! this.head) do.
+(this.tail = '')
+end.
+(this.length--)
+return. true
+end.
+cur =: this.head
+while. (cur.next && (cur.next.value !== value)) do.
+(cur = cur.next)
+end.
+if. cur.next do.
+if. (cur.next === this.tail) do.
+(this.tail = cur)
+end.
+(cur.next = cur.next.next)
+(this.length--)
+return. true
+end.
+return. false
+end.
+method. find predicate do.
+cur =: this.head
+while. cur do.
+if. (predicate cur.value) do.
+return. cur.value
+end.
+(cur = cur.next)
+end.
+return. undefined
+end.
+method. toArray  do.
+res =: (0$0)
+cur =: this.head
+while. cur do.
+(res.push cur.value)
+(cur = cur.next)
+end.
+return. res
+end.
+end.

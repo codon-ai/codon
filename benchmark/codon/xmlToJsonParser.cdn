@@ -1,0 +1,29 @@
+export. fn. parseXml xml do.
+result =: O''
+regex =: /<([a-zA-Z0-9_]+)>([^<]*)<\/\1>/g
+match =: ''
+while. ((match = (regex.exec xml)) !== '') do.
+tag =: match.[1]
+text =: match.[2].trim()
+val =: ''
+if. ((! (isNaN (Number text))) && (text !== '')) do.
+(val = (Number text))
+elseif. (text === 'true') do.
+(val = true)
+elseif. (text === 'false') do.
+(val = false)
+else.
+(val = text)
+end.
+if. (tag in result) do.
+if. (Array.isArray result.[tag]) do.
+(result.[tag].push val)
+else.
+(result.[tag] = (result.[tag];val))
+end.
+else.
+(result.[tag] = val)
+end.
+end.
+return. result
+end.

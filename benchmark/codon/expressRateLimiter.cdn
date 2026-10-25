@@ -1,0 +1,17 @@
+export. fn. createRateLimiter options do.
+store =: (new Map)
+return. {{fn req,res,next => do.
+ip =: ((req.ip || req.socket?.remoteAddress) || 'unknown')
+now =: Date.now()
+entry =: (store.get ip)
+if. ((! entry) || (now > entry.resetTime)) do.
+(store.set ip O(count:1;resetTime:(now + options.windowMs)))
+return. next()
+end.
+if. (entry.count >= options.maxRequests) do.
+return. ((res.status 429).json O(error:'Too many requests, please try again later'))
+end.
+(entry.count++)
+next()
+}}
+end.

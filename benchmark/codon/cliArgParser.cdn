@@ -1,0 +1,28 @@
+export. fn. parseArgs argv do.
+flags =: O''
+options =: O''
+positional =: (0$0)
+for. i =: 0 ; (i < argv.length) ; (i++) do.
+arg =: argv.[i]
+if. (arg.startsWith '--') do.
+if. (arg.includes '=') do.
+eqIdx =: (arg.indexOf '=')
+key =: (arg.slice 2 eqIdx)
+value =: (arg.slice (eqIdx + 1))
+(options.[key] = value)
+else.
+key =: (arg.slice 2)
+if. (((i + 1) < argv.length) && (! (argv.[(i + 1)].startsWith '-'))) do.
+(options.[key] = argv.[(++i)])
+else.
+(flags.[key] = true)
+end.
+end.
+elseif. (arg.startsWith '-') do.
+(flags.[(arg.slice 1)] = true)
+else.
+(positional.push arg)
+end.
+end.
+return. O(flags;options;positional)
+end.

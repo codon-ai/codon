@@ -1,0 +1,16 @@
+import. crypto from 'node:crypto'
+
+export. class. WebhookDispatcher do.
+constructor. secret do.
+(this.secret = secret)
+end.
+method. computeSignature payload do.
+return. (((crypto.createHmac 'sha256' this.secret).update payload).digest 'hex')
+end.
+async_method. dispatch targetUrl,eventName,data do.
+body =: (JSON.stringify O(event:eventName;data;timestamp:Date.now()))
+signature =: (this.computeSignature body)
+response =: @ (fetch targetUrl O(method:'POST';headers:O('Content-Type':'application/json';'X-Webhook-Signature':signature;'X-Webhook-Event':eventName);body))
+return. O(status:response.status;ok:response.ok)
+end.
+end.

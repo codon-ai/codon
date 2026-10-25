@@ -1,0 +1,14 @@
+export. fn. createAuthMiddleware validToken do.
+return. {{fn req,res,next => do.
+auth =: req.headers.authorization
+if. ((! auth) || (! (auth.startsWith 'Bearer '))) do.
+return. ((res.status 401).json O(error:'Unauthorized: Missing or malformed token'))
+end.
+token =: (auth.slice 7)
+if. (token !== validToken) do.
+return. ((res.status 403).json O(error:'Forbidden: Invalid token'))
+end.
+(req.user = O(token;authenticated:true))
+next()
+}}
+end.

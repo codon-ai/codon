@@ -1,0 +1,44 @@
+export. class. SemVer do.
+constructor. major,minor,patch do.
+(this.major = major)
+(this.minor = minor)
+(this.patch = patch)
+end.
+method. parse versionStr do.
+parts =: (versionStr.split '.')
+if. (parts.length !== 3) do.
+throw. (new Error 'Invalid semver string')
+end.
+major =: (Number parts.[0])
+minor =: (Number parts.[1])
+patch =: (Number parts.[2])
+if. (((isNaN major) || (isNaN minor)) || (isNaN patch)) do.
+throw. (new Error 'Invalid semver string')
+end.
+return. (new SemVer major minor patch)
+end.
+method. compare other do.
+if. (this.major !== other.major) do.
+return. ((this.major > other.major) ? 1 : (- 1))
+end.
+if. (this.minor !== other.minor) do.
+return. ((this.minor > other.minor) ? 1 : (- 1))
+end.
+if. (this.patch !== other.patch) do.
+return. ((this.patch > other.patch) ? 1 : (- 1))
+end.
+return. 0
+end.
+method. gt other do.
+return. ((this.compare other) === 1)
+end.
+method. lt other do.
+return. ((this.compare other) === (- 1))
+end.
+method. eq other do.
+return. ((this.compare other) === 0)
+end.
+method. toString  do.
+return. `${this.major}.${this.minor}.${this.patch}`
+end.
+end.

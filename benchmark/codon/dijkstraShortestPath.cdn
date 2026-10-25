@@ -1,0 +1,34 @@
+export. fn. dijkstra graph,startNode do.
+distances =: O''
+previous =: O''
+unvisited =: (new Set (Object.keys graph))
+for_of. node : unvisited do.
+(distances.[node] = Infinity)
+(previous.[node] = '')
+end.
+(distances.[startNode] = 0)
+while. (unvisited.size > 0) do.
+curr =: ''
+minDistance =: Infinity
+for_of. node : unvisited do.
+if. (distances.[node] < minDistance) do.
+(minDistance = distances.[node])
+(curr = node)
+end.
+end.
+if. ((curr === '') || (minDistance === Infinity)) do.
+break.
+end.
+(unvisited.delete curr)
+for_of. [neighbor,weight] : (Object.entries (graph.[curr] || O'')) do.
+if. (unvisited.has neighbor) do.
+alt =: (distances.[curr] + weight)
+if. (alt < distances.[neighbor]) do.
+(distances.[neighbor] = alt)
+(previous.[neighbor] = curr)
+end.
+end.
+end.
+end.
+return. O(distances;previous)
+end.

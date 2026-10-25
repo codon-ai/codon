@@ -1,0 +1,59 @@
+export. class. MinBinaryHeap do.
+constructor. compare={{a,b => ((a < b) ? (- 1) : ((a > b) ? 1 : 0))}} do.
+(this.heap = (0$0))
+(this.compare = compare)
+end.
+method. push val do.
+(this.heap.push val)
+idx =: (this.heap.length - 1)
+while. (idx > 0) do.
+parentIdx =: (Math.floor ((idx - 1) / 2))
+if. ((this.compare this.heap.[idx] this.heap.[parentIdx]) < 0) do.
+tmp =: this.heap.[idx]
+(this.heap.[idx] = this.heap.[parentIdx])
+(this.heap.[parentIdx] = tmp)
+(idx = parentIdx)
+else.
+break.
+end.
+end.
+end.
+method. pop  do.
+if. (this.heap.length === 0) do.
+return. undefined
+end.
+min =: this.heap.[0]
+end =: this.heap.pop()
+if. ((this.heap.length > 0) && (end !== undefined)) do.
+(this.heap.[0] = end)
+idx =: 0
+len =: this.heap.length
+while. true do.
+smallest =: idx
+left =: ((2 * idx) + 1)
+right =: ((2 * idx) + 2)
+if. ((left < len) && ((this.compare this.heap.[left] this.heap.[smallest]) < 0)) do.
+(smallest = left)
+end.
+if. ((right < len) && ((this.compare this.heap.[right] this.heap.[smallest]) < 0)) do.
+(smallest = right)
+end.
+if. (smallest !== idx) do.
+tmp =: this.heap.[idx]
+(this.heap.[idx] = this.heap.[smallest])
+(this.heap.[smallest] = tmp)
+(idx = smallest)
+else.
+break.
+end.
+end.
+end.
+return. min
+end.
+method. peek  do.
+return. this.heap.[0]
+end.
+get. size do.
+return. this.heap.length
+end.
+end.

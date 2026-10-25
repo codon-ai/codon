@@ -1,0 +1,28 @@
+export. fn. asyncDebounce fn,waitMs do.
+timer =: ''
+pendingResolvers =: (0$0)
+return. {{fn ...args => do.
+return. (new Promise {{resolve,reject => do.
+(pendingResolvers.push O(resolve;reject))
+if. timer do.
+(clearTimeout timer)
+end.
+(timer = (setTimeout {{async => do.
+try. do.
+result =: @ (fn ...args)
+current =: pendingResolvers
+(pendingResolvers = (0$0))
+for_of. p : current do.
+(p.resolve result)
+end.
+catch. error do.
+current =: pendingResolvers
+(pendingResolvers = (0$0))
+for_of. p : current do.
+(p.reject error)
+end.
+end.
+}} waitMs))
+}})
+}}
+end.

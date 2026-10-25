@@ -1,0 +1,18 @@
+export. fn. binarySearch arr,target,compare do.
+cmp =: (compare || {{a,b => ((a < b) ? (- 1) : ((a > b) ? 1 : 0))}})
+low =: 0
+high =: (arr.length - 1)
+while. (low <= high) do.
+mid =: (Math.floor ((low + high) / 2))
+res =: (cmp arr.[mid] target)
+if. (res === 0) do.
+return. mid
+end.
+if. (res < 0) do.
+(low = (mid + 1))
+else.
+(high = (mid - 1))
+end.
+end.
+return. (- 1)
+end.

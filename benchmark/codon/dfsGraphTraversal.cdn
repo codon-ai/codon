@@ -1,0 +1,16 @@
+export. fn. dfs graph,startNode do.
+visited =: (new Set)
+visitedOrder =: (0$0)
+fn. traverse node do.
+if. (visited.has node) do.
+return.
+end.
+(visited.add node)
+(visitedOrder.push node)
+for_of. neighbor : (graph.[node] || (0$0)) do.
+(traverse neighbor)
+end.
+end.
+(traverse startNode)
+return. visitedOrder
+end.

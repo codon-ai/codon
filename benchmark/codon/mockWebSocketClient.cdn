@@ -1,0 +1,45 @@
+import. {WebSocket} from 'ws'
+
+export. class. ReconnectingWebSocket do.
+constructor. url,maxRetries=5,baseDelayMs=1000 do.
+(this.url = url)
+(this.maxRetries = maxRetries)
+(this.baseDelayMs = baseDelayMs)
+(this.socket = '')
+(this.retryCount = 0)
+(this.isClosedManually = false)
+(this.messageListeners = (0$0))
+end.
+method. connect  do.
+(this.socket = (new WebSocket this.url))
+(this.socket.on 'open' {{ => do.
+(this.retryCount = 0)
+}})
+(this.socket.on 'message' {{data => do.
+msg =: (String data)
+for_of. cb : this.messageListeners do.
+(cb msg)
+end.
+}})
+(this.socket.on 'close' {{ => do.
+if. ((! this.isClosedManually) && (this.retryCount < this.maxRetries)) do.
+delay =: (this.baseDelayMs * (Math.pow 2 (this.retryCount++)))
+(setTimeout {{ => this.connect()}} delay)
+end.
+}})
+end.
+method. send data do.
+if. (this.socket && (this.socket.readyState === WebSocket.OPEN)) do.
+(this.socket.send data)
+end.
+end.
+method. onMessage cb do.
+(this.messageListeners.push cb)
+end.
+method. close  do.
+(this.isClosedManually = true)
+if. this.socket do.
+this.socket.close()
+end.
+end.
+end.

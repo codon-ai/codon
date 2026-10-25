@@ -1,0 +1,28 @@
+import. React,{useState,useRef,useEffect} from 'react'
+
+export. fn. Dropdown {options,selected,onSelect} do.
+[isOpen,setIsOpen] =: (useState false)
+containerRef =: (useRef '')
+(useEffect {{ => do.
+handleMouseDown =: {{e => do.
+if. (containerRef.current && (! (containerRef.current.contains e.target))) do.
+(setIsOpen false)
+end.
+}}
+(document.addEventListener 'mousedown' handleMouseDown)
+return. {{ => (document.removeEventListener 'mousedown' handleMouseDown)}}
+}} (0$0))
+return. (<div ref={containerRef}>
+      <button onClick={() => setIsOpen(!isOpen)}>
+        {selected || "Select an option"}
+      </button>
+      {isOpen && <ul>
+          {options.map(opt => <li key={opt} onClick={() => {
+      onSelect(opt);
+      setIsOpen(false);
+    }}>
+              {opt}
+            </li>)}
+        </ul>}
+    </div>)
+end.

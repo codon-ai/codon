@@ -1,0 +1,28 @@
+export. fn. deepEqual a,b do.
+if. (Object.is a b) do.
+return. true
+end.
+if. ((((a === '') || ((typeof a) !== 'object')) || (b === '')) || ((typeof b) !== 'object')) do.
+return. false
+end.
+if. (a.constructor !== b.constructor) do.
+return. false
+end.
+if. ((a instanceof Date) && (b instanceof Date)) do.
+return. (a.getTime() === b.getTime())
+end.
+if. ((a instanceof RegExp) && (b instanceof RegExp)) do.
+return. (a.toString() === b.toString())
+end.
+keysA =: (Object.keys a)
+keysB =: (Object.keys b)
+if. (keysA.length !== keysB.length) do.
+return. false
+end.
+for_of. key : keysA do.
+if. ((! (Object.prototype.hasOwnProperty.call b key)) || (! (deepEqual a.[key] b.[key]))) do.
+return. false
+end.
+end.
+return. true
+end.

@@ -1,0 +1,32 @@
+export. class. UrlRouter do.
+constructor.  do.
+(this.routes = (0$0))
+end.
+method. add pattern,handler do.
+parts =: ((pattern.split '/').filter Boolean)
+(this.routes.push O(parts;handler))
+end.
+method. match pathname do.
+pathParts =: ((pathname.split '/').filter Boolean)
+for_of. route : this.routes do.
+if. (route.parts.length !== pathParts.length) do.
+continue.
+end.
+params =: O''
+matched =: true
+for. i =: 0 ; (i < route.parts.length) ; (i++) do.
+seg =: route.parts.[i]
+if. (seg.startsWith ':') do.
+(params.[(seg.slice 1)] = pathParts.[i])
+elseif. (seg !== pathParts.[i]) do.
+(matched = false)
+break.
+end.
+end.
+if. matched do.
+return. O(handler:route.handler;params)
+end.
+end.
+return. ''
+end.
+end.

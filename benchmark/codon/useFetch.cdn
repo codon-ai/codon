@@ -1,0 +1,26 @@
+import. {useState,useEffect} from 'react'
+
+export. fn. useFetch url do.
+[data,setData] =: (useState '')
+[error,setError] =: (useState '')
+[loading,setLoading] =: (useState true)
+(useEffect {{ => do.
+controller =: (new AbortController)
+(setLoading true)
+(((((fetch url O(signal:controller.signal)).then {{res => res.json()}}).then {{json => do.
+(setData json)
+(setError '')
+}}).catch {{err => do.
+if. (err.name !== 'AbortError') do.
+(setError err)
+(setData '')
+end.
+}}).finally {{ => do.
+(setLoading false)
+}})
+return. {{ => do.
+controller.abort()
+}}
+}} (,url))
+return. O(data;error;loading)
+end.

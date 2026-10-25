@@ -1,0 +1,36 @@
+import. express from 'express'
+
+import. crypto from 'node:crypto'
+
+app =: express()
+
+MAX_SIZE =: ((2 * 1024) * 1024)
+
+(app.post '/upload' {{req,res => do.
+chunks =: (0$0)
+totalBytes =: 0
+tooLarge =: false
+(req.on 'data' {{chunk => do.
+if. tooLarge do.
+return.
+end.
+(totalBytes += chunk.length)
+if. (totalBytes > MAX_SIZE) do.
+(tooLarge = true)
+((res.status 413).json O(error:'Payload too large: exceeds 2MB limit'))
+req.destroy()
+return.
+end.
+(chunks.push chunk)
+}})
+(req.on 'end' {{ => do.
+if. tooLarge do.
+return.
+end.
+buffer =: (Buffer.concat chunks)
+sha1 =: (((crypto.createHash 'sha1').update buffer).digest 'hex')
+((res.status 201).json O(success:true;size:buffer.length;sha1))
+}})
+}})
+
+(app.listen 8082)

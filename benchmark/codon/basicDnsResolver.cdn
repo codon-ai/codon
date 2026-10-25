@@ -1,0 +1,8 @@
+import. dns from 'node:dns/promises'
+
+export. async_fn. resolveDomainRecords domain do.
+[aResult,mxResult] =: @ (Promise.allSettled ((dns.resolve4 domain);(dns.resolveMx domain)))
+ipv4 =: ((aResult.status === 'fulfilled') ? aResult.value : (0$0))
+mxRecords =: ((mxResult.status === 'fulfilled') ? ((Array.from mxResult.value).sort {{a,b => (a.priority - b.priority)}}) : (0$0))
+return. O(ipv4;mxRecords)
+end.

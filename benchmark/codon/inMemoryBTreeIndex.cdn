@@ -1,0 +1,54 @@
+export. class. IndexedTable do.
+constructor. indexFields do.
+(this.indexFields = indexFields)
+(this.records = (new Map))
+(this.indices = (new Map))
+for_of. field : indexFields do.
+(this.indices.set field (new Map))
+end.
+end.
+method. insert row do.
+(this.records.set row.id row)
+for_of. field : this.indexFields do.
+val =: row.[field]
+indexMap =: (this.indices.get field)
+if. (! (indexMap.has val)) do.
+(indexMap.set val (new Set))
+end.
+((indexMap.get val).add row.id)
+end.
+end.
+method. findById id do.
+return. (this.records.get id)
+end.
+method. findBy field,val do.
+indexMap =: (this.indices.get field)
+if. ((! indexMap) || (! (indexMap.has val))) do.
+return. (0$0)
+end.
+ids =: (indexMap.get val)
+results =: (0$0)
+for_of. id : ids do.
+record =: (this.records.get id)
+if. record do.
+(results.push record)
+end.
+end.
+return. results
+end.
+method. delete id do.
+record =: (this.records.get id)
+if. (! record) do.
+return. false
+end.
+(this.records.delete id)
+for_of. field : this.indexFields do.
+indexMap =: (this.indices.get field)
+val =: record.[field]
+if. (indexMap && (indexMap.has val)) do.
+((indexMap.get val).delete id)
+end.
+end.
+return. true
+end.
+end.
