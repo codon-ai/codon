@@ -2,7 +2,7 @@
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
 ## Revision 1a (successful)
-- **Tokens:** 3245
+- **Tokens:** 3903
 
 - **Revision Idea**: Introduce native concise conditional expressions (unwrapped right-associative ternaries `test ? cons : alt`, chained ternary expressions `a ? b : c ? d : e`) and first-class logical assignment operators (`??=`, `||=`, `&&=`), eliminating mandatory parenthesization and enabling compact fullstack state fallbacks.
 - **Rationale**: In AI fullstack development (React JSX conditional classes and component rendering, Express/Next.js API route status codes and error responses, configuration defaults, cache lookups, and options validation), conditional expressions and nullish assignments appear continuously. Previously in Codon:
