@@ -287,15 +287,23 @@ Codon supports full ES6 destructuring:
 Monadic verbs operate on their right-hand argument with zero wrapping boilerplate:
 
 ### Await (`@` and `@:`)
-Revision 1a introduced `@` and `@:` as prefix monadic await verbs, eliminating verbose `(await expr)` syntax:
+Revisions 1a and 19a establish `@` and `@:` as prefix monadic await verbs, eliminating verbose `(await expr)` syntax across standalone statements, variable initializers, return statements, member assignments, and concise arrow closures:
 
 ```codon
 NB. Standalone await
 @ (delay 100)
 
-NB. Await assignment
+NB. Await assignment & member mutation
 response =: @ (fetch url)
 data =: @ (response.json())
+this.socket = @ (createSocket this.url)
+
+NB. Return await
+return. @ res.json()
+return. @ (fetch url)
+
+NB. Concise arrow closure await
+getter =: {{async => @ (loadData())}}
 
 NB. Colon-inflected verb form
 user =: @: (getUser id)
@@ -306,6 +314,10 @@ Transpiles to:
 await delay(100);
 const response = await fetch(url);
 const data = await response.json();
+this.socket = await createSocket(this.url);
+return await res.json();
+return await fetch(url);
+const getter = async () => await loadData();
 const user = await getUser(id);
 ```
 
@@ -607,6 +619,8 @@ end.
 
 ```codon
 return. result
+return. @ (res.json())
+return. @ res.json()
 return.
 throw. (new Error 'Operation failed')
 ```

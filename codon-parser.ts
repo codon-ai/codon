@@ -1596,7 +1596,7 @@ export class CodonToASTParser {
         // Update Expression: (++x), (--x), (x++), (x--), x++, x--, ++x, --x
         if (strippedExpr.endsWith("++") && strippedExpr.length > 2) {
             const inner = strippedExpr.slice(0, -2).trim();
-            if (inner && !inner.includes(",") && !inner.includes(";")) {
+            if (inner && !inner.includes(",") && !inner.includes(";") && splitAtLevel(inner, " ").length === 1) {
                 return {
                     type: "UpdateExpression",
                     operator: "++",
@@ -1607,7 +1607,7 @@ export class CodonToASTParser {
         }
         if (strippedExpr.endsWith("--") && strippedExpr.length > 2) {
             const inner = strippedExpr.slice(0, -2).trim();
-            if (inner && !inner.includes(",") && !inner.includes(";")) {
+            if (inner && !inner.includes(",") && !inner.includes(";") && splitAtLevel(inner, " ").length === 1) {
                 return {
                     type: "UpdateExpression",
                     operator: "--",
@@ -1618,7 +1618,7 @@ export class CodonToASTParser {
         }
         if (strippedExpr.startsWith("++") && strippedExpr.length > 2) {
             const inner = strippedExpr.slice(2).trim();
-            if (inner && !inner.includes(",") && !inner.includes(";")) {
+            if (inner && !inner.includes(",") && !inner.includes(";") && splitAtLevel(inner, " ").length === 1) {
                 return {
                     type: "UpdateExpression",
                     operator: "++",
@@ -1629,7 +1629,7 @@ export class CodonToASTParser {
         }
         if (strippedExpr.startsWith("--") && strippedExpr.length > 2) {
             const inner = strippedExpr.slice(2).trim();
-            if (inner && !inner.includes(",") && !inner.includes(";")) {
+            if (inner && !inner.includes(",") && !inner.includes(";") && splitAtLevel(inner, " ").length === 1) {
                 return {
                     type: "UpdateExpression",
                     operator: "--",
