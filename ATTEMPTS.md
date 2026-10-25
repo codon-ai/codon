@@ -1,6 +1,42 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
+## Revision 10a (successful)
+- **Tokens:** 3260
+
+- **Revision Idea**: Introduce concise unparenthesized member assignment (`this.prop = val`, `this.prop =: val`, `obj.prop = val`, `obj.[key] = val`), variable reassignment (`x = val`), and compound assignment statements (`count += 1`, `len -= 1`, `total *= 2`) in Codon, eliminating mandatory outer wrapping parentheses `(this.prop = val)` and `(count += 1)`.
+- **Rationale**: In modern AI fullstack web development (React component refs, event handlers, Express/Koa request/response headers and status codes, WebSocket client connection state management, database query builders, in-memory indexes, and algorithmic pipelines), member assignments (`this.socket = null`, `this.retryCount = 0`, `res.statusCode = 200`, `headers.host = host`, `node.keys[i] = key`), variable reassignments (`idx = parentIdx`), and in-place compound mutations (`count += 1`, `nextId.current += 1`, `len -= 1`) are among the most frequent statement-level operations. Prior to Revision 10a, Codon suffered from two major limitations:
+  1. Codon strictly required every assignment statement to be wrapped in outer parentheses `(this.socket = null)`, `(this.retryCount = 0)`, `(count += 1)`. Omitting wrapping parentheses (such as `this.socket =: null`, `this.retryCount = 0`, or `count += 1`) caused `parseStatement` to misinterpret the assignment as a `VariableDeclaration` (`const this.socket = null;` or `const count + = 1;`), triggering fatal Babel parser syntax errors (`Unexpected keyword 'this'` or `Missing initializer in const declaration`).
+  2. `JSToCodonTranslator` unconditionally emitted redundant wrapping parentheses for all assignment statements `(${this.transpile(node.left)} ${node.operator} ${this.transpile(node.right)})`, inflating token counts across classes, handlers, loops, and state machines in fullstack applications.
+  By enabling unparenthesized member and compound assignment parsing at statement level and emitting concise `this.prop = val`, `obj.prop = val`, and `count += val` directly:
+  - Unparenthesized member assignment: `this.socket = null`, `this.socket =: null`, `this.retryCount = 0`, `this.isClosedManually = true`
+  - Unparenthesized property mutation: `res.statusCode = 200`, `headers.host = host`
+  - Unparenthesized computed member assignment: `this.heap.[idx] = tmp`, `records.[id] = row`
+  - Unparenthesized variable reassignment: `idx = parentIdx`, `smallest = left`
+  - Unparenthesized compound mutation: `count += 1`, `total -= fee`, `step *= 2`
+  - Full roundtrip fidelity: JS ➔ Codon (concise unparenthesized assignment emission) ➔ JS (100% Babel parser validation).
+  - Retains 100% backward compatibility with legacy parenthesized assignment expressions `(this.socket = null)`.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates 2 wrapping tokens `(` and `)` on every member assignment, reassignment, and compound mutation statement (e.g. `(this.socket = null)` [6 tokens] -> `this.socket = null` [4 tokens], saving ~33% tokens per assignment).
+  - Eliminates 2 wrapping tokens per compound mutation statement (e.g. `(count += 1)` [5 tokens] -> `count += 1` [3 tokens], saving 40% tokens).
+  - Prevents AST corruption, invalid `const this.socket` declarations, and fatal syntax errors across LLM fullstack code generation.
+- **Concrete Syntax Changes**:
+  - `codon-parser.ts`: Updated `parseStatement` to detect member assignments (targets containing `.` or `[` outside destructuring, or starting with `this.`), variable reassignments (plain `=` without pattern markers), and compound assignment operators (`+=`, `-=`, `*=`, `/=`, `%=`, `**=`, `??=`, `||=`, `&&=`), cleanly constructing `ExpressionStatement` nodes with `AssignmentExpression` instead of falling through to `VariableDeclaration`. Added support for `=:` on member assignments (`this.socket =: null` -> `this.socket = null;`).
+  - `transpilers.ts`: Updated `JSToCodonTranslator` in `ExpressionStatement` to emit concise unparenthesized `${this.transpile(node.expression.left)} ${node.expression.operator} ${this.transpile(node.expression.right)}` when translating statement-level assignments.
+  - Examples:
+    - Old Codon: `(this.socket = null)`
+    - New Codon: `this.socket = null` or `this.socket =: null`
+    - Old Codon: `(this.retryCount = 0)`
+    - New Codon: `this.retryCount = 0` or `this.retryCount =: 0`
+    - Old Codon: `(headers.host = host)`
+    - New Codon: `headers.host = host` or `headers.host =: host`
+    - Old Codon: `(this.heap.[idx] = tmp)`
+    - New Codon: `this.heap.[idx] = tmp` or `this.heap[idx] = tmp`
+    - Old Codon: `(count += 1)`
+    - New Codon: `count += 1`
+    - Old Codon: `(idx = parentIdx)`
+    - New Codon: `idx = parentIdx`
+
 ## Revision 9a (unsuccessful)
 - **Tokens:** 4608
 
