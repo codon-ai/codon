@@ -1,7 +1,9 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
-## Revision 23a (successful)
+## Revision 23a (unsuccessful)
+- **Tokens:** 3885
+
 - **Revision Idea**: Introduce concise computed property keys in object literals (`O([key]:val)`, `O([fieldName]:result)`) and single-operand boundary protection for update expressions (`++`, `--`), eliminating fatal compiler crashes when generating dynamic dictionaries and resolving call expression misparsing when call arguments contain update operations (`(Math.pow 2 this.retryCount++)`).
 - **Rationale**: In modern AI fullstack web development (GraphQL query execution and resolver dispatching, dynamic database queries, REST API payload constructors, WebSocket event dispatchers, React state reducers, and exponential backoff retry algorithms):
   1. **Computed Property Keys in Object Expressions**: In GraphQL query dispatchers (e.g. `graphqlSchemaExecutor.md`), dynamic database record builders, and event dispatchers, objects with dynamic keys (`{ [fieldName]: result }` or `{ [key]: val }`) are standard requirements. Previously in Codon, writing `O([fieldName]:result)` caused `parseExpression` to parse `[fieldName]` as an `ArrayExpression`, setting `keyName` to `undefined` and triggering a fatal compiler crash (`TypeError: undefined is not an object (evaluating 'str.length')`). Furthermore, `JSToCodonTranslator` discarded `computed: true` on object properties, emitting static `fieldName:result`. By detecting bracketed computed keys in colon pairs `[key]:val` and preserving `computed: true`, Codon enables dynamic dictionary construction with 100% roundtrip fidelity.
