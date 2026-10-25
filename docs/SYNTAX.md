@@ -43,6 +43,7 @@ This document provides a comprehensive, rigorous specification of the Codon lang
 10. [Modules & Imports/Exports](#10-modules--importsexports)
 11. [React & JSX Support](#11-react--jsx-support)
 12. [Subtree-Hashing Macros (`M!`)](#12-subtree-hashing-macros-m)
+13. [Unary & Update Expressions](#13-unary--update-expressions)
 
 ---
 
@@ -561,3 +562,46 @@ capitalized =: M!m_binary_expr_32(word)
 ```
 
 For the complete specification of the macro engine, wyhash matching, dictionary structure, and full catalog of 721 macros, see the **[Macros Guide](MACROS.md)**.
+
+---
+
+## 13. Unary & Update Expressions
+
+Codon supports native unparenthesized unary and update expressions, optimized for minimal token footprint in conditional statements, validation guards, loops, and object literals:
+
+### Logical NOT & Type Checks
+```codon
+NB. Unparenthesized logical NOT
+if. !input.trim() do.
+  return.
+end.
+
+notFound =: !res.ok
+isValid =: !error && !loading
+
+NB. Unparenthesized type check
+if. typeof window !== 'undefined' do.
+  initClient()
+end.
+```
+
+### Auto-Increment & Decrement
+```codon
+NB. Standalone statement updates
+c++
+++c
+c--
+--c
+
+NB. In object properties and React ref counters
+payload =: O(id:nextId.current++;text:'hello')
+
+NB. In for-loop update clauses
+for. i =: 0 ; (i < 10) ; i++ do.
+  (console.log i)
+end.
+```
+
+### Backward Compatibility
+Legacy parenthesized expressions `(! expr)`, `(typeof expr)`, and `(x++)` remain fully supported across all contexts.
+

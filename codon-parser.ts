@@ -1443,6 +1443,12 @@ export class CodonToASTParser {
                             if (op === "<" || op === ">") {
                                 if (str[i + 1] === "=") continue;
                             }
+                            if (op === "+") {
+                                if (str[i + 1] === "+" || (i > 0 && str[i - 1] === "+")) continue;
+                            }
+                            if (op === "-") {
+                                if (str[i + 1] === "-" || (i > 0 && str[i - 1] === "-")) continue;
+                            }
                             if (op === "/") {
                                 if (i > 0 && str[i - 1] && ["+", "*", "<", ">", "-", "%", "|", "."].includes(str[i - 1]!)) continue;
                                 if (str[i + 1] === "/" || str[i + 1] === ".") continue;
@@ -1522,37 +1528,47 @@ export class CodonToASTParser {
             return node;
         }
 
-        // Update Expression: (++x), (--x), (x++), (x--)
-        if (wasWrapped) {
-            if (strippedExpr.endsWith("++")) {
+        // Update Expression: (++x), (--x), (x++), (x--), ++x, --x, x++, x--
+        if (strippedExpr.endsWith("++") && strippedExpr.length > 2) {
+            const inner = strippedExpr.slice(0, -2).trim();
+            if (inner && splitAtLevel(inner, ",").length === 1) {
                 return {
                     type: "UpdateExpression",
                     operator: "++",
-                    argument: this.parseExpression(strippedExpr.slice(0, -2).trim()),
+                    argument: this.parseExpression(inner),
                     prefix: false,
                 };
             }
-            if (strippedExpr.endsWith("--")) {
+        }
+        if (strippedExpr.endsWith("--") && strippedExpr.length > 2) {
+            const inner = strippedExpr.slice(0, -2).trim();
+            if (inner && splitAtLevel(inner, ",").length === 1) {
                 return {
                     type: "UpdateExpression",
                     operator: "--",
-                    argument: this.parseExpression(strippedExpr.slice(0, -2).trim()),
+                    argument: this.parseExpression(inner),
                     prefix: false,
                 };
             }
-            if (strippedExpr.startsWith("++")) {
+        }
+        if (strippedExpr.startsWith("++") && strippedExpr.length > 2) {
+            const inner = strippedExpr.slice(2).trim();
+            if (inner && splitAtLevel(inner, ",").length === 1) {
                 return {
                     type: "UpdateExpression",
                     operator: "++",
-                    argument: this.parseExpression(strippedExpr.slice(2).trim()),
+                    argument: this.parseExpression(inner),
                     prefix: true,
                 };
             }
-            if (strippedExpr.startsWith("--")) {
+        }
+        if (strippedExpr.startsWith("--") && strippedExpr.length > 2) {
+            const inner = strippedExpr.slice(2).trim();
+            if (inner && splitAtLevel(inner, ",").length === 1) {
                 return {
                     type: "UpdateExpression",
                     operator: "--",
-                    argument: this.parseExpression(strippedExpr.slice(2).trim()),
+                    argument: this.parseExpression(inner),
                     prefix: true,
                 };
             }
@@ -1758,17 +1774,23 @@ export class CodonToASTParser {
             };
         }
 
-        // Unary Expression: (!expr), (-expr), (+expr), (typeof expr)
-        if (wasWrapped && !strippedExpr.startsWith("+/") && !strippedExpr.startsWith("*/") && !strippedExpr.startsWith("+\\") && !strippedExpr.startsWith("*\\")) {
-            const unaryPrefixes = ["!", "-", "+", "~", "typeof ", "delete ", "void "];
+        // Unary Expression: !expr, -expr, +expr, typeof expr, ~expr, delete expr, void expr, (!expr), (-expr)
+        if (!strippedExpr.startsWith("+/") && !strippedExpr.startsWith("*/") && !strippedExpr.startsWith("+\\") && !strippedExpr.startsWith("*\\")) {
+            const unaryPrefixes = ["typeof ", "delete ", "void ", "!", "~", "-", "+"];
             for (const prefix of unaryPrefixes) {
                 if (strippedExpr.startsWith(prefix)) {
-                    return {
-                        type: "UnaryExpression",
-                        operator: prefix.trim(),
-                        argument: this.parseExpression(strippedExpr.slice(prefix.length).trim()),
-                        prefix: true,
-                    };
+                    if (prefix === "!" && (strippedExpr.startsWith("!=") || strippedExpr.startsWith("!=="))) continue;
+                    if (prefix === "-" && /^-\d+(\.\d+)?([eE][+-]?\d+)?$/.test(strippedExpr)) continue;
+                    if (prefix === "+" && /^\+\d+(\.\d+)?([eE][+-]?\d+)?$/.test(strippedExpr)) continue;
+                    const innerArg = strippedExpr.slice(prefix.length).trim();
+                    if (innerArg.length > 0) {
+                        return {
+                            type: "UnaryExpression",
+                            operator: prefix.trim(),
+                            argument: this.parseExpression(innerArg),
+                            prefix: true,
+                        };
+                    }
                 }
             }
         }

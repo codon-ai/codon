@@ -575,13 +575,19 @@ export class JSToCodonTranslator {
             case "LogicalExpression":
                 return `(${this.transpile(node.left)} ${node.operator} ${this.transpile(node.right)})`;
 
-            case "UnaryExpression":
-                return `(${node.operator} ${this.transpile(node.argument)})`;
+            case "UnaryExpression": {
+                const op = node.operator;
+                const argStr = this.transpile(node.argument);
+                if (op === "typeof" || op === "void" || op === "delete") {
+                    return `${op} ${argStr}`;
+                }
+                return `${op}${argStr}`;
+            }
 
             case "UpdateExpression":
                 return node.prefix
-                    ? `(${node.operator}${this.transpile(node.argument)})`
-                    : `(${this.transpile(node.argument)}${node.operator})`;
+                    ? `${node.operator}${this.transpile(node.argument)}`
+                    : `${this.transpile(node.argument)}${node.operator}`;
 
             case "ConditionalExpression":
                 return `(${this.transpile(node.test)} ? ${this.transpile(node.consequent)} : ${this.transpile(node.alternate)})`;

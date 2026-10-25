@@ -353,7 +353,7 @@ for (let i = 0, j = 10; i < j; i++, j--) {
         const translator = new JSToCodonTranslator();
         const codonCode = translator.transpile(ast.program as any);
 
-        expect(codonCode).toContain("((i++), (j--))");
+        expect(codonCode).toContain("(i++, j--)");
 
         const astParser = new CodonToASTParser();
         const parsedAst = astParser.parse(codonCode);
@@ -1263,6 +1263,147 @@ TorusKnotCurve.prototype = Object.create(Curve.prototype);
         expect(js).toContain('"line": 1');
         expect(js).toContain('"column": 10');
         expect(js).toContain('"column": 20');
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+});
+
+describe("Concise Unparenthesized Unary & Update Expressions Support (Rev 9a)", () => {
+    test("Transpiles concise unparenthesized unary expressions (!expr, typeof expr, ~expr, -expr)", () => {
+        const codonCode = `
+isNotValid =: !isValid
+strCheck =: (typeof x === 'string')
+bitwise =: ~mask
+neg =: -val
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("const isNotValid = !isValid;");
+        expect(js).toContain('const strCheck = typeof x === "string";');
+        expect(js).toContain("const bitwise = ~mask;");
+        expect(js).toContain("const neg = -val;");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles unparenthesized unary in control flow, method calls, and compound logic", () => {
+        const codonCode = `
+fn. validate input do.
+if. !input.trim() do.
+return. false
+end.
+if. typeof window !== 'undefined' do.
+return. true
+end.
+return. !error && !loading
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("if (!input.trim()) {");
+        expect(js).toContain('if (typeof window !== "undefined") {');
+        expect(js).toContain("return !error && !loading;");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+
+        const fn = new Function(`${js}; return validate("  ");`);
+        expect(fn()).toBe(false);
+    });
+
+    test("Transpiles concise unparenthesized update expressions (x++, ++x, x--, --x)", () => {
+        const codonCode = `
+fn. counter do.
+c =: 0
+c++
+++c
+c--
+--c
+todo =: O(id:nextId.current++;text:'msg')
+return. c
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("c++;");
+        expect(js).toContain("++c;");
+        expect(js).toContain("c--;");
+        expect(js).toContain("--c;");
+        expect(js).toContain("id: nextId.current++");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles for-loop with unparenthesized update", () => {
+        const codonCode = `
+for. i =: 0 ; (i < 10) ; i++ do.
+(console.log i)
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("i = 0; i < 10; i++");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips JS unary and update expressions with concise syntax", () => {
+        const jsCode = `
+function handleEvent(e, input, nextId) {
+  e.preventDefault();
+  if (!input.trim()) {
+    return;
+  }
+  const item = { id: nextId.current++, active: !error };
+  const typeOk = typeof item === "object";
+  return item;
+}
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("!input.trim()");
+        expect(codonCode).toContain("nextId.current++");
+        expect(codonCode).toContain("!error");
+        expect(codonCode).toContain("typeof item");
+        expect(codonCode).not.toContain("(! input.trim())");
+        expect(codonCode).not.toContain("(nextId.current++)");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+        expect(roundtrippedJs).toContain("!input.trim()");
+        expect(roundtrippedJs).toContain("nextId.current++");
+        expect(roundtrippedJs).toContain("!error");
+        expect(roundtrippedJs).toContain('typeof item === "object"');
+    });
+
+    test("Retains backward compatibility with legacy parenthesized (! expr), (typeof expr), and (x++)", () => {
+        const codonCode = `
+a =: (! found)
+b =: (typeof val)
+c =: (count++)
+d =: (++step)
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("const a = !found;");
+        expect(js).toContain("const b = typeof val;");
+        expect(js).toContain("const c = count++;");
+        expect(js).toContain("const d = ++step;");
         expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
     });
 });
