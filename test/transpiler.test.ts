@@ -1505,5 +1505,144 @@ end.
     });
 });
 
+describe("Concise Unparenthesized Call Statements, Computed Keys & Update Operand Protection (Rev 22a)", () => {
+    test("Transpiles unparenthesized function and method call statements", () => {
+        const codonCode = `
+fn. handleMessage data do.
+  console.log 'Received' data
+  this.socket.send data
+  this.messageListeners.push data
+  setInput ''
+  setTimeout {{ => this.connect()}} 1000
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("console.log(\"Received\", data);");
+        expect(js).toContain("this.socket.send(data);");
+        expect(js).toContain("this.messageListeners.push(data);");
+        expect(js).toContain("setInput(\"\");");
+        expect(js).toContain("setTimeout(() => this.connect(), 1000);");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles unparenthesized new expression calls at statement level", () => {
+        const codonCode = `
+fn. initSocket url do.
+  new WebSocket url
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("new WebSocket(url);");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles chained and parenthesized callee call statements", () => {
+        const codonCode = `
+(suite.run()).then {{results => do.
+  console.log results
+}}
+(expect (1 + 1)).toBe 2
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("suite.run().then(results => {");
+        expect(js).toContain("expect(1 + 1).toBe(2);");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles computed property keys in object literals: O([fieldName]:result)", () => {
+        const codonCode = `
+async_fn. execute query do.
+  return. O(data:O([fieldName]:result))
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("[fieldName]: result");
+        expect(js).toContain("data: {");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Correctly parses function calls with update arguments without greedy suffix collision", () => {
+        const codonCode = `
+delay =: (baseDelay * (Math.pow 2 this.retryCount++))
+result =: (compute a b++)
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("const delay = baseDelay * Math.pow(2, this.retryCount++);");
+        expect(js).toContain("const result = compute(a, b++);");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips JS call statements, computed object properties, and calls with update arguments", () => {
+        const jsCode = `
+export async function queryData(url, fieldName) {
+  const res = await fetch(url);
+  const result = await res.json();
+  console.log("Fetched", fieldName);
+  return { data: { [fieldName]: result } };
+}
+export class Client {
+  reconnect() {
+    const delay = baseDelay * Math.pow(2, this.retryCount++);
+    setTimeout(() => this.connect(), delay);
+  }
+}
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("[fieldName]:result");
+        expect(codonCode).toContain("console.log 'Fetched' fieldName");
+        expect(codonCode).toContain("setTimeout {{ => this.connect()}} delay");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(roundtrippedJs).toContain("[fieldName]: result");
+        expect(roundtrippedJs).toContain("Math.pow(2, this.retryCount++)");
+        expect(roundtrippedJs).toContain("console.log(\"Fetched\", fieldName);");
+        expect(roundtrippedJs).toContain("setTimeout(() => this.connect(), delay);");
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Retains backward compatibility with legacy parenthesized call statements (console.log x)", () => {
+        const codonCode = `
+(console.log 'hello')
+(this.socket.send data)
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("console.log(\"hello\");");
+        expect(js).toContain("this.socket.send(data);");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+});
+
+
 
 

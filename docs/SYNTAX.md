@@ -120,6 +120,7 @@ floats   = 1.5 2.5 3.5      NB. const floats = [1.5, 2.5, 3.5];
 Codon provides ultra-compact object literals via `O(...)`:
 
 - **Colon Key-Value Pairs**: `O(key:val;key2:val2)`
+- **Computed Property Keys**: `O([dynamicKey]:val)` compiles to `{ [dynamicKey]: val }`
 - **Identifier Property Shorthand**: `O(prop1;prop2)` compiles to `{ prop1, prop2 }`
 - **Prefix Spread**: `O(...rest;key:val)` compiles to `{ ...rest, key: val }`
 - **Quoted Keys**: `O('Content-Type':'application/json')` for special characters
@@ -127,13 +128,13 @@ Codon provides ultra-compact object literals via `O(...)`:
 - **Legacy Alternating Pairs**: `O('key';val)` remains supported for backward compatibility
 
 ```codon
-NB. Modern concise object literal
-config =: O(...baseConfig;port:8080;host:'localhost';timeout)
+NB. Modern concise object literal with computed keys
+config =: O(...baseConfig;[envKey]:'prod';port:8080;host:'localhost';timeout)
 ```
 
 Transpiles to:
 ```javascript
-const config = { ...baseConfig, port: 8080, host: "localhost", timeout };
+const config = { ...baseConfig, [envKey]: "prod", port: 8080, host: "localhost", timeout };
 ```
 
 ### Arrays (`[...]`)
@@ -483,6 +484,31 @@ To emit `function(params) { ... }`:
 (app.get '/health' {{fn req,res => do.
   (res.json O(status:'ok'))
 end.}})
+```
+
+### Function Calls & Call Statements
+
+Codon supports concise unparenthesized call statements at top-level / statement position as well as standard parenthesized expressions:
+
+- **Unparenthesized Call Statements**: At statement level, outer parentheses can be omitted:
+  ```codon
+  console.log 'User logged in' user.id
+  res.status 200
+  app.use cors()
+  new User 'Alice' 30
+  ```
+- **Expression Calls**: Inside expressions, wrap in parentheses:
+  ```codon
+  result =: (Math.max a b)
+  ```
+
+Transpiles to:
+```javascript
+console.log("User logged in", user.id);
+res.status(200);
+app.use(cors());
+new User("Alice", 30);
+const result = Math.max(a, b);
 ```
 
 ---

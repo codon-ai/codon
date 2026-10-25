@@ -239,6 +239,12 @@ export class JSToCodonTranslator {
                     const assignNode = node.expression as AssignmentExpression;
                     return `${this.transpile(assignNode.left)} ${assignNode.operator} ${this.transpile(assignNode.right)}`;
                 }
+                if (node.expression.type === "CallExpression") {
+                    const cNode = node.expression as CallExpression;
+                    const calleeStr = this.transpile(cNode.callee);
+                    if (cNode.arguments.length === 0) return `${calleeStr}()`;
+                    return `${calleeStr} ${cNode.arguments.map((n) => this.transpile(n)).join(" ")}`;
+                }
                 return this.transpile(node.expression);
 
             case "BlockStatement":
@@ -518,15 +524,22 @@ export class JSToCodonTranslator {
                 if (p.shorthand || (p.key.type === "Identifier" && p.value.type === "Identifier" && p.key.name === p.value.name)) {
                     return keyStr;
                 }
+                if (p.computed) {
+                    return `[${this.transpile(p.key)}]:${this.transpile(p.value)}`;
+                }
                 const formattedKey = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(keyStr) ? keyStr : `'${keyStr}'`;
                 return `${formattedKey}:${this.transpile(p.value)}`;
             }
 
             case "ObjectMethod" as any: {
                 const p = node as any;
-                const keyStr = p.key.type === "Identifier" ? p.key.name : String(p.key.value ?? this.transpile(p.key));
                 const pStr = p.params.map((param: any) => this.transpilePattern(param)).join(",");
                 const fnHeader = p.async ? (pStr ? `async fn ${pStr}` : "async fn") : (pStr ? `fn ${pStr}` : "fn");
+                if (p.computed) {
+                    const keyExpr = this.transpile(p.key);
+                    return `[${keyExpr}]:{{${fnHeader} => do.\n${this.transpile(p.body)}\n}}`;
+                }
+                const keyStr = p.key.type === "Identifier" ? p.key.name : String(p.key.value ?? this.transpile(p.key));
                 const formattedKey = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(keyStr) ? keyStr : `'${keyStr}'`;
                 return `${formattedKey}:{{${fnHeader} => do.\n${this.transpile(p.body)}\n}}`;
             }

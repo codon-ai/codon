@@ -1093,6 +1093,43 @@ export class CodonToASTParser {
             }
         }
 
+        // Unparenthesized statement-level call: callee arg1 arg2 ... or new Callee arg1 arg2 ...
+        if (!isFullyWrapped(stmt) && !stmt.startsWith("{") && !stmt.startsWith("[") && !stmt.startsWith("<")) {
+            const spaceParts = splitAtLevel(stmt, " ");
+            if (spaceParts.length > 1) {
+                if (spaceParts[0] === "new" && spaceParts[1]) {
+                    return {
+                        type: "ExpressionStatement",
+                        expression: {
+                            type: "NewExpression",
+                            callee: this.parseExpression(spaceParts[1]),
+                            arguments: spaceParts.slice(2).map((a) => this.parseExpression(a.endsWith(",") ? a.slice(0, -1).trim() : a)),
+                        },
+                    };
+                }
+
+                const calleeCandidate = spaceParts[0]!;
+                const isIdentOrMember = /^[a-zA-Z_$][a-zA-Z0-9_$]*(\.[a-zA-Z_$][a-zA-Z0-9_$]*)*(\?\.[a-zA-Z_$][a-zA-Z0-9_$]*)*$/.test(calleeCandidate);
+                const isParenCallee = calleeCandidate.startsWith("(") && (calleeCandidate.includes(").") || calleeCandidate.includes(")?.") || calleeCandidate.endsWith(")"));
+                if (isIdentOrMember || isParenCallee) {
+                    const reserved = new Set(["return", "throw", "yield", "if", "for", "for_of", "for_in", "while", "try", "select", "case", "class", "fn", "async_fn", "import", "export", "let", "const", "var"]);
+                    if (!reserved.has(calleeCandidate)) {
+                        const calleeNode = this.parseExpression(calleeCandidate);
+                        const callArgs = spaceParts.slice(1).map((a) => this.parseExpression(a.endsWith(",") ? a.slice(0, -1).trim() : a));
+                        return {
+                            type: "ExpressionStatement",
+                            expression: {
+                                type: "CallExpression",
+                                callee: calleeNode,
+                                arguments: callArgs,
+                                optional: calleeCandidate.endsWith("?."),
+                            },
+                        };
+                    }
+                }
+            }
+        }
+
         const expr = this.parseExpression(stmt);
         if (expr.type === "FunctionDeclaration") return expr;
         return { type: "ExpressionStatement", expression: expr };
@@ -1596,7 +1633,7 @@ export class CodonToASTParser {
         // Update Expression: (++x), (--x), (x++), (x--), x++, x--, ++x, --x
         if (strippedExpr.endsWith("++") && strippedExpr.length > 2) {
             const inner = strippedExpr.slice(0, -2).trim();
-            if (inner && !inner.includes(",") && !inner.includes(";")) {
+            if (inner && !inner.includes(",") && !inner.includes(";") && splitAtLevel(inner, " ").length === 1) {
                 return {
                     type: "UpdateExpression",
                     operator: "++",
@@ -1607,7 +1644,7 @@ export class CodonToASTParser {
         }
         if (strippedExpr.endsWith("--") && strippedExpr.length > 2) {
             const inner = strippedExpr.slice(0, -2).trim();
-            if (inner && !inner.includes(",") && !inner.includes(";")) {
+            if (inner && !inner.includes(",") && !inner.includes(";") && splitAtLevel(inner, " ").length === 1) {
                 return {
                     type: "UpdateExpression",
                     operator: "--",
@@ -1618,7 +1655,7 @@ export class CodonToASTParser {
         }
         if (strippedExpr.startsWith("++") && strippedExpr.length > 2) {
             const inner = strippedExpr.slice(2).trim();
-            if (inner && !inner.includes(",") && !inner.includes(";")) {
+            if (inner && !inner.includes(",") && !inner.includes(";") && splitAtLevel(inner, " ").length === 1) {
                 return {
                     type: "UpdateExpression",
                     operator: "++",
@@ -1629,7 +1666,7 @@ export class CodonToASTParser {
         }
         if (strippedExpr.startsWith("--") && strippedExpr.length > 2) {
             const inner = strippedExpr.slice(2).trim();
-            if (inner && !inner.includes(",") && !inner.includes(";")) {
+            if (inner && !inner.includes(",") && !inner.includes(";") && splitAtLevel(inner, " ").length === 1) {
                 return {
                     type: "UpdateExpression",
                     operator: "--",
@@ -2068,22 +2105,33 @@ export class CodonToASTParser {
                     continue;
                 }
 
-                // Key-value pair with colon: key:val or 'key':val
+                // Key-value pair with colon: key:val, 'key':val, or [key]:val
                 const colonSplit = splitFirstAtLevel(part, ":");
                 if (colonSplit) {
                     const [keyPart, valPart] = colonSplit;
-                    const keyNode = this.parseExpression(keyPart);
-                    const keyName = keyNode.type === "Literal" ? String(keyNode.value) : (keyNode as Identifier).name;
+                    const trimmedKey = keyPart.trim();
+                    let keyProp: any;
+                    let isComputed = false;
+
+                    if (trimmedKey.startsWith("[") && trimmedKey.endsWith("]")) {
+                        isComputed = true;
+                        keyProp = this.parseExpression(trimmedKey.slice(1, -1).trim());
+                    } else {
+                        const keyNode = this.parseExpression(trimmedKey);
+                        const keyName = keyNode.type === "Literal" ? String(keyNode.value) : (keyNode as Identifier).name;
+                        keyProp = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(keyName)
+                            ? { type: "Identifier", name: keyName }
+                            : { type: "Literal", value: keyName };
+                    }
+
                     const valNode = this.parseExpression(valPart);
                     const isMethod = valNode.type === "FunctionExpression" || (valNode as any).type === "ObjectMethod";
                     properties.push({
                         type: "Property",
-                        key: /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(keyName)
-                            ? { type: "Identifier", name: keyName }
-                            : { type: "Literal", value: keyName },
+                        key: keyProp,
                         value: valNode,
                         kind: "init",
-                        computed: false,
+                        computed: isComputed,
                         method: isMethod,
                         shorthand: false,
                     });
