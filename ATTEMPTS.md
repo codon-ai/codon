@@ -1,8 +1,8 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
-## Revision 20a (successful)
-- **Tokens:** 500
+## Revision 20a (unsuccessful)
+- **Tokens:** 2769
 
 - **Revision Idea**: Introduce concise computed property keys in object expressions (`O([key]:val)`), concise unparenthesized monadic await in return statements (`return. @ expr`) and member assignments (`this.prop = @ expr`), alongside single-operand boundary protection for update expressions (`++`, `--`), eliminating fatal compiler crashes and mandatory outer wrapping parentheses `return. (@ expr)` and `this.prop = (@ expr)`.
 - **Rationale**: In modern AI fullstack web development (GraphQL query execution and resolver dispatching, REST API responses, Next.js server actions, React form state, WebSocket client reconnection pipelines, and exponential backoff retry algorithms):
