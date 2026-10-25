@@ -1,4 +1,4 @@
-NB. i|D:Database:better-sqlite3
+import. Database from 'better-sqlite3'
 
 db =: (new Database ':memory:')
 
@@ -16,22 +16,19 @@ toggleStmt =: (db.prepare 'UPDATE todos SET completed = 1 - completed WHERE id =
 
 selectAllStmt =: (db.prepare 'SELECT * FROM todos ORDER BY id ASC')
 
-NB. export
-{{ NB. FD|addTodo|title
+export. fn. addTodo title do.
 result =: (insertStmt.run title)
 return. (Number result.lastInsertRowid)
-}}
+end.
 
-NB. export
-{{ NB. FD|toggleTodo|id
+export. fn. toggleTodo id do.
 result =: (toggleStmt.run id)
 return. (result.changes > 0)
-}}
+end.
 
-NB. export
-{{ NB. FD|getTodos|
+export. fn. getTodos do.
 return. selectAllStmt.all()
-}}
+end.
 
 (addTodo 'Buy groceries')
 

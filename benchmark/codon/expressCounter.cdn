@@ -1,26 +1,26 @@
-NB. i|D:express:express
+import. express from 'express'
 
 app =: express()
 
 counter =: 0
 
-(app.get '/' ({{ NB. FE|_,res
-(res.json O('counter';counter))
-}}))
+(app.get '/' {{fn _,res => do.
+(res.json O(counter))
+}})
 
-(app.get '/increment' ({{ NB. FE|_,res
+(app.get '/increment' {{fn _,res => do.
 (counter++)
-(res.json O('counter';counter))
-}}))
+(res.json O(counter))
+}})
 
-(app.get '/decrement' ({{ NB. FE|_,res
+(app.get '/decrement' {{fn _,res => do.
 (counter--)
-(res.json O('counter';counter))
-}}))
+(res.json O(counter))
+}})
 
-(app.get '/reset' ({{ NB. FE|_,res
+(app.get '/reset' {{fn _,res => do.
 (counter = 0)
-(res.json O('counter';counter))
-}}))
+(res.json O(counter))
+}})
 
 (app.listen 8080)

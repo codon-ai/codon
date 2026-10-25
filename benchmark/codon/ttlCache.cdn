@@ -1,12 +1,11 @@
-NB. export
-class. TtlCache do.
+export. class. TtlCache do.
 store =: (new Map)
 constructor. defaultTtlMs=60000 do.
 (this.defaultTtlMs = defaultTtlMs)
 end.
 method. set key,value,ttlMs=this.defaultTtlMs do.
 expiresAt =: (Date.now() + ttlMs)
-(this.store.set key O('value';value;'expiresAt';expiresAt))
+(this.store.set key O(value;expiresAt))
 end.
 method. get key do.
 entry =: (this.store.get key)

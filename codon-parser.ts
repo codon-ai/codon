@@ -69,6 +69,8 @@ export function splitCodonStatements(code: string): string[] {
         "constructor.",
         "async_method.",
         "method.",
+        "async_fn.",
+        "fn.",
         "get.",
         "set.",
     ];
@@ -224,6 +226,47 @@ export function splitAtLevel(str: string, delimiter: string): string[] {
     return args;
 }
 
+export function splitFirstAtLevel(
+    str: string,
+    delimiter: string,
+): [string, string] | null {
+    let depth = 0;
+    let braceDepth = 0;
+    let bracketDepth = 0;
+    let inString = false;
+    let inTpl = false;
+
+    for (let i = 0; i < str.length; i++) {
+        const char = str[i];
+        if (char === "'" && !inTpl) {
+            inString = !inString;
+            continue;
+        }
+        if (char === "`" && !inString) {
+            inTpl = !inTpl;
+            continue;
+        }
+        if (!inString && !inTpl) {
+            if (char === "(") depth++;
+            else if (char === ")") depth = Math.max(0, depth - 1);
+            else if (char === "{") braceDepth++;
+            else if (char === "}") braceDepth = Math.max(0, braceDepth - 1);
+            else if (char === "[") bracketDepth++;
+            else if (char === "]") bracketDepth = Math.max(0, bracketDepth - 1);
+
+            if (
+                str.startsWith(delimiter, i) &&
+                depth === 0 &&
+                braceDepth === 0 &&
+                bracketDepth === 0
+            ) {
+                return [str.slice(0, i).trim(), str.slice(i + delimiter.length).trim()];
+            }
+        }
+    }
+    return null;
+}
+
 export function isFullyWrapped(
     str: string,
     open: string = "(",
@@ -264,6 +307,8 @@ export class CodonToASTParser {
 
             if (b.startsWith("NB. i|")) {
                 body.push(...this.parseImports(b));
+            } else if (b.startsWith("import.") || b.startsWith("import ")) {
+                body.push(this.parseImportDeclaration(b));
             } else if (b.startsWith("NB. export")) {
                 const remainder = b.slice("NB. export".length).trim();
                 if (remainder) {
@@ -276,6 +321,27 @@ export class CodonToASTParser {
                         body.push({ type: "ExportNamedDeclaration", declaration: nextStmt, specifiers: [] });
                     }
                 }
+            } else if (b.startsWith("export.")) {
+                const remainder = b.slice("export.".length).trim();
+                if (remainder.startsWith("default ")) {
+                    body.push({
+                        type: "ExportDefaultDeclaration",
+                        declaration: this.parseExpression(remainder.slice(8).trim()),
+                    });
+                } else if (remainder) {
+                    const parsed = this.parseStatement(remainder);
+                    if (parsed) body.push({ type: "ExportNamedDeclaration", declaration: parsed, specifiers: [] });
+                } else if (idx + 1 < blocks.length) {
+                    idx++;
+                    const nextStmt = this.parseStatement(blocks[idx]);
+                    if (nextStmt) {
+                        body.push({ type: "ExportNamedDeclaration", declaration: nextStmt, specifiers: [] });
+                    }
+                }
+            } else if (b.startsWith("export ") && (b.startsWith("export fn.") || b.startsWith("export async_fn.") || b.startsWith("export class."))) {
+                const remainder = b.slice(7).trim();
+                const parsed = this.parseStatement(remainder);
+                if (parsed) body.push({ type: "ExportNamedDeclaration", declaration: parsed, specifiers: [] });
             } else if (b.startsWith("NB. exAll|")) {
                 const src = b.substring(10).trim().replace(/%7C/g, "|").replace(/%3A/g, ":");
                 body.push({
@@ -359,6 +425,94 @@ export class CodonToASTParser {
         return declarations;
     }
 
+    public parseImportDeclaration(stmt: string): Node {
+        stmt = stmt.trim();
+        let raw = "";
+        if (stmt.startsWith("import.")) {
+            raw = stmt.slice("import.".length).trim();
+        } else if (stmt.startsWith("import ")) {
+            raw = stmt.slice("import".length).trim();
+        }
+
+        // Side-effect only import: import. 'module' or import. "module"
+        if (/^['"`][^'"`]+['"`]$/.test(raw)) {
+            const src = raw.slice(1, -1);
+            return {
+                type: "ImportDeclaration",
+                specifiers: [],
+                source: { type: "Literal", value: src },
+            };
+        }
+
+        let specPart = "";
+        let srcPart = "";
+
+        const fromSplit = splitFirstAtLevel(raw, " from ");
+        if (fromSplit) {
+            specPart = fromSplit[0].trim();
+            srcPart = fromSplit[1].trim();
+        } else {
+            const colonSplit = splitFirstAtLevel(raw, ":");
+            if (colonSplit) {
+                specPart = colonSplit[0].trim();
+                srcPart = colonSplit[1].trim();
+            } else {
+                srcPart = raw;
+            }
+        }
+
+        const src = srcPart.replace(/^['"`]|['"`]$/g, "");
+        const specifiers: any[] = [];
+
+        if (specPart) {
+            const items = splitAtLevel(specPart, ",");
+            for (const item of items) {
+                const trimmed = item.trim();
+                if (!trimmed) continue;
+
+                if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+                    const inner = trimmed.slice(1, -1).trim();
+                    const namedList = splitAtLevel(inner, ",");
+                    for (const named of namedList) {
+                        const n = named.trim();
+                        if (!n) continue;
+                        if (n.includes(" as ")) {
+                            const [imported, local] = n.split(" as ").map((s) => s.trim());
+                            specifiers.push({
+                                type: "ImportSpecifier",
+                                imported: { type: "Identifier", name: imported },
+                                local: { type: "Identifier", name: local },
+                            });
+                        } else {
+                            specifiers.push({
+                                type: "ImportSpecifier",
+                                imported: { type: "Identifier", name: n },
+                                local: { type: "Identifier", name: n },
+                            });
+                        }
+                    }
+                } else if (trimmed.startsWith("* as ")) {
+                    const localName = trimmed.slice(5).trim();
+                    specifiers.push({
+                        type: "ImportNamespaceSpecifier",
+                        local: { type: "Identifier", name: localName },
+                    });
+                } else {
+                    specifiers.push({
+                        type: "ImportDefaultSpecifier",
+                        local: { type: "Identifier", name: trimmed },
+                    });
+                }
+            }
+        }
+
+        return {
+            type: "ImportDeclaration",
+            specifiers,
+            source: { type: "Literal", value: src },
+        };
+    }
+
     public parseBlock(bodyStr: string): BlockStatement {
         const stmts = splitCodonStatements(bodyStr);
         const body: Node[] = [];
@@ -374,12 +528,72 @@ export class CodonToASTParser {
         if (!stmt) return null;
         if (stmt.endsWith(";")) stmt = stmt.slice(0, -1).trim();
 
-        // Export Default
+        // Import Declaration
+        if (stmt.startsWith("import.") || stmt.startsWith("import ")) {
+            return this.parseImportDeclaration(stmt);
+        }
+
+        // Export Declaration
+        if (stmt.startsWith("export.")) {
+            const remainder = stmt.slice("export.".length).trim();
+            if (remainder.startsWith("default ")) {
+                return {
+                    type: "ExportDefaultDeclaration",
+                    declaration: this.parseExpression(remainder.slice(8).trim()),
+                };
+            }
+            const parsed = this.parseStatement(remainder);
+            if (parsed) {
+                return {
+                    type: "ExportNamedDeclaration",
+                    declaration: parsed,
+                    specifiers: [],
+                };
+            }
+        }
+
+        // Export Default (Legacy)
         if (stmt.startsWith("NB. e|")) {
             return {
                 type: "ExportDefaultDeclaration",
                 declaration: this.parseExpression(stmt.substring(6).trim()),
             };
+        }
+
+        // Function Declaration: [async_]fn. [name] [params] do. ... end.
+        const isAsyncFn = stmt.startsWith("async_fn.");
+        const isSyncFn = stmt.startsWith("fn.");
+        if (isAsyncFn || isSyncFn) {
+            const prefix = isAsyncFn ? "async_fn." : "fn.";
+            const doIdx = stmt.indexOf(" do.");
+            if (doIdx !== -1 && stmt.endsWith("end.")) {
+                const header = stmt.substring(prefix.length, doIdx).trim();
+                let fnName = "";
+                let paramsStr = "";
+                if (header) {
+                    const parenIdx = header.indexOf("(");
+                    if (parenIdx !== -1 && header.endsWith(")")) {
+                        fnName = header.substring(0, parenIdx).trim();
+                        paramsStr = header.substring(parenIdx + 1, header.length - 1).trim();
+                    } else {
+                        const spaceIdx = header.indexOf(" ");
+                        if (spaceIdx !== -1) {
+                            fnName = header.substring(0, spaceIdx).trim();
+                            paramsStr = header.substring(spaceIdx + 1).trim();
+                        } else {
+                            fnName = header.trim();
+                        }
+                    }
+                }
+                const fnBody = stmt.substring(doIdx + 4, stmt.length - 4).trim();
+                return {
+                    type: "FunctionDeclaration",
+                    id: fnName ? { type: "Identifier", name: fnName } : null,
+                    params: paramsStr ? this.parseParamList(paramsStr) : [],
+                    body: this.parseBlock(fnBody),
+                    async: isAsyncFn,
+                };
+            }
         }
 
         // Class Declaration: class. [Name] [extends Super] do. ... end.
@@ -645,7 +859,7 @@ export class CodonToASTParser {
 
         // Destructuring / Variable Assignment: pattern =: expr or pattern =. expr or pattern = expr
         // Crucial: Only match unparenthesized declarations at depth 0 (outside {}, [], ())!
-        if (!stmt.startsWith("(") && !stmt.startsWith("{{") && !stmt.startsWith("class.")) {
+        if (!stmt.startsWith("(") && !stmt.startsWith("{{") && !stmt.startsWith("class.") && !stmt.startsWith("fn.") && !stmt.startsWith("async_fn.")) {
             let depth = 0;
             let braceDepth = 0;
             let bracketDepth = 0;
@@ -1341,11 +1555,24 @@ export class CodonToASTParser {
             };
         }
 
-        // Await Expression: (await expr)
-        if (wasWrapped && strippedExpr.startsWith("await ")) {
+        // Await Expression: @ expr, @: expr, (@ expr), or (await expr)
+        if (
+            strippedExpr.startsWith("@:") ||
+            strippedExpr.startsWith("@ ") ||
+            (strippedExpr.startsWith("@") && strippedExpr.length > 1) ||
+            strippedExpr.startsWith("await ")
+        ) {
+            let innerArg = "";
+            if (strippedExpr.startsWith("@:")) {
+                innerArg = strippedExpr.slice(2).trim();
+            } else if (strippedExpr.startsWith("@")) {
+                innerArg = strippedExpr.slice(1).trim();
+            } else {
+                innerArg = strippedExpr.slice(6).trim();
+            }
             return {
                 type: "AwaitExpression",
-                argument: this.parseExpression(strippedExpr.slice(6).trim()),
+                argument: this.parseExpression(innerArg),
             };
         }
 
@@ -1364,9 +1591,82 @@ export class CodonToASTParser {
             }
         }
 
+        // Function Declaration Expression: (fn. name params do. ... end.)
+        if (strippedExpr.startsWith("fn.") || strippedExpr.startsWith("async_fn.")) {
+            const parsed = this.parseStatement(strippedExpr);
+            if (parsed) return parsed as any;
+        }
+
         // Direct Definition: {{ ... }}
         if (strippedExpr.startsWith("{{") && strippedExpr.endsWith("}}")) {
             const inner = strippedExpr.slice(2, -2).trim();
+
+            // Concise Arrow / Direct Definition: {{ [async] [fn] [params] => [do.] body [end.] }}
+            const arrowSplit = splitFirstAtLevel(inner, "=>");
+            if (arrowSplit) {
+                const [leftPart, rightPart] = arrowSplit;
+                let rawLeft = leftPart.trim();
+                let isAsync = false;
+                let isFunctionExpr = false;
+
+                if (rawLeft.startsWith("async ") || rawLeft === "async") {
+                    isAsync = true;
+                    rawLeft = rawLeft.startsWith("async ") ? rawLeft.slice(6).trim() : "";
+                }
+
+                if (rawLeft.startsWith("fn ") || rawLeft === "fn") {
+                    isFunctionExpr = true;
+                    rawLeft = rawLeft.startsWith("fn ") ? rawLeft.slice(3).trim() : "";
+                } else if (rawLeft.startsWith("function ") || rawLeft === "function") {
+                    isFunctionExpr = true;
+                    rawLeft = rawLeft.startsWith("function ") ? rawLeft.slice(9).trim() : "";
+                }
+
+                if (rawLeft.startsWith("(") && rawLeft.endsWith(")")) {
+                    rawLeft = rawLeft.slice(1, -1).trim();
+                }
+
+                const params = rawLeft ? this.parseParamList(rawLeft) : [];
+                let bodyStr = rightPart.trim();
+
+                let isBlock = false;
+                if (bodyStr.startsWith("do.")) {
+                    isBlock = true;
+                    bodyStr = bodyStr.slice(3).trim();
+                } else if (
+                    bodyStr.startsWith("return.") ||
+                    bodyStr.startsWith("throw.") ||
+                    bodyStr.startsWith("if.") ||
+                    bodyStr.startsWith("for_of.") ||
+                    bodyStr.startsWith("for.") ||
+                    bodyStr.startsWith("while.") ||
+                    bodyStr.startsWith("try.") ||
+                    splitCodonStatements(bodyStr).length > 1
+                ) {
+                    isBlock = true;
+                }
+
+                if (isFunctionExpr) {
+                    return {
+                        type: "FunctionExpression",
+                        id: null,
+                        params,
+                        body: isBlock ? this.parseBlock(bodyStr) : {
+                            type: "BlockStatement",
+                            body: [{ type: "ReturnStatement", argument: this.parseExpression(bodyStr) }],
+                        },
+                        async: isAsync,
+                    };
+                }
+
+                return {
+                    type: "ArrowFunctionExpression",
+                    params,
+                    body: isBlock ? this.parseBlock(bodyStr) : this.parseExpression(bodyStr),
+                    async: isAsync,
+                };
+            }
+
             const nlIdx = inner.indexOf("\n");
             const firstLine = nlIdx !== -1 ? inner.substring(0, nlIdx).trim() : inner;
             const bodyStr = nlIdx !== -1 ? inner.substring(nlIdx + 1).trim() : "";
@@ -1430,39 +1730,116 @@ export class CodonToASTParser {
             };
         }
 
-        // Object Expression: O(...) or O''
-        if (/^O[ (]/.test(strippedExpr) || strippedExpr === "O''") {
-            if (strippedExpr === "O''") return { type: "ObjectExpression", properties: [] };
+        // Spread Expression: ...expr (standalone, not an array)
+        if (strippedExpr.startsWith("...") && strippedExpr !== "..." && !strippedExpr.includes(";")) {
+            return {
+                type: "SpreadElement",
+                argument: this.parseExpression(strippedExpr.slice(3).trim()),
+            };
+        }
+
+        // Object Expression: O(...), O'', or O()
+        if (/^O[ (]/.test(strippedExpr) || strippedExpr === "O''" || strippedExpr === "O()") {
+            if (strippedExpr === "O''" || strippedExpr === "O()") return { type: "ObjectExpression", properties: [] };
             let strippedO = strippedExpr.startsWith("O(")
                 ? strippedExpr.substring(1).trim()
                 : strippedExpr.substring(2).trim();
             if (isFullyWrapped(strippedO)) strippedO = strippedO.slice(1, -1);
+            if (!strippedO.trim()) return { type: "ObjectExpression", properties: [] };
 
             const parts = splitAtLevel(strippedO, ";");
             const properties: any[] = [];
-            for (let i = 0; i < parts.length; i += 2) {
-                const keyPart = parts[i].trim();
-                if (keyPart === "'...'" || keyPart === "...") {
-                    properties.push({
-                        type: "SpreadElement",
-                        argument: this.parseExpression(parts[i + 1]),
-                    });
+            let i = 0;
+            while (i < parts.length) {
+                const part = parts[i].trim();
+                if (!part) {
+                    i++;
                     continue;
                 }
-                const keyNode = this.parseExpression(keyPart);
-                const keyName = keyNode.type === "Literal" ? String(keyNode.value) : (keyNode as Identifier).name;
-                const valNode = i + 1 < parts.length ? this.parseExpression(parts[i + 1]) : { type: "Identifier", name: keyName };
-                const isMethod = valNode.type === "FunctionExpression" || (valNode as any).type === "ObjectMethod";
+
+                // Spread: ...expr
+                if (part.startsWith("...") && part !== "...") {
+                    properties.push({
+                        type: "SpreadElement",
+                        argument: this.parseExpression(part.slice(3).trim()),
+                    });
+                    i++;
+                    continue;
+                }
+
+                // Legacy spread: '...';expr or ...;expr
+                if (part === "'...'" || part === "...") {
+                    if (i + 1 < parts.length) {
+                        properties.push({
+                            type: "SpreadElement",
+                            argument: this.parseExpression(parts[i + 1].trim()),
+                        });
+                        i += 2;
+                    } else {
+                        i++;
+                    }
+                    continue;
+                }
+
+                // Key-value pair with colon: key:val or 'key':val
+                const colonSplit = splitFirstAtLevel(part, ":");
+                if (colonSplit) {
+                    const [keyPart, valPart] = colonSplit;
+                    const keyNode = this.parseExpression(keyPart);
+                    const keyName = keyNode.type === "Literal" ? String(keyNode.value) : (keyNode as Identifier).name;
+                    const valNode = this.parseExpression(valPart);
+                    const isMethod = valNode.type === "FunctionExpression" || (valNode as any).type === "ObjectMethod";
+                    properties.push({
+                        type: "Property",
+                        key: /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(keyName)
+                            ? { type: "Identifier", name: keyName }
+                            : { type: "Literal", value: keyName },
+                        value: valNode,
+                        kind: "init",
+                        computed: false,
+                        method: isMethod,
+                        shorthand: false,
+                    });
+                    i++;
+                    continue;
+                }
+
+                // Legacy alternating format: 'key';val
+                if (part.startsWith("'") && i + 1 < parts.length) {
+                    const keyNode = this.parseExpression(part);
+                    const keyName = keyNode.type === "Literal" ? String(keyNode.value) : (keyNode as Identifier).name;
+                    const valNode = this.parseExpression(parts[i + 1].trim());
+                    const isMethod = valNode.type === "FunctionExpression" || (valNode as any).type === "ObjectMethod";
+                    properties.push({
+                        type: "Property",
+                        key: /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(keyName)
+                            ? { type: "Identifier", name: keyName }
+                            : { type: "Literal", value: keyName },
+                        value: valNode,
+                        kind: "init",
+                        computed: false,
+                        method: isMethod,
+                        shorthand: false,
+                    });
+                    i += 2;
+                    continue;
+                }
+
+                // Shorthand property: prop (e.g. counter, channel)
+                const propNode = this.parseExpression(part);
+                const propName = propNode.type === "Literal" ? String(propNode.value) : (propNode as Identifier).name;
                 properties.push({
                     type: "Property",
-                    key: /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(keyName)
-                        ? { type: "Identifier", name: keyName }
-                        : { type: "Literal", value: keyName },
-                    value: valNode,
+                    key: /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(propName)
+                        ? { type: "Identifier", name: propName }
+                        : { type: "Literal", value: propName },
+                    value: propNode,
                     kind: "init",
                     computed: false,
-                    method: isMethod,
+                    method: false,
+                    shorthand: true,
                 });
+                i++;
             }
             return { type: "ObjectExpression", properties };
         }

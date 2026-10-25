@@ -445,3 +445,566 @@ export { a, b } from "./math";
         expect(roundtrippedJs).toContain('export { a, b } from "./math";');
     });
 });
+
+describe("Monadic @ and @: Await Verb Support", () => {
+    test("Transpiles @ expr and @: expr to JavaScript await", () => {
+        const codonCode = `
+res1 =: @ (fetch url)
+res2 =: @: (api.get id)
+res3 =: (@ task())
+res4 =: (await legacyCall())
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("const res1 = await fetch(url);");
+        expect(js).toContain("const res2 = await api.get(id);");
+        expect(js).toContain("const res3 = await task();");
+        expect(js).toContain("const res4 = await legacyCall();");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles standalone statement await @ expr", () => {
+        const codonCode = `
+@ (delay 50)
+(@ cleanup())
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("await delay(50);");
+        expect(js).toContain("await cleanup();");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips JS await expressions using @ notation", () => {
+        const jsCode = `
+async function loadData(endpoint) {
+  const response = await fetch(endpoint);
+  const data = await response.json();
+  return data;
+}
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("@");
+        expect(codonCode).not.toContain("(await");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+        expect(roundtrippedJs).toContain("await fetch(endpoint)");
+        expect(roundtrippedJs).toContain("await response.json()");
+    });
+});
+
+describe("Concise Object Expressions (Colon Key-Value, Shorthand, Spread)", () => {
+    test("Transpiles shorthand property O(counter) to { counter }", () => {
+        const codonCode = `
+payload =: O(counter)
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("counter");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles colon key-value pairs and multiple shorthand properties", () => {
+        const codonCode = `
+todo =: O(id;title;completed:0;active:true)
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("id");
+        expect(js).toContain("title");
+        expect(js).toContain("completed: 0");
+        expect(js).toContain("active: true");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles nested objects with spread O(...rest;headers:O('Content-Type':'application/json'))", () => {
+        const codonCode = `
+opts =: O(...rest;headers:O('Content-Type':'application/json';...defaultHeaders))
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("...rest");
+        expect(js).toContain("...defaultHeaders");
+        expect(js).toContain('"Content-Type": "application/json"');
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Retains backward compatibility with legacy alternating O('key';val)", () => {
+        const codonCode = `
+legacy =: O('name';'Alice';'age';30;'...';extra)
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain('name: "Alice"');
+        expect(js).toContain("age: 30");
+        expect(js).toContain("...extra");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips JS object literals with shorthand, colon syntax, and spread", () => {
+        const jsCode = `
+const channel = "chat";
+const data = { msg: "hi" };
+const payload = { channel, data, status: 200, ...metadata };
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("channel");
+        expect(codonCode).toContain("data");
+        expect(codonCode).toContain("status:200");
+        expect(codonCode).toContain("...metadata");
+        expect(codonCode).not.toContain("'channel';channel");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+        expect(roundtrippedJs).toContain("channel");
+        expect(roundtrippedJs).toContain("status: 200");
+        expect(roundtrippedJs).toContain("...metadata");
+    });
+});
+
+describe("Concise Direct Definition (Arrow & Anonymous Functions) Support", () => {
+    test("Transpiles concise arrow expressions {{params => expr}} to JS", () => {
+        const codonCode = `
+double =: {{x => (x * 2)}}
+add =: {{a, b => (a + b)}}
+constant =: {{=> 42}}
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("x => x * 2");
+        expect(js).toContain("(a, b) => a + b");
+        expect(js).toContain("() => 42");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles concise block arrow functions {{params => do. ... }} to JS", () => {
+        const codonCode = `
+processItem =: {{x => do.
+(console.log x)
+return. (x + 1)
+}}
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("console.log(x)");
+        expect(js).toContain("return x + 1");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles async arrow functions {{async params => expr}} and block forms", () => {
+        const codonCode = `
+fetchData =: {{async url => @ (fetch url)}}
+delayTask =: {{async ms => do.
+@ (delay ms)
+return. 1
+}}
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("async url => await fetch(url)");
+        expect(js).toContain("await delay(ms)");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles anonymous function expressions {{fn params => do. ... }} to JS", () => {
+        const codonCode = `
+handler =: {{fn req, res => do.
+(res.json O(ok:true))
+}}
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("function (req, res)");
+        expect(js).toContain("ok: true");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles arrow function with pattern destructuring", () => {
+        const codonCode = `
+calc =: {{[x, y] => (x * y)}}
+getName =: {{({name}) => name}}
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("([x, y]) => x * y");
+        expect(js).toContain("name");
+        expect(js).toContain("=> name");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips JS arrow functions and anonymous function expressions", () => {
+        const jsCode = `
+const double = x => x * 2;
+const add = (a, b) => a + b;
+const run = async () => {
+  await delay(10);
+  return 42;
+};
+const handler = function (req, res) {
+  res.json({ ok: true });
+};
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("{{x => (x * 2)}}");
+        expect(codonCode).toContain("{{a,b => (a + b)}}");
+        expect(codonCode).toContain("{{async => do.");
+        expect(codonCode).toContain("{{fn req,res => do.");
+        expect(codonCode).not.toContain("NB. pE|");
+        expect(codonCode).not.toContain("NB. pB|");
+        expect(codonCode).not.toContain("NB. FE|");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+        expect(roundtrippedJs).toContain("x => x * 2");
+        expect(roundtrippedJs).toContain("(a, b) => a + b");
+        expect(roundtrippedJs).toContain("function (req, res)");
+    });
+
+    test("Retains backward compatibility with legacy NB. pE| and NB. pB| forms", () => {
+        const codonCode = `
+delay =: ({{ NB. pE|ms
+(new Promise ({{ NB. pE|resolve
+(setTimeout resolve ms)
+}}))
+}})
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("ms => new Promise");
+        expect(js).toContain("setTimeout(resolve, ms)");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+});
+
+describe("Concise Function Declarations (fn. and async_fn.) Support", () => {
+    test("Transpiles synchronous function declarations fn. name params do. ... end.", () => {
+        const codonCode = `
+fn. addTodo title do.
+return. (Number title)
+end.
+
+fn. getTodos do.
+return. (0$0)
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("function addTodo(title)");
+        expect(js).toContain("function getTodos()");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+
+        const fn = new Function(`${js}; return { add: addTodo("42"), list: getTodos() };`);
+        const res = fn();
+        expect(res.add).toBe(42);
+        expect(res.list).toEqual([]);
+    });
+
+    test("Transpiles asynchronous function declarations async_fn. name params do. ... end.", async () => {
+        const codonCode = `
+async_fn. fetchUser id do.
+return. O(id;name:'Alice')
+end.
+
+async_fn. noop do.
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("async function fetchUser(id)");
+        expect(js).toContain("async function noop()");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+
+        const fn = new Function(`${js}; return fetchUser(101);`);
+        const res = await fn();
+        expect(res).toEqual({ id: 101, name: "Alice" });
+    });
+
+    test("Transpiles exported function declarations with NB. export and export.", () => {
+        const codonCode = `
+NB. export
+fn. parseData raw do.
+return. (raw.trim())
+end.
+
+export. async_fn. sendMsg msg do.
+return. true
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("export function parseData(raw)");
+        expect(js).toContain("export async function sendMsg(msg)");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles function declarations with destructuring and default params", () => {
+        const codonCode = `
+fn. greet name='world' do.
+return. \`Hello \${name}\`
+end.
+
+fn. handleItem {id,val} do.
+return. (id + val)
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain('function greet(name = "world")');
+        expect(js).toContain("function handleItem");
+        expect(js).toContain("id");
+        expect(js).toContain("val");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+
+        const fn = new Function(`${js}; return { g1: greet(), g2: greet("Bob"), h: handleItem({ id: 10, val: 5 }) };`);
+        const res = fn();
+        expect(res.g1).toBe("Hello world");
+        expect(res.g2).toBe("Hello Bob");
+        expect(res.h).toBe(15);
+    });
+
+    test("Roundtrips JS function declarations with fn. and async_fn.", () => {
+        const jsCode = `
+function add(a, b) {
+  return a + b;
+}
+async function fetchData(url) {
+  return await fetch(url);
+}
+export function getStatus() {
+  return 200;
+}
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("fn. add a,b do.");
+        expect(codonCode).toContain("async_fn. fetchData url do.");
+        expect(codonCode).toContain("fn. getStatus do.");
+        expect(codonCode).not.toContain("NB. FD|");
+        expect(codonCode).not.toContain("NB. async FD|");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+        expect(roundtrippedJs).toContain("function add(a, b)");
+        expect(roundtrippedJs).toContain("async function fetchData(url)");
+        expect(roundtrippedJs).toContain("export function getStatus()");
+    });
+
+    test("Retains backward compatibility with legacy NB. FD| and NB. async FD| forms", () => {
+        const codonCode = `
+{{ NB. FD|addTodo|title
+result =: (insertStmt.run title)
+return. (Number result.lastInsertRowid)
+}}
+
+{{ NB. async FD|scanDir|dir,extension
+entries =: @ (fs.readdir dir)
+return. entries
+}}
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("function addTodo(title)");
+        expect(js).toContain("async function scanDir(dir, extension)");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+});
+
+describe("Concise Module Imports and Exports (import. and export.) Support", () => {
+    test("Transpiles import. declarations with default, named, namespace, and side-effect specifiers", () => {
+        const codonCode = `
+import. express from 'express'
+import. React,{useState,useRef} from 'react'
+import. * as path from 'path'
+import. 'style.css'
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain('import express from "express";');
+        expect(js).toContain('import React, { useState, useRef } from "react";');
+        expect(js).toContain('import * as path from "path";');
+        expect(js).toContain('import "style.css";');
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles import. with colon separator and aliased specifiers", () => {
+        const codonCode = `
+import. express : 'express'
+import. {read as readFile,write as writeFile} from 'fs'
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain('import express from "express";');
+        expect(js).toContain('import { read as readFile, write as writeFile } from "fs";');
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles export. declarations and export. default", () => {
+        const codonCode = `
+export. fn. add a,b do.
+return. (a + b)
+end.
+
+export. class. User do.
+end.
+
+export. default (add 1 2)
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("export function add(a, b)");
+        expect(js).toContain("export class User");
+        expect(js).toContain("export default add(1, 2);");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips JS import and export declarations with import. and export.", () => {
+        const jsCode = `
+import express from "express";
+import React, { useState, useRef } from "react";
+import * as path from "node:path";
+import "reset.css";
+
+export function handleRequest(req, res) {
+  return res.json({ ok: true });
+}
+
+export class ServiceClient {
+  constructor(url) {
+    this.url = url;
+  }
+}
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("import. express from 'express'");
+        expect(codonCode).toContain("import. React,{useState,useRef} from 'react'");
+        expect(codonCode).toContain("import. * as path from 'node:path'");
+        expect(codonCode).toContain("import. 'reset.css'");
+        expect(codonCode).toContain("export. fn. handleRequest req,res do.");
+        expect(codonCode).toContain("export. class. ServiceClient do.");
+        expect(codonCode).not.toContain("NB. i|");
+        expect(codonCode).not.toContain("NB. export\n");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+        expect(roundtrippedJs).toContain('import express from "express";');
+        expect(roundtrippedJs).toContain('import React, { useState, useRef } from "react";');
+        expect(roundtrippedJs).toContain('import * as path from "node:path";');
+        expect(roundtrippedJs).toContain('import "reset.css";');
+        expect(roundtrippedJs).toContain("export function handleRequest(req, res)");
+        expect(roundtrippedJs).toContain("export class ServiceClient");
+    });
+
+    test("Retains backward compatibility with legacy NB. i| and NB. export forms", () => {
+        const codonCode = `
+NB. i|D:express:express|N:useState,useRef:react
+NB. export
+fn. legacyHandler do.
+return. 1
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain('import express from "express";');
+        expect(js).toContain('import { useState, useRef } from "react";');
+        expect(js).toContain("export function legacyHandler()");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+});

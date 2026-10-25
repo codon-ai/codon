@@ -75,21 +75,32 @@ export class JSToCodonTranslator {
 
                 for (const n of node.body) {
                     if (n.type === "ImportDeclaration") {
-                        const source = String((n.source as Literal).value).replace(/\|/g, "%7C").replace(/:/g, "%3A");
+                        const src = String((n.source as Literal).value);
                         if (!n.specifiers || n.specifiers.length === 0) {
-                            imports.push(`S::${source}`);
+                            imports.push(`import. '${src}'`);
                         } else {
+                            let defaultSpec = "";
+                            let namespaceSpec = "";
+                            const namedSpecs: string[] = [];
+
                             for (const s of n.specifiers) {
                                 if (s.type === "ImportDefaultSpecifier") {
-                                    imports.push(`D:${s.local.name}:${source}`);
+                                    defaultSpec = s.local.name;
                                 } else if (s.type === "ImportNamespaceSpecifier") {
-                                    imports.push(`A:${s.local.name}:${source}`);
+                                    namespaceSpec = `* as ${s.local.name}`;
                                 } else if (s.type === "ImportSpecifier") {
                                     const imported = s.imported.name;
                                     const local = s.local ? s.local.name : imported;
-                                    imports.push(`N:${imported}${local !== imported ? " as " + local : ""}:${source}`);
+                                    namedSpecs.push(local !== imported ? `${imported} as ${local}` : imported);
                                 }
                             }
+
+                            const specParts: string[] = [];
+                            if (defaultSpec) specParts.push(defaultSpec);
+                            if (namespaceSpec) specParts.push(namespaceSpec);
+                            if (namedSpecs.length > 0) specParts.push(`{${namedSpecs.join(",")}}`);
+
+                            imports.push(`import. ${specParts.join(",")} from '${src}'`);
                         }
                     } else if (n.type === "ExportDefaultDeclaration") {
                         exports.push(`NB. e|${this.transpile(n.declaration)}`);
@@ -98,7 +109,7 @@ export class JSToCodonTranslator {
                         exports.push(`NB. exAll|${source}`);
                     } else if (n.type === "ExportNamedDeclaration") {
                         if (n.declaration) {
-                            body.push(`NB. export\n` + this.transpile(n.declaration));
+                            body.push(`export. ` + this.transpile(n.declaration));
                         } else if (n.specifiers && n.specifiers.length > 0) {
                             const specNames = n.specifiers
                                 .map((s) => (s.exported ? s.exported.name : s.local.name))
@@ -112,7 +123,7 @@ export class JSToCodonTranslator {
                 }
 
                 const out: string[] = [];
-                if (imports.length > 0) out.push(`NB. i|${imports.join("|")}`);
+                out.push(...imports);
                 out.push(...body);
                 out.push(...exports);
                 return out.filter(Boolean).join("\n\n");
@@ -122,12 +133,19 @@ export class JSToCodonTranslator {
                 return node.declarations
                     .map((d) => {
                         const idStr = this.transpilePattern(d.id);
-                        const initStr = d.init ? this.transpile(d.init) : "''";
+                        let initStr = d.init ? this.transpile(d.init) : "''";
+                        if (d.init?.type === "AwaitExpression" && initStr.startsWith("(@ ") && initStr.endsWith(")")) {
+                            initStr = "@ " + initStr.slice(3, -1);
+                        }
                         return `${idStr} =: ${initStr}`;
                     })
                     .join("\n");
 
             case "ExpressionStatement":
+                if (node.expression.type === "AwaitExpression") {
+                    const argStr = this.transpile((node.expression as any).argument);
+                    return `@ ${argStr}`;
+                }
                 return this.transpile(node.expression);
 
             case "BlockStatement":
@@ -269,23 +287,57 @@ export class JSToCodonTranslator {
                 return `${isAsync ? "async_method." : "method."} ${keyStr} ${params} do.\n${body}\nend.`;
             }
 
+            case "ImportDeclaration": {
+                const src = String((node.source as Literal).value);
+                if (!node.specifiers || node.specifiers.length === 0) {
+                    return `import. '${src}'`;
+                }
+                let defaultSpec = "";
+                let namespaceSpec = "";
+                const namedSpecs: string[] = [];
+
+                for (const s of node.specifiers) {
+                    if (s.type === "ImportDefaultSpecifier") {
+                        defaultSpec = s.local.name;
+                    } else if (s.type === "ImportNamespaceSpecifier") {
+                        namespaceSpec = `* as ${s.local.name}`;
+                    } else if (s.type === "ImportSpecifier") {
+                        const imported = s.imported.name;
+                        const local = s.local ? s.local.name : imported;
+                        namedSpecs.push(local !== imported ? `${imported} as ${local}` : imported);
+                    }
+                }
+
+                const specParts: string[] = [];
+                if (defaultSpec) specParts.push(defaultSpec);
+                if (namespaceSpec) specParts.push(namespaceSpec);
+                if (namedSpecs.length > 0) specParts.push(`{${namedSpecs.join(",")}}`);
+
+                return `import. ${specParts.join(",")} from '${src}'`;
+            }
+
             case "FunctionDeclaration": {
                 const fdParams = node.params.map((p) => this.transpilePattern(p)).join(",");
-                const asyncPrefix = node.async ? "async " : "";
-                return `{{ NB. ${asyncPrefix}FD|${node.id ? node.id.name : "anonymous"}|${fdParams}\n${this.transpile(node.body)}\n}}`;
+                const fnName = node.id ? node.id.name : "";
+                const prefix = node.async ? "async_fn." : "fn.";
+                const header = fnName ? (fdParams ? `${fnName} ${fdParams}` : fnName) : (fdParams || "");
+                return `${prefix}${header ? " " + header : ""} do.\n${this.transpile(node.body)}\nend.`;
             }
 
             case "FunctionExpression": {
                 const feParams = node.params.map((p) => this.transpilePattern(p)).join(",");
-                const asyncPrefix = node.async ? "async " : "";
-                return `({{ NB. ${asyncPrefix}FE|${feParams}\n${this.transpile(node.body)}\n}})`;
+                const fnHeader = node.async ? (feParams ? `async fn ${feParams}` : "async fn") : (feParams ? `fn ${feParams}` : "fn");
+                return `{{${fnHeader} => do.\n${this.transpile(node.body)}\n}}`;
             }
 
             case "ArrowFunctionExpression": {
                 const pStr = node.params.map((p) => this.transpilePattern(p)).join(",");
                 const isBlock = node.body.type === "BlockStatement";
-                const asyncPrefix = node.async ? "async " : "";
-                return `({{ NB. ${asyncPrefix}${isBlock ? "pB" : "pE"}|${pStr}\n${this.transpile(node.body)}\n}})`;
+                const pHeader = node.async ? (pStr ? `async ${pStr}` : "async") : pStr;
+                if (isBlock) {
+                    return `{{${pHeader} => do.\n${this.transpile(node.body)}\n}}`;
+                }
+                return `{{${pHeader} => ${this.transpile(node.body)}}}`;
             }
 
             case "ThisExpression":
@@ -315,22 +367,28 @@ export class JSToCodonTranslator {
                 if (p.method) {
                     const fnVal = p.value;
                     const pStr = fnVal.params.map((param: any) => this.transpilePattern(param)).join(",");
-                    const asyncPrefix = fnVal.async ? "async " : "";
-                    return `'${keyStr}';({{ NB. ${asyncPrefix}method|${pStr}\n${this.transpile(fnVal.body)}\n}})`;
+                    const fnHeader = fnVal.async ? (pStr ? `async fn ${pStr}` : "async fn") : (pStr ? `fn ${pStr}` : "fn");
+                    const formattedKey = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(keyStr) ? keyStr : `'${keyStr}'`;
+                    return `${formattedKey}:{{${fnHeader} => do.\n${this.transpile(fnVal.body)}\n}}`;
                 }
-                return `'${keyStr}';${this.transpile(p.value)}`;
+                if (p.shorthand || (p.key.type === "Identifier" && p.value.type === "Identifier" && p.key.name === p.value.name)) {
+                    return keyStr;
+                }
+                const formattedKey = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(keyStr) ? keyStr : `'${keyStr}'`;
+                return `${formattedKey}:${this.transpile(p.value)}`;
             }
 
             case "ObjectMethod" as any: {
                 const p = node as any;
                 const keyStr = p.key.type === "Identifier" ? p.key.name : String(p.key.value ?? this.transpile(p.key));
                 const pStr = p.params.map((param: any) => this.transpilePattern(param)).join(",");
-                const asyncPrefix = p.async ? "async " : "";
-                return `'${keyStr}';({{ NB. ${asyncPrefix}method|${pStr}\n${this.transpile(p.body)}\n}})`;
+                const fnHeader = p.async ? (pStr ? `async fn ${pStr}` : "async fn") : (pStr ? `fn ${pStr}` : "fn");
+                const formattedKey = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(keyStr) ? keyStr : `'${keyStr}'`;
+                return `${formattedKey}:{{${fnHeader} => do.\n${this.transpile(p.body)}\n}}`;
             }
 
             case "SpreadElement":
-                return `'...';${this.transpile(node.argument)}`;
+                return `...${this.transpile(node.argument)}`;
 
             case "NewExpression": {
                 const newArgs = node.arguments.map((a) => this.transpile(a)).join(" ");
@@ -394,7 +452,7 @@ export class JSToCodonTranslator {
             }
 
             case "AwaitExpression":
-                return `(await ${this.transpile(node.argument)})`;
+                return `(@ ${this.transpile(node.argument)})`;
 
             case "TemplateLiteral": {
                 let tpl = "`";
