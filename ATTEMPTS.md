@@ -1,8 +1,8 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
-## Revision 21a (successful)
-- **Tokens:** 500
+## Revision 21a (unsuccessful)
+- **Tokens:** 1208
 
 - **Revision Idea**: Introduce concise computed property keys in object literals (`O([key]:val)`, `O([fieldName]:result)`), flexible comma and semicolon delimiters in object expressions (`O(a:1, b:2)`), and single-operand boundary protection for update expressions (`++`, `--`), eliminating fatal compiler crashes and AST misparsing in dynamic dictionaries and call expressions with update arguments.
 - **Rationale**: In modern AI fullstack web development (GraphQL query execution and resolver dispatching, REST API responses, Next.js server actions, React form state, WebSocket client reconnection pipelines, and exponential backoff retry algorithms):
