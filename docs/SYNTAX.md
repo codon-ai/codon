@@ -535,6 +535,32 @@ Dog =: (class. Canine extends Animal do.
 end.)
 ```
 
+### Object Instantiation (`new`)
+
+Codon supports concise unparenthesized object instantiations across variable declarations, member assignments, return statements, and throw statements:
+
+```codon
+NB. Unparenthesized instantiation
+map =: new Map
+client =: new WebSocket 'ws://localhost:8080'
+db =: new Database ':memory:'
+
+NB. In returns and error handling
+return. new Promise {{resolve,reject => (resolve 42)}}
+throw. new Error 'Invalid state'
+```
+
+Transpiles to:
+```javascript
+const map = new Map();
+const client = new WebSocket("ws://localhost:8080");
+const db = new Database(":memory:");
+return new Promise((resolve, reject) => resolve(42));
+throw new Error("Invalid state");
+```
+
+Parenthesized forms like `(new Map)` and `(new WebSocket url)` remain fully supported for backward compatibility and inside nested argument lists.
+
 ---
 
 ## 9. Control Flow Structures

@@ -419,4 +419,43 @@ Revision 16a introduces native unparenthesized logical NOT expressions (`!expr`,
 ### Impact on Fullstack Applications
 In modern AI fullstack applications (React form validation, Next.js server actions, JSX disabled/error state bindings `<button disabled={!isValid}>`, Express middleware route checks, SQLite auto-increment IDs, WebSocket connection retries, and algorithmic loop counters), logical NOT checks and increment/decrement operations appear on 20–35% of all code branches. Eliminating mandatory wrapping parentheses saves 40–55% of tokens per operation, prevents fatal identifier misparsing, and enables LLMs to emit clean, concise conditional logic.
 
+## 10. Concise Unparenthesized New Expressions and Update Boundary Guard
 
+### Overview
+In standard J and prior versions of Codon, object and class instantiations using `new` strictly required outer wrapping parentheses `(new Callee [args...])`:
+- Writing `map =: new Map`, `this.socket = new WebSocket this.url`, `db =: new Database ':memory:'`, `return. new Promise {{...}}`, or `throw. new Error '...'` without parentheses caused the parser to misinterpret the expression as an invalid Identifier, triggering fatal Babel syntax errors.
+- `JSToCodonTranslator` unconditionally emitted redundant wrapping parentheses for all `NewExpression` AST nodes: `(${this.transpile(node.callee)} ...)`.
+- Furthermore, update expression detection (`++`, `--`) in `codon-parser.ts` lacked a single-operand boundary check, causing function call expressions containing update arguments (such as `(Math.pow 2 this.retryCount++)`) to greedily match trailing `++` across spaces, producing broken JavaScript (`Math.pow 2 this.retryCount++;`) and fatal Babel compiler crashes (`Missing semicolon`).
+
+Revision 24a introduces native unparenthesized `new` expression parsing at expression level (`new Callee`, `new Callee arg1 arg2`, `new Callee O(...)`) across variable declarations, member assignments, return statements, throw statements, and class properties, alongside single-operand boundary protection for update expressions (`splitAtLevel(inner, " ").length === 1`).
+
+### Syntax
+- `new Callee`: Zero-argument object instantiation (e.g. `map =: new Map`).
+- `new Callee arg1 arg2`: Multi-argument instantiation (e.g. `this.socket = new WebSocket this.url`).
+- `return. new Promise {{resolve,reject => ...}}`: Unparenthesized `new` in return statements.
+- `throw. new Error 'Not found'`: Unparenthesized `new` in throw statements.
+- `(Math.pow 2 this.retryCount++)`: Function call expressions with update arguments cleanly parse into `CallExpression` nodes.
+- `(new Callee [args...])`: Retained for backward compatibility.
+
+### How It Functions
+- **Parsing (`CodonToASTParser`)**:
+  - In `parseExpression`, `strippedExpr.startsWith("new ") && strippedExpr.length > 4` is recognized directly at expression level without requiring `wasWrapped`. It extracts the callee and arguments using `splitAtLevel(strippedExpr, " ")` and constructs a clean ESTree `NewExpression` node.
+  - In update expression parsing (`strippedExpr.endsWith("++")`, `strippedExpr.endsWith("--")`, etc.), an additional single-operand boundary check `splitAtLevel(inner, " ").length === 1` ensures that multi-operand function call expressions containing trailing update arguments are not captured as raw update expressions.
+- **Transpilation (`JSToCodonTranslator`)**:
+  - In `VariableDeclaration`, `ClassProperty`, `ExpressionStatement`, `ReturnStatement`, and `ThrowStatement`, when the target expression or right-hand side is a `NewExpression` (or `AwaitExpression`), the translator unwraps redundant outer parentheses `(new ...)` and `(@ ...)`, emitting concise unparenthesized forms directly.
+- **Code Generation (`CodonToJSCompiler`)**: Normalizes the `NewExpression` AST node and emits standard JavaScript `new Callee(...)` via `@babel/generator`.
+
+### Comparison Examples & Token Savings
+
+| Pattern | Standard J / Legacy Codon | Optimized Codon (Rev 24a) | JavaScript Target | Token Reduction |
+| :--- | :--- | :--- | :--- | :--- |
+| **Collection Instantiation** | `map =: (new Map)` | `map =: new Map` | `const map = new Map();` | **~50%** (2 tokens vs 4 tokens) |
+| **WebSocket Connection** | `this.socket = (new WebSocket this.url)` | `this.socket = new WebSocket this.url` | `this.socket = new WebSocket(this.url);` | **~33%** (4 tokens vs 6 tokens) |
+| **Database Connection** | `db =: (new Database ':memory:')` | `db =: new Database ':memory:'` | `const db = new Database(":memory:");` | **~33%** (4 tokens vs 6 tokens) |
+| **Promise Return** | `return. (new Promise {{resolve,reject => do. ... end.}})` | `return. new Promise {{resolve,reject => do. ... end.}}` | `return new Promise((resolve, reject) => { ... });` | **~25%** (5 tokens vs 7 tokens) |
+| **Error Throwing** | `throw. (new Error 'Not found')` | `throw. new Error 'Not found'` | `throw new Error("Not found");` | **~33%** (4 tokens vs 6 tokens) |
+| **HTTP Agent Setup** | `return. (new http.Agent O(keepAlive:true))` | `return. new http.Agent O(keepAlive:true)` | `return new http.Agent({ keepAlive: true });` | **~25%** (6 tokens vs 8 tokens) |
+| **Call with Update Arg** | `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` *(crashed with Missing semicolon)* | `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` | `const delay = baseDelay * Math.pow(2, this.retryCount++);` | **100% bug fix & valid parse** |
+
+### Impact on Fullstack Applications
+In modern AI fullstack applications (Node/Express APIs, WebSocket clients, SQLite/Prisma database drivers, async Promises, Maps, Sets, and error boundaries), `new` instantiations are pervasive. Eliminating mandatory wrapping parentheses saves 25–50% of tokens per instantiation, and enforcing single-operand boundaries on update expressions eliminates fatal compilation crashes across exponential retry loops and WebSocket clients.

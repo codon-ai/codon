@@ -226,6 +226,9 @@ export class JSToCodonTranslator {
                         if (d.init?.type === "AwaitExpression" && initStr.startsWith("(@ ") && initStr.endsWith(")")) {
                             initStr = "@ " + initStr.slice(3, -1);
                         }
+                        if (d.init?.type === "NewExpression" && initStr.startsWith("(new ") && initStr.endsWith(")")) {
+                            initStr = initStr.slice(1, -1);
+                        }
                         return `${idStr} =: ${initStr}`;
                     })
                     .join("\n");
@@ -237,7 +240,21 @@ export class JSToCodonTranslator {
                 }
                 if (node.expression.type === "AssignmentExpression") {
                     const assignNode = node.expression as AssignmentExpression;
-                    return `${this.transpile(assignNode.left)} ${assignNode.operator} ${this.transpile(assignNode.right)}`;
+                    let rightStr = this.transpile(assignNode.right);
+                    if (assignNode.right.type === "NewExpression" && rightStr.startsWith("(new ") && rightStr.endsWith(")")) {
+                        rightStr = rightStr.slice(1, -1);
+                    }
+                    if (assignNode.right.type === "AwaitExpression" && rightStr.startsWith("(@ ") && rightStr.endsWith(")")) {
+                        rightStr = "@ " + rightStr.slice(3, -1);
+                    }
+                    return `${this.transpile(assignNode.left)} ${assignNode.operator} ${rightStr}`;
+                }
+                if (node.expression.type === "NewExpression") {
+                    let exprStr = this.transpile(node.expression);
+                    if (exprStr.startsWith("(new ") && exprStr.endsWith(")")) {
+                        exprStr = exprStr.slice(1, -1);
+                    }
+                    return exprStr;
                 }
                 return this.transpile(node.expression);
 
@@ -307,11 +324,25 @@ export class JSToCodonTranslator {
                 return `try. do.\n${blockStr}\n${catchStr}${finStr}end.`;
             }
 
-            case "ThrowStatement":
-                return `throw. ${this.transpile(node.argument)}`;
+            case "ThrowStatement": {
+                let argStr = this.transpile(node.argument);
+                if (node.argument.type === "NewExpression" && argStr.startsWith("(new ") && argStr.endsWith(")")) {
+                    argStr = argStr.slice(1, -1);
+                }
+                return `throw. ${argStr}`;
+            }
 
-            case "ReturnStatement":
-                return node.argument ? `return. ${this.transpile(node.argument)}` : "return.";
+            case "ReturnStatement": {
+                if (!node.argument) return "return.";
+                let argStr = this.transpile(node.argument);
+                if (node.argument.type === "NewExpression" && argStr.startsWith("(new ") && argStr.endsWith(")")) {
+                    argStr = argStr.slice(1, -1);
+                }
+                if (node.argument.type === "AwaitExpression" && argStr.startsWith("(@ ") && argStr.endsWith(")")) {
+                    argStr = "@ " + argStr.slice(3, -1);
+                }
+                return `return. ${argStr}`;
+            }
 
             case "YieldExpression":
                 return (node as any).argument ? `yield. ${this.transpile((node as any).argument)}` : "yield.";
@@ -358,7 +389,13 @@ export class JSToCodonTranslator {
             case "ClassProperty": {
                 const pNode = node as PropertyDefinition | ClassProperty;
                 const keyStr = (pNode.key as any).type === "Identifier" ? (pNode.key as any).name : this.transpile(pNode.key);
-                const initStr = pNode.value ? this.transpile(pNode.value) : "''";
+                let initStr = pNode.value ? this.transpile(pNode.value) : "''";
+                if (pNode.value?.type === "NewExpression" && initStr.startsWith("(new ") && initStr.endsWith(")")) {
+                    initStr = initStr.slice(1, -1);
+                }
+                if (pNode.value?.type === "AwaitExpression" && initStr.startsWith("(@ ") && initStr.endsWith(")")) {
+                    initStr = "@ " + initStr.slice(3, -1);
+                }
                 return `${pNode.static ? "static " : ""}${keyStr} =: ${initStr}`;
             }
 

@@ -1505,5 +1505,113 @@ end.
     });
 });
 
+describe("Concise Unparenthesized New Expressions and Update Boundary Guard (Rev 24a)", () => {
+    test("Transpiles unparenthesized new expressions in variable declarations and assignments", () => {
+        const codonCode = `
+map =: new Map
+this.socket = new WebSocket this.url
+db =: new Database ':memory:'
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("const map = new Map();");
+        expect(js).toContain("this.socket = new WebSocket(this.url);");
+        expect(js).toContain('const db = new Database(":memory:");');
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles unparenthesized new in return and throw statements", () => {
+        const codonCode = `
+fn. createAgent do.
+  return. new http.Agent O(keepAlive:true;maxSockets:10)
+end.
+
+fn. fail do.
+  throw. new Error 'Connection refused'
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("return new http.Agent(");
+        expect(js).toContain('throw new Error("Connection refused");');
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles function call with update argument (Math.pow 2 this.retryCount++)", () => {
+        const codonCode = `
+delay =: (this.baseDelayMs * (Math.pow 2 this.retryCount++))
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("Math.pow(2, this.retryCount++)");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips JS new expressions with concise unparenthesized notation", () => {
+        const jsCode = `
+const map = new Map();
+this.socket = new WebSocket("ws://localhost:8080");
+const db = new Database(":memory:");
+function createPromise() {
+  return new Promise((resolve, reject) => {
+    resolve(1);
+  });
+}
+function throwErr() {
+  throw new Error("fail");
+}
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("map =: new Map");
+        expect(codonCode).toContain("this.socket = new WebSocket 'ws://localhost:8080'");
+        expect(codonCode).toContain("db =: new Database ':memory:'");
+        expect(codonCode).toContain("return. new Promise");
+        expect(codonCode).toContain("throw. new Error 'fail'");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(roundtrippedJs).toContain("new Map()");
+        expect(roundtrippedJs).toContain("new WebSocket(");
+        expect(roundtrippedJs).toContain("new Database(");
+        expect(roundtrippedJs).toContain("return new Promise(");
+        expect(roundtrippedJs).toContain('throw new Error("fail");');
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Retains backward compatibility with parenthesized new expressions (new Callee)", () => {
+        const codonCode = `
+map =: (new Map)
+this.socket = (new WebSocket this.url)
+fn. makePromise do.
+  return. (new Promise {{resolve,reject => (resolve 42)}})
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("const map = new Map();");
+        expect(js).toContain("this.socket = new WebSocket(this.url);");
+        expect(js).toContain("return new Promise(");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+});
+
 
 
