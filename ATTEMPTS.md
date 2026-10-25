@@ -2,7 +2,7 @@
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
 ## Revision 10a (successful)
-- **Tokens:** 3260
+- **Tokens:** 772
 
 - **Revision Idea**: Introduce concise unparenthesized member assignment (`this.prop = val`, `this.prop =: val`, `obj.prop = val`, `obj.[key] = val`), variable reassignment (`x = val`), and compound assignment statements (`count += 1`, `len -= 1`, `total *= 2`) in Codon, eliminating mandatory outer wrapping parentheses `(this.prop = val)` and `(count += 1)`.
 - **Rationale**: In modern AI fullstack web development (React component refs, event handlers, Express/Koa request/response headers and status codes, WebSocket client connection state management, database query builders, in-memory indexes, and algorithmic pipelines), member assignments (`this.socket = null`, `this.retryCount = 0`, `res.statusCode = 200`, `headers.host = host`, `node.keys[i] = key`), variable reassignments (`idx = parentIdx`), and in-place compound mutations (`count += 1`, `nextId.current += 1`, `len -= 1`) are among the most frequent statement-level operations. Prior to Revision 10a, Codon suffered from two major limitations:
