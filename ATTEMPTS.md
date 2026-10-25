@@ -1,6 +1,37 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
+## Revision 15a (unsuccessful)
+- **Tokens:** 3970
+
+- **Revision Idea**: Introduce concise unparenthesized logical NOT expressions (`!expr`, `!obj.method()`) and unparenthesized update expressions (`expr++`, `expr--`, `++expr`, `--expr`) in Codon, eliminating mandatory outer wrapping parentheses `(! expr)` and `(expr++)`.
+- **Rationale**: In modern AI fullstack web development (React component state and JSX conditional rendering, form validation, event handling, API error checking, HTTP response handling, safe type checks, loop iterations, and auto-incrementing ID generators), logical NOT expressions (`!isValid`, `!response.ok`, `!input.trim()`, `!cache.has(key)`) and update expressions (`nextId.current++`, `i++`, `count++`) are among the most pervasive expressions. Prior to Revision 15a, Codon suffered from two critical limitations:
+  1. Codon strictly required every logical NOT expression to be wrapped in outer parentheses `(! expr)` and update expressions `(x++)`, `(++x)`. Omitting outer parentheses (such as `if. !input.trim() do.`, `return. !found`, `isValid =: !error && !loading`, or `id: nextId.current++`) caused the parser to misinterpret the expression as a raw malformed Identifier token (`{ type: "Identifier", name: "!input" }`) or misparse update expressions as broken binary addition/subtraction `nextId.current + +` or `i + +`, producing invalid JavaScript and fatal Babel compiler crashes (`Unexpected token`).
+  2. `JSToCodonTranslator` unconditionally emitted redundant wrapping parentheses and whitespace for all logical NOT expressions `(! ${arg})` and update expressions `(${arg}++)`, inflating token counts across every conditional check and counter update in fullstack applications.
+  By enabling unparenthesized logical NOT parsing at depth 0, preventing binary `+`/`-` from splitting update operators `++`/`--`, and emitting concise `!${arg}` and `${arg}++` directly:
+  - Unparenthesized logical NOT: `!isValid`, `!response.ok`, `!input.trim()`, `!cache.has(key)`
+  - Unparenthesized update: `nextId.current++`, `i++`, `count--`
+  - Compound logical conditions: `!error && !loading`
+  - React handlers & JSX: `if. !input.trim() do. return. end.`, `<button disabled={!isValid}>`
+  - Full roundtrip fidelity: JS ➔ Codon (concise unparenthesized unary & update emission) ➔ JS (100% Babel parser validation).
+  - Retains 100% backward compatibility with legacy parenthesized forms `(! expr)` and `(x++)`.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates 2 wrapping tokens `(` and `)` plus redundant whitespace per logical NOT expression (e.g. `(! input.trim())` [6 tokens] -> `!input.trim()` [3 tokens], saving 50% tokens per check).
+  - Eliminates 2 wrapping tokens per update expression (e.g. `(nextId.current++)` [5 tokens] -> `nextId.current++` [3 tokens], saving 40% tokens; `(i++)` [4 tokens] -> `i++` [2 tokens], saving 50% tokens).
+  - Prevents AST corruption, invalid `nextId.current + +` additions, and syntax crashes across LLM fullstack code generation.
+- **Concrete Syntax Changes**:
+  - `codon-parser.ts`: Updated `parseExpression` to detect unparenthesized prefix `!` (when not `!=` or `!==`) after binary splitting, returning clean `UnaryExpression` nodes. Updated update expression detection to parse `++` and `--` without requiring `wasWrapped`. Added boundary guards in `parseBinaryOrAssignment` so binary `+` and `-` operators do not match or split `++` and `--`.
+  - `transpilers.ts`: Updated `JSToCodonTranslator` in `UnaryExpression` to emit concise `!${this.transpile(node.argument)}` when `node.operator === "!"`, and updated `UpdateExpression` to emit unparenthesized `${arg}++` / `++${arg}` directly.
+  - Examples:
+    - Old Codon: `if. (! input.trim()) do.`
+    - New Codon: `if. !input.trim() do.`
+    - Old Codon: `valid =: ((! error) && (! loading))`
+    - New Codon: `valid =: (!error && !loading)` or `valid =: !error && !loading`
+    - Old Codon: `todo =: O(id:(nextId.current++);title:text)`
+    - New Codon: `todo =: O(id:nextId.current++;title:text)`
+    - Old Codon: `for. i =: 0 ; i < 10 ; (i++) do.`
+    - New Codon: `for. i =: 0 ; i < 10 ; i++ do.`
+
 ## Revision 14a (unsuccessful)
 - **Tokens:** 4889
 
