@@ -1,6 +1,36 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
+## Revision 8a (successful)
+- **Tokens:** 3260
+
+- **Revision Idea**: Introduce concise conditional expressions (unparenthesized and right-associative chained ternary `test ? cons : alt`, and compact conditional forms) alongside logical nullish assignment operators (`??=`, `||=`, `&&=`), eliminating mandatory outer wrapping parentheses and supporting complex multi-branch conditional logic in fullstack Codon code.
+- **Rationale**: In modern AI fullstack web development (React component state and JSX conditional rendering, Express/Koa route parameter defaults, authentication/authorization status resolution, pagination boundaries, API error handling, and reactive state reducers), conditional expressions (`test ? consequent : alternate`) and logical short-circuit assignments (`cache[key] ??= compute()`, `headers ||= {}`) are among the most pervasive expressions. Prior to Revision 8a, Codon suffered from two major limitations:
+  1. Codon strictly required every ternary expression to be wrapped in outer parentheses `(test ? cons : alt)`. Omitting wrapping parentheses (such as `res =: isAuth ? 'user' : 'guest'` or `return. ok ? data : null`) caused the parser to misinterpret the entire conditional clause as a raw Identifier token containing spaces and operators (`{ type: "Identifier", name: "isAuth ? 'user' : 'guest'" }`), corrupting the AST.
+  2. Nested or chained ternaries (e.g., `(score >= 90 ? 'A' : score >= 80 ? 'B' : 'C')`) failed because Codon's parser rigidly required exactly two parts separated by `?`, causing multi-branch conditionals to erroneously fall through to `CallExpression` invocation `score(>=, 90, ...)`.
+  3. Logical assignment operators (`??=`, `||=`, `&&=`) were completely broken, emitting invalid JavaScript with spaces `a ||  = b` and causing Babel parser syntax errors.
+  By implementing right-associative depth-aware ternary parsing at level 0 and registering logical assignment operators in Tier 0 assignment precedence:
+  - Unparenthesized ternary: `res =: isAuth ? 'user' : 'guest'`
+  - Unparenthesized chained ternary: `grade =: score >= 90 ? 'A' : score >= 80 ? 'B' : 'C'`
+  - Return statements: `return. count > 0 ? count : 0`
+  - Logical assignment: `cache.[key] ??= (compute key)`, `options.headers ||= O()`
+  - Full roundtrip fidelity: JS ➔ Codon (concise unparenthesized ternary emission) ➔ JS (100% Babel parser validation).
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates 2 wrapping tokens `(` and `)` per ternary expression (~30% token reduction per conditional).
+  - Eliminates 6+ wrapper tokens on chained/nested conditionals (e.g. `(a ? b : (c ? d : e))` -> `a ? b : c ? d : e`).
+  - Cuts fallback initialization from 4-line `if.` blocks (12-15 tokens) down to a single logical assignment statement (3-5 tokens, a 65-75% token reduction).
+  - Prevents AST corruption and syntax hallucinations across LLM fullstack code generation.
+- **Concrete Syntax Changes**:
+  - `codon-parser.ts`: Implemented depth-aware right-associative ternary parsing in `parseExpression` to find the first un-nested `?` at level 0 and its matching `:` alternate delimiter, without requiring `wasWrapped`. Added `??=`, `||=`, and `&&=` to assignment operator precedence in `parseBinaryOrAssignment`.
+  - `transpilers.ts`: Updated `JSToCodonTranslator` to emit concise unparenthesized `test ? cons : alt` for `ConditionalExpression`, and preserved `AssignmentExpression` for logical assignment operators `??=`, `||=`, `&&=`.
+  - Examples:
+    - Old Codon: `status =: (isLoggedIn ? 'active' : 'guest')`
+    - New Codon: `status =: isLoggedIn ? 'active' : 'guest'`
+    - Old Codon: `badge =: (isNew ? 'NEW' : (isSale ? 'SALE' : 'REGULAR'))`
+    - New Codon: `badge =: isNew ? 'NEW' : isSale ? 'SALE' : 'REGULAR'`
+    - Old Codon: `if. (! cache.[key]) do. cache.[key] =: (compute key) end.`
+    - New Codon: `(cache.[key] ??= (compute key))`
+
 ## Revision 7a (successful)
 - **Tokens:** 3260
 
