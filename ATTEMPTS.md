@@ -1,8 +1,8 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
-## Revision 8a (successful)
-- **Tokens:** 3260
+## Revision 8a (unsuccessful)
+- **Tokens:** 4593
 
 - **Revision Idea**: Introduce concise conditional expressions (unparenthesized and right-associative chained ternary `test ? cons : alt`, and compact conditional forms) alongside logical nullish assignment operators (`??=`, `||=`, `&&=`), eliminating mandatory outer wrapping parentheses and supporting complex multi-branch conditional logic in fullstack Codon code.
 - **Rationale**: In modern AI fullstack web development (React component state and JSX conditional rendering, Express/Koa route parameter defaults, authentication/authorization status resolution, pagination boundaries, API error handling, and reactive state reducers), conditional expressions (`test ? consequent : alternate`) and logical short-circuit assignments (`cache[key] ??= compute()`, `headers ||= {}`) are among the most pervasive expressions. Prior to Revision 8a, Codon suffered from two major limitations:
