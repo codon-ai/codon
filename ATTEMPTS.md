@@ -2,7 +2,7 @@
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
 ## Revision 7a (successful)
-- **Tokens:** 2890
+- **Tokens:** 3260
 
 - **Revision Idea**: Introduce a Subtree Hashing Macro System in Codon (`M!name(...)` and `M!name()`) leveraging popularity metadata of Level 2 code clones in `dict.json`, allowing Codon to compact common verbose AST subtrees into token-dense macro invocations.
 - **Rationale**: Codon is designed to be maximally token efficient for LLMs without concern for human readability. Real-world fullstack JavaScript repositories exhibit repetitive structural patterns (Level 2 code clones — syntactically identical AST subtrees with variations only in parameter identifiers, literals, and local variable names). For example:
