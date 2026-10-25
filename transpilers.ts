@@ -507,6 +507,16 @@ export class JSToCodonTranslator {
             case "Property":
             case "ObjectProperty" as any: {
                 const p = node as any;
+                if (p.computed) {
+                    const keyStr = this.transpile(p.key);
+                    if (p.method) {
+                        const fnVal = p.value;
+                        const pStr = fnVal.params.map((param: any) => this.transpilePattern(param)).join(",");
+                        const fnHeader = fnVal.async ? (pStr ? `async fn ${pStr}` : "async fn") : (pStr ? `fn ${pStr}` : "fn");
+                        return `[${keyStr}]:{{${fnHeader} => do.\n${this.transpile(fnVal.body)}\n}}`;
+                    }
+                    return `[${keyStr}]:${this.transpile(p.value)}`;
+                }
                 const keyStr = p.key.type === "Identifier" ? p.key.name : String(p.key.value ?? this.transpile(p.key));
                 if (p.method) {
                     const fnVal = p.value;
@@ -524,9 +534,13 @@ export class JSToCodonTranslator {
 
             case "ObjectMethod" as any: {
                 const p = node as any;
-                const keyStr = p.key.type === "Identifier" ? p.key.name : String(p.key.value ?? this.transpile(p.key));
                 const pStr = p.params.map((param: any) => this.transpilePattern(param)).join(",");
                 const fnHeader = p.async ? (pStr ? `async fn ${pStr}` : "async fn") : (pStr ? `fn ${pStr}` : "fn");
+                if (p.computed) {
+                    const keyStr = this.transpile(p.key);
+                    return `[${keyStr}]:{{${fnHeader} => do.\n${this.transpile(p.body)}\n}}`;
+                }
+                const keyStr = p.key.type === "Identifier" ? p.key.name : String(p.key.value ?? this.transpile(p.key));
                 const formattedKey = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(keyStr) ? keyStr : `'${keyStr}'`;
                 return `${formattedKey}:{{${fnHeader} => do.\n${this.transpile(p.body)}\n}}`;
             }

@@ -1505,5 +1505,61 @@ end.
     });
 });
 
+describe("Concise Computed Property Keys in Object Literals and Update Expression Guard", () => {
+    test("Transpiles computed property keys O([key]:val) and O([fieldName]:result)", () => {
+        const codonCode = `
+res =: O([fieldName]:result)
+response =: O(data:O([key]:val);errors:[])
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("[fieldName]: result");
+        expect(js).toContain("[key]: val");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles function call with update expression argument (Math.pow 2 this.retryCount++)", () => {
+        const codonCode = `
+delay =: (this.baseDelayMs * (Math.pow 2 this.retryCount++))
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("Math.pow(2, this.retryCount++)");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips JS computed property keys", () => {
+        const jsCode = `
+const result = {
+  [fieldName]: data,
+  staticKey: 123,
+  [prefix + id]: true,
+};
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("[fieldName]:data");
+        expect(codonCode).toContain("staticKey:123");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(roundtrippedJs).toContain("[fieldName]: data");
+        expect(roundtrippedJs).toContain("staticKey: 123");
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+    });
+});
+
+
 
 

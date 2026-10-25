@@ -419,4 +419,42 @@ Revision 16a introduces native unparenthesized logical NOT expressions (`!expr`,
 ### Impact on Fullstack Applications
 In modern AI fullstack applications (React form validation, Next.js server actions, JSX disabled/error state bindings `<button disabled={!isValid}>`, Express middleware route checks, SQLite auto-increment IDs, WebSocket connection retries, and algorithmic loop counters), logical NOT checks and increment/decrement operations appear on 20–35% of all code branches. Eliminating mandatory wrapping parentheses saves 40–55% of tokens per operation, prevents fatal identifier misparsing, and enables LLMs to emit clean, concise conditional logic.
 
+## 10. Concise Computed Property Keys in Object Literals and Update Expression Single-Operand Guard
+
+### Overview
+In standard J and prior versions of Codon, object expressions `O(...)` supported static identifier keys (`O(key:val)`), quoted keys (`O('Content-Type':'application/json')`), and shorthand properties (`O(counter)`). However, dynamic computed property keys (`{ [fieldName]: result }` or `{ [key]: value }`) were unsupported:
+- Writing `O([fieldName]:result)` in Codon caused `parseExpression` to parse `[fieldName]` as an `ArrayExpression`, setting `keyName` to `undefined` and triggering a fatal compiler crash (`TypeError: undefined is not an object (evaluating 'str.length')`).
+- `JSToCodonTranslator` discarded `computed: true` on object properties, emitting static `fieldName:result` and losing dynamic key semantics during roundtrip compilation.
+- Furthermore, update expression detection (`++`, `--`) lacked a single-operand boundary check, causing function call expressions with update arguments (such as `(Math.pow 2 this.retryCount++)`) to greedily match trailing `++` across spaces, producing broken JavaScript (`Math.pow 2 this.retryCount++;`) and fatal Babel compiler crashes (`Missing semicolon`).
+
+Revision 23a introduces native support for computed property keys in object literals (`O([key]:val)`, `O([fieldName]:result)`) and single-operand boundary protection for update expressions (`splitAtLevel(inner, " ").length === 1`).
+
+### Syntax
+- `O([key]:val)`: Object property with computed dynamic key.
+- `O([fieldName]:result;errors:[])`: Mixed computed and static keys in object expressions.
+- `O([key]:{{fn => do. ... end.}})`: Computed method definition in object literal.
+- `(Math.pow 2 this.retryCount++)`: Function call expressions with update arguments cleanly parse into `CallExpression` nodes.
+
+### How It Functions
+- **Parsing (`CodonToASTParser`)**:
+  - In `O(...)` object parsing, when the key part of a colon pair starts with `[` and ends with `]`, the parser unwraps the brackets, parses the inner expression as the key AST node, and constructs a `Property` node with `computed: true`.
+  - In update expression parsing (`strippedExpr.endsWith("++")`, `strippedExpr.endsWith("--")`, etc.), an additional single-operand check `splitAtLevel(inner, " ").length === 1` ensures that multi-operand function calls with trailing update arguments are not greedily captured as raw update expressions.
+- **Transpilation (`JSToCodonTranslator`)**:
+  - In `Property` / `ObjectProperty` and `ObjectMethod`, when `node.computed === true`, the translator emits `[${this.transpile(node.key)}]:${this.transpile(node.value)}`, preserving computed bracket notation.
+- **Code Generation (`CodonToJSCompiler`)**:
+  - The AST normalizer translates `Property` nodes with `computed: true` into Babel `ObjectProperty` nodes with `computed: true`, generating standard JavaScript `{ [key]: value }` via `@babel/generator`.
+
+### Comparison Examples & Token Savings
+
+| Pattern | Standard J / Legacy Codon | Optimized Codon (Rev 23a) | JavaScript Target | Token Reduction |
+| :--- | :--- | :--- | :--- | :--- |
+| **GraphQL Field Result** | `res =: O() \n res.[field] =: val \n return. res` | `return. O([field]:val)` | `return { [field]: val };` | **~65%** (5 tokens vs 14+ tokens) |
+| **Dynamic Key Response** | `data =: O() \n data.[k] =: v \n return. O(data:data)` | `return. O(data:O([k]:v))` | `return { data: { [k]: v } };` | **~60%** (8 tokens vs 20 tokens) |
+| **Dynamic Header Map** | `headers =: O() \n headers.[headerName] =: val` | `headers =: O([headerName]:val)` | `const headers = { [headerName]: val };` | **~60%** (6 tokens vs 15 tokens) |
+| **Call with Update Arg** | `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` *(crashed with Missing semicolon)* | `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` | `const delay = baseDelay * Math.pow(2, this.retryCount++);` | **100% bug fix & valid parse** |
+
+### Impact on Fullstack Applications
+In modern AI fullstack applications (GraphQL query dispatchers, dynamic database query builders, REST API responses, WebSocket clients, exponential backoff retries, and state management reducers), computed property keys and update arguments are essential. Providing first-class `O([key]:val)` computed property syntax eliminates multi-statement imperative dictionary construction workarounds (saving ~65% tokens per dynamic dictionary), and enforcing single-operand boundaries on update expressions eliminates fatal compilation crashes across exponential retry loops and WebSocket clients.
+
+
 
