@@ -1,6 +1,37 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
+## Revision 24a (successful)
+- **Tokens:** 485
+
+- **Revision Idea**: Introduce concise unparenthesized `new` object instantiation expressions (`new Callee`, `new Callee arg1 arg2`, `new Callee O(...)`) across variable declarations (`map =: new Map`), member assignments (`this.socket = new WebSocket this.url`), class properties (`resolvers =: new Map`), return statements (`return. new Promise {{...}}`), throw statements (`throw. new Error '...'`), and standalone statements, alongside single-operand boundary protection for update expressions (`++`, `--`) in function call arguments (`(Math.pow 2 this.retryCount++)`).
+- **Rationale**: In modern AI fullstack web development (React component refs, WebSocket clients, Node/Express HTTP servers, database drivers, async Promises, Maps, Sets, and error boundaries):
+  1. **Concise Unparenthesized `new` Expressions**: `NewExpression` is among the most pervasive expressions in fullstack applications (`new Map()`, `new Set()`, `new WebSocket()`, `new Database()`, `new Promise()`, `new Error()`, `new http.Agent()`). Prior to Revision 24a, Codon strictly required every `new` expression to be wrapped in outer parentheses: `(new Map)`, `(new WebSocket this.url)`, `(new Database ':memory:')`, `(new http.Agent ...)`. Omitting parentheses caused `parseExpression` to bypass `NewExpression` parsing, interpreting `new Callee` as an invalid Identifier. Revision 24a introduces native unparenthesized `new` expression parsing at expression level and updates `JSToCodonTranslator` to emit concise unparenthesized `new` across variable initializers, member mutations, return statements, throw statements, and class properties, eliminating 2 wrapping tokens `(` and `)` on every instantiation while preserving 100% backward compatibility with parenthesized calls.
+  2. **Single-Operand Guard for Update Expressions**: In `codon-parser.ts`, update expression detection (`++`, `--`) lacked a single-operand boundary check (`splitAtLevel(inner, " ").length === 1`), causing function call expressions containing update arguments (such as `(Math.pow 2 this.retryCount++)`) to greedily match trailing `++` across spaces, producing broken JavaScript (`Math.pow 2 this.retryCount++;`) and fatal Babel compiler crashes (`Missing semicolon`). Enforcing single-operand boundaries ensures calls with update arguments parse into clean `CallExpression` nodes with nested `UpdateExpression` arguments.
+  Together, these changes eliminate wrapping parentheses across object instantiations and fix update expression misparsing in fullstack applications with 100% compilation and roundtrip fidelity.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates 2 wrapping tokens `(` and `)` per `new` expression across services, controllers, connections, and collections (e.g. `(new Map)` [4 tokens] -> `new Map` [2 tokens], saving 50%; `(new WebSocket this.url)` [6 tokens] -> `new WebSocket this.url` [4 tokens], saving 33%).
+  - Eliminates 2 wrapping tokens on asynchronous Promise construction: `return. (new Promise ...)` -> `return. new Promise ...`.
+  - Eliminates 2 wrapping tokens on database connections: `db =: (new Database ':memory:')` -> `db =: new Database ':memory:'`.
+  - Resolves update expression misparsing and syntax crashes across WebSocket clients and exponential backoff retry algorithms in fullstack benchmarks.
+- **Concrete Syntax Changes**:
+  - `codon-parser.ts`:
+    - In `parseExpression`, detect `strippedExpr.startsWith("new ") && strippedExpr.length > 4`, parsing into `NewExpression` without requiring `wasWrapped`.
+    - In update expression parsing (`strippedExpr.endsWith("++")`, `strippedExpr.endsWith("--")`, `strippedExpr.startsWith("++")`, `strippedExpr.startsWith("--")`), added `splitAtLevel(inner, " ").length === 1` boundary check so call expressions with update arguments do not misparse.
+  - `transpilers.ts`:
+    - Updated `case "VariableDeclaration"`, `case "PropertyDefinition" / "ClassProperty"`, `case "ExpressionStatement"`, `case "ReturnStatement"`, and `case "ThrowStatement"`: when the expression or right-hand side is a `NewExpression` (or `AwaitExpression`), unwraps outer `(new ...)` and `(@ ...)` to emit concise unparenthesized forms.
+  - Examples:
+    - Old Codon: `map =: (new Map)`
+    - New Codon: `map =: new Map`
+    - Old Codon: `this.socket = (new WebSocket this.url)`
+    - New Codon: `this.socket = new WebSocket this.url`
+    - Old Codon: `return. (new Promise {{resolve,reject => do. ... end.}})`
+    - New Codon: `return. new Promise {{resolve,reject => do. ... end.}}`
+    - Old Codon: `throw. (new Error 'Not found')`
+    - New Codon: `throw. new Error 'Not found'`
+    - Old Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` *(crashed with Missing semicolon)*
+    - New Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` *(cleanly compiles to Math.pow(2, this.retryCount++))*
+
 ## Revision 23a (unsuccessful)
 - **Tokens:** 3885
 
