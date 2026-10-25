@@ -22,19 +22,30 @@ The Codon CLI provides powerful tools to build entire multi-file Codon projects 
 
 ## Installation & Requirements
 
-The CLI runs directly with [Bun](https://bun.sh/) or Node.js. It is also exposed via the `bin` executable `codon` (and `codonc`):
+The Codon CLI is distributed via NPM as [`codon-lang`](https://www.npmjs.com/package/codon-lang).
+
+### Global Installation (Recommended)
+
+Install globally using [Bun](https://bun.sh/):
+
+```bash
+bun add -g codon-lang
+```
+
+*(Or via npm: `npm install -g codon-lang`)*
+
+Once installed globally, `codon` is available directly in your shell:
+
+```bash
+codon --help
+```
+
+### Local Development from Source
+
+If you are developing the Codon compiler repository directly from source:
 
 ```bash
 bun install
-```
-
-When installed globally or linked (`npm link` / `bun link`), the CLI can be invoked directly as:
-```bash
-codon <command> [options]
-```
-
-Or via bun during development:
-```bash
 bun run index.ts <command> [options]
 ```
 
@@ -90,7 +101,7 @@ codon init [target-directory]
 1. **`package.json`**: Configured with `"type": "module"`, `"main": "dist/index.js"`, and scripts:
    - `"build": "codon build"`
    - `"dev": "codon build --watch"`
-   - `"start": "node dist/index.js"`
+   - `"start": "bun dist/index.js"`
 2. **`codon.json`**: Preconfigured compiler options (`rootDir: "src"`, `outDir: "dist"`).
 3. **`src/index.cdn`**: Starter entrypoint demonstrating imports, functions, array calculations, and execution.
 

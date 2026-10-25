@@ -8,7 +8,7 @@ This guide details project architecture, module system semantics, configuration 
 
 ## 1. Quickstart: Bootstrapping a Project
 
-Codon provides a dedicated initializer (`codon init`) that configures a project following **Method B** (standard ESM compilation with `package.json` scripts):
+Codon provides a dedicated initializer (`codon init`) that configures a project with standard ESM compilation:
 
 ```bash
 # Initialize a new project in the current directory or a subfolder
@@ -36,7 +36,7 @@ my-app/
   "scripts": {
     "build": "codon build",
     "dev": "codon build --watch",
-    "start": "node dist/index.js"
+    "start": "bun dist/index.js"
   }
 }
 ```
@@ -44,10 +44,10 @@ my-app/
 ### Compiling and Running
 ```bash
 # 1. Compile all .cdn files in src/ to dist/
-npm run build    # or: codon build
+bun run build    # or: codon build
 
 # 2. Run the compiled application
-npm start        # executes: node dist/index.js (or bun dist/index.js)
+bun start        # executes: bun dist/index.js
 ```
 
 ---

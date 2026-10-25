@@ -6,6 +6,69 @@ Codon is designed from first principles to be **maximally token-efficient for La
 
 ---
 
+## ⚡ Quickstart
+
+Codon is primarily used through the CLI, distributed on NPM as **[`codon-lang`](https://www.npmjs.com/package/codon-lang)**.
+
+### 1. Install `codon-lang` Globally with Bun
+
+Install the package globally using [Bun](https://bun.sh/):
+
+```bash
+bun add -g codon-lang
+```
+
+Verify the installation:
+
+```bash
+codon --help
+```
+
+*(Alternatively with npm: `npm install -g codon-lang`)*
+
+### 2. Bootstrap a Project
+
+Bootstrap a new, ready-to-run Codon project using `codon init`:
+
+```bash
+# Bootstrap a new project in my-project/
+codon init my-project
+cd my-project
+```
+
+`codon init` scaffolds a complete ECMAScript module (ESM) application:
+```text
+my-project/
+├── codon.json          # Codon compiler configuration (src/ -> dist/, runtime auto-import)
+├── package.json        # Configured with "type": "module" and build/dev/start scripts
+└── src/
+    └── index.cdn       # Starter entrypoint with sample Codon idioms
+```
+
+### 3. Build & Run
+
+Compile your Codon source code into standard JavaScript and run it:
+
+```bash
+# Compile project (src/**/*.cdn -> dist/**/*.js)
+codon build
+
+# Run the compiled application
+bun start
+# or: bun dist/index.js
+```
+
+### 4. Development Watch Mode
+
+Start the incremental compiler in watch mode during development:
+
+```bash
+codon build -w
+# or: bun run dev
+```
+
+---
+
 ## 📚 Documentation
 
 Comprehensive documentation is available in the **[`docs/`](docs/README.md)** directory:
@@ -65,26 +128,7 @@ Comprehensive documentation is available in the **[`docs/`](docs/README.md)** di
 
 ---
 
-## Prerequisites
-
-- [Bun](https://bun.sh/) (or Node.js v18+)
-
-```bash
-bun install
-```
-
----
-
 ## Usage
-
-### Bootstrap a New Project (`init`)
-
-Initializes a ready-to-run Codon project (Method B: native ESM with `package.json` scripts, `codon.json`, and `src/index.cdn`):
-
-```bash
-codon init my-project
-cd my-project
-```
 
 ### Build Multi-File Project (`build`)
 
@@ -107,7 +151,6 @@ Converts a `.cdn` file into standard JavaScript:
 
 ```bash
 codon compile path/to/file.cdn
-# or: bun run index.ts compile path/to/file.cdn
 ```
 
 *Output: Generates `path/to/file.js` in the same directory.*
@@ -118,14 +161,33 @@ Parses a `.js` (or `.jsx`) file and emits Codon notation with automatic Level-2 
 
 ```bash
 codon translate path/to/file.js
-# or: bun run index.ts translate path/to/file.js
 ```
 
 *Output: Generates `path/to/file.cdn` in the same directory.*
 
-### Run Unit Tests
+### Verify Roundtrip Suite (`verify`)
+
+Runs verification benchmarks to ensure round-trip AST fidelity:
 
 ```bash
+codon verify
+```
+
+---
+
+## Development & Contributing
+
+To contribute to or develop the Codon compiler repository directly from source:
+
+```bash
+# Clone the repository
+git clone https://github.com/your-org/codon.git
+cd codon
+
+# Install dependencies
+bun install
+
+# Run test suite
 bun test
 ```
 

@@ -38,7 +38,7 @@ describe("Codon Project Compiler & Tooling (`codon build` / `codon init`)", () =
         expect(pkgJson.main).toBe("dist/index.js");
         expect(pkgJson.scripts.build).toBe("codon build");
         expect(pkgJson.scripts.dev).toBe("codon build --watch");
-        expect(pkgJson.scripts.start).toBe("node dist/index.js");
+        expect(pkgJson.scripts.start).toBe("bun dist/index.js");
 
         // Verify codon.json
         const codonJson = JSON.parse(fs.readFileSync(path.join(tmpDir, "codon.json"), "utf-8"));

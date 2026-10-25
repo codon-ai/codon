@@ -165,7 +165,7 @@ export function initProject(targetDir: string, options?: { projectName?: string 
         ...(pkgData.scripts || {}),
         build: "codon build",
         dev: "codon build --watch",
-        start: "node dist/index.js",
+        start: "bun dist/index.js",
     };
 
     fs.writeFileSync(pkgPath, JSON.stringify(pkgData, null, 2) + "\n", "utf-8");
