@@ -310,8 +310,14 @@ export class JSToCodonTranslator {
             case "ThrowStatement":
                 return `throw. ${this.transpile(node.argument)}`;
 
-            case "ReturnStatement":
-                return node.argument ? `return. ${this.transpile(node.argument)}` : "return.";
+            case "ReturnStatement": {
+                if (!node.argument) return "return.";
+                let argStr = this.transpile(node.argument);
+                if (node.argument.type === "AwaitExpression" && argStr.startsWith("(@ ") && argStr.endsWith(")")) {
+                    argStr = "@ " + argStr.slice(3, -1);
+                }
+                return `return. ${argStr}`;
+            }
 
             case "YieldExpression":
                 return (node as any).argument ? `yield. ${this.transpile((node as any).argument)}` : "yield.";

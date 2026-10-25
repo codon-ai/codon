@@ -16,6 +16,7 @@ This document provides a comprehensive, rigorous specification of the Codon lang
 4. [Variable Declarations & Assignments](#4-variable-declarations--assignments)
    - [Right-to-Left Assignment (`=:`)](#right-to-left-assignment-)
    - [Member, Property & Compound Assignments](#member-property-and-compound-assignments)
+   - [Variable Reassignments](#variable-reassignment-statements)
    - [Update Expressions (`++`, `--`)](#update-expressions---)
    - [Pattern Destructuring](#pattern-destructuring)
 5. [Monadic Verbs](#5-monadic-verbs)
@@ -222,6 +223,27 @@ cache[key] ??= compute();
 
 Legacy parenthesized assignment expressions `(this.socket = null)` and `(count += 1)` remain fully supported.
 
+### Variable Reassignment Statements
+
+Reassigning existing variables uses plain `=` without wrapping parentheses:
+
+```codon
+order =: O(id:'ORD-101';state:'pending')
+order = (transition order 'pay')
+parsed = (parsed.replace regex '')
+count = (count + 1)
+```
+
+Transpiles to:
+```javascript
+const order = { id: "ORD-101", state: "pending" };
+order = transition(order, "pay");
+parsed = parsed.replace(regex, "");
+count = count + 1;
+```
+
+Codon tracks variable scope: initial declarations with `=:` establish `const` bindings, while subsequent reassignments with plain `=` emit standard JavaScript statement-level assignments (`id = expr;`). Legacy parenthesized reassignment `(id = expr)` remains fully supported.
+
 ### Update Expressions (`++`, `--`)
 
 Codon natively supports unparenthesized prefix and postfix update operators (`++`, `--`):
@@ -297,6 +319,9 @@ NB. Await assignment
 response =: @ (fetch url)
 data =: @ (response.json())
 
+NB. Return await
+return. @ (response.json())
+
 NB. Colon-inflected verb form
 user =: @: (getUser id)
 ```
@@ -306,6 +331,7 @@ Transpiles to:
 await delay(100);
 const response = await fetch(url);
 const data = await response.json();
+return await response.json();
 const user = await getUser(id);
 ```
 

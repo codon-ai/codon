@@ -1505,5 +1505,79 @@ end.
     });
 });
 
+describe("Concise Variable Reassignment and Unparenthesized Standalone/Return Await Expressions", () => {
+    test("Transpiles concise variable reassignment statements id = expr", () => {
+        const codonCode = `
+order =: O(id:'ORD-101';state:'pending')
+order = (transition order 'pay')
+order = (transition order 'ship')
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("const order = {\n  id: \"ORD-101\",\n  state: \"pending\"\n};");
+        expect(js).toContain("order = transition(order, \"pay\");");
+        expect(js).toContain("order = transition(order, \"ship\");");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles unparenthesized return await expression return. @ expr", () => {
+        const codonCode = `
+async_fn. fetchUser id do.
+return. @ (api.getUser id)
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("return await api.getUser(id);");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Correctly parses update expression inside function call arguments without greedy expansion", () => {
+        const codonCode = `
+delay =: (this.baseDelayMs * (Math.pow 2 this.retryCount++))
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("Math.pow(2, this.retryCount++)");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips JS variable reassignment and return await statements", () => {
+        const jsCode = `
+let order = { id: 1, state: "pending" };
+order = transition(order, "pay");
+async function getJson(url) {
+  const res = await fetch(url);
+  return await res.json();
+}
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("order =: O(id:1;state:'pending')");
+        expect(codonCode).toContain("order = (transition order 'pay')");
+        expect(codonCode).toContain("return. @ res.json()");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(roundtrippedJs).toContain("order = transition(order, \"pay\");");
+        expect(roundtrippedJs).toContain("return await res.json();");
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+    });
+});
+
 
 

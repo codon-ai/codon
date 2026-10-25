@@ -82,6 +82,8 @@ flowchart TD
 | **ES Module Import** | `import { useState, useRef } from "react";` | `import. {useState,useRef} from 'react'` | **~45%** |
 | **Logical NOT Expression** | `if (!input.trim()) return;` | `if. !input.trim() do. return. end.` | **~40%** |
 | **Update Expression** | `nextId.current++;` | `nextId.current++` | **~40%** |
+| **Variable Reassignment** | `order = transition(order, "pay");` | `order = (transition order 'pay')` | **~25%** |
+| **Return Await** | `return await res.json();` | `return. @ res.json()` | **~35%** |
 
 ---
 
