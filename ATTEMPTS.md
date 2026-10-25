@@ -1,8 +1,8 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
-## Revision 9a (successful)
-- **Tokens:** 3260
+## Revision 9a (unsuccessful)
+- **Tokens:** 4608
 
 - **Revision Idea**: Introduce concise unparenthesized unary expressions (`!expr`, `typeof expr`, `~expr`, `-expr`, `+expr`, `delete expr`, `void expr`) and update expressions (`expr++`, `expr--`, `++expr`, `--expr`) in Codon, eliminating mandatory outer wrapping parentheses `(! expr)`, `(typeof expr)`, and `(expr++)`.
 - **Rationale**: In modern AI fullstack web development (React component state and JSX conditional rendering, form validation, event handling, API error checking, HTTP response handling, safe type checks, loop iterations, and auto-incrementing ID generators), unary expressions (`!isValid`, `!response.ok`, `!input.trim()`, `typeof window !== 'undefined'`) and update expressions (`nextId.current++`, `i++`, `count++`) are among the most pervasive expressions. Prior to Revision 9a, Codon suffered from two major limitations:
