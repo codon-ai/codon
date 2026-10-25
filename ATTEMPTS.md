@@ -1,6 +1,43 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
+## Revision 25a (successful)
+- **Tokens:** 450
+
+- **Revision Idea**: Introduce concise unparenthesized return expressions (`return. expr`) across JSX components, await expressions, relational/binary comparisons, and boolean checks (`return. <div>...</div>`, `return. @ res.json()`, `return. result.changes > 0`, `return. !isValid`), direct unparenthesized JSX element emission, first-class computed property keys in object literals (`O([key]:val)`, `O([fieldName]:result)`), and single-operand boundary protection for update expressions (`++`, `--`) in function call arguments (`(Math.pow 2 this.retryCount++)`).
+- **Rationale**: In modern AI fullstack web development (React component rendering, Express/Koa API controllers, GraphQL resolver dispatchers, WebSocket client reconnection loops, database query results, and state validation):
+  1. **Concise Unparenthesized Return Expressions & JSX Elements**: `ReturnStatement` and `JSXElement` are ubiquitous in fullstack code. Previously, `JSToCodonTranslator` unconditionally wrapped all return values and JSX elements in redundant outer parentheses: `return. (<div>...</div>)`, `return. (@ (res.json()))`, `return. (result.changes > 0)`, and `return. (a + b)`. In Codon, `return.` is an unambiguous statement-level keyword extending to the end of the statement; requiring wrapping parentheses consumes 2 redundant tokens `(` and `)` on every single return statement in functions, API route handlers, and React component roots. Furthermore, emitting native unparenthesized JSX elements `<tag ...>...</tag>` directly mirrors standard JSX and eliminates wrapping parentheses.
+  2. **Computed Property Keys in Object Literals**: In dynamic fullstack applications (such as GraphQL query dispatchers and database record builders returning `{ data: { [fieldName]: result } }`), dynamic dictionary keys are essential. Previously in Codon, writing `O([fieldName]:result)` caused `parseExpression` to parse `[fieldName]` as an `ArrayExpression`, setting `keyName` to `undefined` and triggering a fatal compiler crash (`TypeError: undefined is not an object (evaluating 'str.length')`). Furthermore, `JSToCodonTranslator` discarded `computed: true` on object properties, emitting static `fieldName:result`. Enabling `[key]:val` parsing and preserving `computed: true` allows dynamic objects to be constructed concisely in a single expression.
+  3. **Single-Operand Guard for Update Expressions**: In `codon-parser.ts`, update expression detection (`++`, `--`) lacked a single-operand boundary check (`splitAtLevel(inner, " ").length === 1`), causing function call expressions containing update arguments (such as `(Math.pow 2 this.retryCount++)`) to greedily match trailing `++` across spaces, producing broken JavaScript (`Math.pow 2 this.retryCount++;`) and fatal Babel compiler crashes (`Missing semicolon`). Enforcing single-operand boundaries ensures calls with update arguments parse into clean `CallExpression` nodes with nested `UpdateExpression` arguments.
+  Together, these changes eliminate redundant wrapping parentheses across return statements and JSX views, support dynamic object construction, and guarantee 100% roundtrip compilation fidelity across all fullstack benchmarks.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates 2 wrapping tokens `(` and `)` per return statement across React components, route handlers, and utility functions (e.g. `return. (<div>...</div>)` [6 tokens] -> `return. <div>...</div>` [4 tokens], saving ~33%; `return. (result.changes > 0)` [7 tokens] -> `return. result.changes > 0` [5 tokens], saving ~29%).
+  - Eliminates 2 wrapping tokens on async return await expressions: `return. (@ (res.json()))` [7 tokens] -> `return. @ (res.json())` [5 tokens], saving ~29%.
+  - Eliminates multi-statement imperative dictionary workarounds for dynamic keys (`res =: O() \n res.[key] =: val \n return. res` [14+ tokens] -> `return. O([key]:val)` [5 tokens], saving ~65%).
+  - Resolves update expression misparsing and syntax crashes across WebSocket clients and exponential retry algorithms in fullstack benchmarks.
+- **Concrete Syntax Changes**:
+  - `transpilers.ts`:
+    - In `JSToCodonTranslator.prototype.transpile`:
+      - `case "ReturnStatement"`: When `node.argument` is present, unwraps outer parentheses for `AwaitExpression` (`return. @ ...`), `JSXElement`, `JSXFragment`, `BinaryExpression`, `LogicalExpression`, and `UnaryExpression`.
+      - `case "JSXElement"`: Emits `${generate(node as any).code}` directly without outer wrapping parentheses `(...)`.
+      - `case "Property" / case "ObjectProperty"` and `case "ObjectMethod"`: When `node.computed === true`, emits `[${this.transpile(node.key)}]:${this.transpile(node.value)}`.
+  - `codon-parser.ts`:
+    - In `O(...)` object parsing, detect bracketed key expressions `[keyPart]:val`, parsing `keyPart` as an expression and setting `computed: true`.
+    - In update expression parsing (`strippedExpr.endsWith("++")`, `strippedExpr.endsWith("--")`, `strippedExpr.startsWith("++")`, `strippedExpr.startsWith("--")`), added `splitAtLevel(inner, " ").length === 1` boundary check so call expressions with update arguments do not misparse.
+  - Examples:
+    - Old Codon: `return. (<div><h2>Chat Room</h2></div>)`
+    - New Codon: `return. <div><h2>Chat Room</h2></div>`
+    - Old Codon: `return. (@ (res.json()))`
+    - New Codon: `return. @ (res.json())`
+    - Old Codon: `return. (result.changes > 0)`
+    - New Codon: `return. result.changes > 0`
+    - Old Codon: `return. (a + b)`
+    - New Codon: `return. a + b`
+    - Old Codon: `return. O(fieldName:result)` *(lost computed semantics)*
+    - New Codon: `return. O([fieldName]:result)`
+    - Old Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` *(crashed with Missing semicolon)*
+    - New Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` *(cleanly parses and compiles to Math.pow(2, this.retryCount++))*
+
 ## Revision 24a (unsuccessful)
 - **Tokens:** 686
 
