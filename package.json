@@ -1,6 +1,6 @@
 {
   "name": "codon-lang",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Codon compiler and translator for JavaScript",
   "main": "index.ts",
   "scripts": {
@@ -25,5 +25,9 @@
   },
   "devDependencies": {
     "@types/bun": "^1.4.4"
+  },
+  "repository": {
+      "type": "git",
+      "url": "http://www.github.com/codon"
   }
 }
