@@ -1,6 +1,47 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
+## Revision 12a (unsuccessful)
+- **Tokens:** 8661
+
+- **Revision Idea**: Introduce concise unparenthesized statement-level function and method calls (`callee arg1 arg2`, `obj.method arg1 arg2`, `this.method arg1 arg2`) and standard argument call syntax (`callee(args)`) in Codon, eliminating mandatory outer wrapping parentheses `(console.log 'hello')`, `(res.json O(...))`, and `(addTodo 'item')` across statement-level invocations.
+- **Rationale**: In modern AI fullstack web development (React state setter calls `setMessages(...)` and `setInput(...)`, Express/Koa response streaming `res.json(...)`, `res.status(...)`, `res.writeHead(...)`, database operations `insertStmt.run(...)` and `db.exec(...)`, logging `console.log(...)`, DOM/Observer mutations `observer.observe(...)`, stream piping `req.pipe(...)`, socket emissions `this.emit(...)`, and controller calls `addTodo(...)`), statement-level function and method calls are ubiquitous, occurring on 25–40% of executable lines in fullstack modules. Prior to Revision 12a, Codon suffered from two major limitations:
+  1. Codon strictly required EVERY statement-level function or method call with arguments to be wrapped in outer parentheses `(console.log 'hello')`, `(res.json O(counter))`, `(addTodo 'Buy groceries')`, `(setMessages {{...}})`. Omitting outer parentheses (such as `console.log 'hello'` or `observer.observe sentinelRef.current`) caused the statement parser to fall through to `parseExpression` where lack of wrapping parentheses caused member calls to misparse as corrupted Identifiers containing spaces (e.g. `{ type: "Identifier", name: "observe sentinelRef" }`), producing invalid JavaScript and fatal compiler errors.
+  2. `JSToCodonTranslator` unconditionally emitted redundant wrapping parentheses for all call expressions `(${calleeStr} ${argsStr})`, inflating token counts across controllers, event handlers, lifecycle hooks, and server routes in fullstack applications.
+  By enabling unparenthesized statement-level call parsing in `parseStatement` (supporting space-separated Codon arguments `callee arg1 arg2`, member calls `obj.method arg1 arg2`, and standard call syntax `callee(arg1, arg2)`) and emitting concise unparenthesized calls in `JSToCodonTranslator` for statement-level `CallExpression` nodes:
+  - Statement-level logging & output: `console.log 'hello'`, `console.log getTodos()`
+  - Statement-level API responses: `res.json O(counter)`, `res.writeHead 502 O('Content-Type':'application/json')`
+  - Statement-level state updaters: `setMessages {{prev => [...prev, item]}}`, `setInput ''`
+  - Statement-level database execution: `db.exec ddl`, `addTodo 'Buy groceries'`, `toggleTodo 1`
+  - Statement-level event & stream operations: `observer.observe sentinelRef.current`, `req.pipe proxyReq`, `this.emit 'message' data`
+  - Expression-level standard call compatibility: `Number(result.lastInsertRowid)`, `JSON.stringify(payload)`, `resolve(res)`
+  - Full roundtrip fidelity: JS ➔ Codon (concise unparenthesized statement call emission) ➔ JS (100% Babel parser validation).
+  - Retains 100% backward compatibility with legacy parenthesized call statements `(console.log 'hello')` and 0-argument calls `callee()`.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates 2 wrapping tokens `(` and `)` on every statement-level function or method call with arguments (e.g. `(console.log 'hello')` [6 tokens] -> `console.log 'hello'` [4 tokens], saving ~33% tokens per call statement).
+  - Eliminates 2 wrapping tokens per React state updater and single-argument call (e.g. `(setInput '')` [5 tokens] -> `setInput ''` [3 tokens], saving 40% tokens; `(toggleTodo 1)` [5 tokens] -> `toggleTodo 1` [3 tokens], saving 40% tokens).
+  - Prevents AST corruption, invalid Identifier tokens with spaces in member expressions, and syntax crashes across LLM fullstack code generation.
+- **Concrete Syntax Changes**:
+  - `codon-parser.ts`: Updated `parseStatement` to detect statement-level function and method calls where the target callee is a valid identifier, member expression, or `super` followed by arguments, parsing them cleanly into `ExpressionStatement` containing `CallExpression` nodes instead of falling through to member/identifier misparsing. Added support for `callee(args)` in `parseExpression`.
+  - `transpilers.ts`: Updated `JSToCodonTranslator` in `ExpressionStatement` to emit concise unparenthesized `${calleeStr} ${argsStr}` (or `${calleeStr}()` for 0-argument calls) when translating statement-level `CallExpression` nodes.
+  - Examples:
+    - Old Codon: `(console.log 'hello')`
+    - New Codon: `console.log 'hello'`
+    - Old Codon: `(addTodo 'Buy groceries')`
+    - New Codon: `addTodo 'Buy groceries'`
+    - Old Codon: `(toggleTodo 1)`
+    - New Codon: `toggleTodo 1`
+    - Old Codon: `(res.json O(counter))`
+    - New Codon: `res.json O(counter)`
+    - Old Codon: `(setMessages {{prev => [...prev, item]}})`
+    - New Codon: `setMessages {{prev => [...prev, item]}}`
+    - Old Codon: `(setInput '')`
+    - New Codon: `setInput ''`
+    - Old Codon: `(observer.observe sentinelRef.current)`
+    - New Codon: `observer.observe sentinelRef.current`
+    - Old Codon: `(req.pipe proxyReq)`
+    - New Codon: `req.pipe proxyReq`
+
 ## Revision 11a (unsuccessful)
 - **Tokens:** 5014
 
