@@ -9,10 +9,6 @@ const BABEL_PARSER_OPTIONS: parser.ParserOptions = {
     plugins: [
         "jsx",
         "exportDefaultFrom",
-        "exportNamespaceFrom",
-        "classProperties",
-        "classPrivateProperties",
-        "classPrivateMethods",
     ],
     errorRecovery: true,
 };
