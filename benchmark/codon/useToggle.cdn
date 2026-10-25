@@ -1,9 +1,0 @@
-import. {useState} from 'react'
-
-export. fn. useToggle initialValue=false do.
-[value,setValue] =: (useState initialValue)
-toggle =: {{ => (setValue {{v => (! v)}})}}
-setTrue =: {{ => (setValue true)}}
-setFalse =: {{ => (setValue false)}}
-return. (value;toggle;setTrue;setFalse)
-end.

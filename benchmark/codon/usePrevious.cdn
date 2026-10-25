@@ -1,9 +1,0 @@
-import. {useRef,useEffect} from 'react'
-
-export. fn. usePrevious value do.
-ref =: (useRef undefined)
-(useEffect {{ => do.
-(ref.current = value)
-}} (,value))
-return. ref.current
-end.

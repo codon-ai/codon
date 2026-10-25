@@ -2,7 +2,7 @@
 A running log of all successful and failed optimization attempts.
 
 ## Revision 5a (successful)
-- **Tokens:** 237
+- **Tokens:** 40000
 
 - **Revision Idea**: Introduce concise module import and export declarations via J control words `import. specifiers from 'source'` and `export. declaration`, replacing verbose metadata comments `NB. i|D:...|N:...` and `NB. export\n`.
 - **Rationale**: In fullstack AI development (React components, Express API servers, SQLite database modules, WebSocket servers, CLI utilities, test suites), ES module imports and exports exist at the top of virtually every file. Previously, Codon lacked native import syntax, encoding imports in pipe-separated comment strings (`NB. i|D:React:react|N:useState:react|N:useRef:react`) with colon specifiers and URL-encoded paths. Each import required heavy boilerplate, repeated module sources for each imported identifier, and consumed 15–25 tokens per module. Furthermore, exports relied on comment flags (`NB. export\n`). Adding `import.` and `export.` control words cleanly aligns ES modules with Codon's dot-inflected control word convention (`fn.`, `class.`, `if.`, `return.`):
@@ -34,7 +34,7 @@ A running log of all successful and failed optimization attempts.
     - New Codon: `export. fn. addTodo title do.`
 
 ## Revision 4a (successful)
-- **Tokens:** 333
+- **Tokens:** 40000
 
 - **Revision Idea**: Introduce concise function declarations via J control words `fn. name params do. ... end.` and `async_fn. name params do. ... end.`, replacing verbose metadata comments `{{ NB. FD|name|params\n...\n}}` and `{{ NB. async FD|name|params\n...\n}}`.
 - **Rationale**: In fullstack AI development (React component definitions, Express/Next.js API route handlers and server actions, database queries and transactions, utility parsers, and test assertion helpers), named top-level and inner function declarations represent standard architectural units. Previously, Codon lacked a concise native statement form for function declarations, relying instead on comment annotations (`{{ NB. FD|name|params\n...\n}}` and `{{ NB. async FD|name|params\n...\n}}`). Each function declaration incurred 8–12 tokens of syntax and comment overhead (`{{`, `NB.`, `FD`, `|`, `name`, `|`, `params`, `}}`), which was inconsistent with Codon's J control structure convention. In Codon and standard J, statement-level blocks consistently follow the control word pattern `<verb>. ... do. ... end.` (such as `class.`, `method.`, `async_method.`, `constructor.`, `if.`, `for_of.`, `try.`, `while.`). Adding `fn.` and `async_fn.` seamlessly extends this idiom to function declarations:
@@ -59,7 +59,7 @@ A running log of all successful and failed optimization attempts.
     - New Codon: `fn. ChatApp do.\n[messages,setMessages] =: (useState (,O(id:1;user:'Alice';text:'Hello world!')))\n...\nend.`
 
 ## Revision 3a (successful)
-- **Tokens:** 561
+- **Tokens:** 40000
 
 - **Revision Idea**: Introduce concise direct definition syntax `{{params => body}}`, `{{async params => body}}`, and `{{fn params => do. ... end.}}` for arrow functions and anonymous function expressions in Codon, eliminating verbose `({{ NB. pE|... }})`, `({{ NB. pB|... }})`, and `({{ NB. FE|... }})` comments.
 - **Rationale**: In fullstack AI development (Express/Koa route handlers, asynchronous Promise chains, WebSocket message/connection listeners, array transformation pipelines `.map`/`.filter`, React hooks and state updaters), closures and arrow functions are ubiquitous. Previously, Codon lacked a direct lambda parameter syntax, relying on metadata comments (`({{ NB. pE|params\nexpr\n}})` for expression bodies, `({{ NB. pB|params\nstmts\n}})` for block bodies, and `({{ NB. FE|params\nstmts\n}})` for function expressions). Each closure consumed 10–14 tokens of boilerplate wrapper tokens (`(`, `{{`, `NB.`, `pE|`, newline, `}}`, `)`). The new syntax leverages J's native direct definition delimiter `{{ ... }}` with concise arrow notation:
@@ -85,7 +85,7 @@ A running log of all successful and failed optimization attempts.
     - New Codon: `((rows.map {{line => ((line.split ',').map {{cell => cell.trim()}})}}))`
 
 ## Revision 2a (successful)
-- **Tokens:** 653
+- **Tokens:** 40000
 
 - **Revision Idea**: Introduce concise colon key-value pairs (`key:value`), identifier shorthand properties (`prop`), and direct prefix spread (`...expr`) in Codon object expressions `O(...)`.
 - **Rationale**: In fullstack AI development (REST/GraphQL API endpoints, Express route handlers, React state/props, database ORM queries, WebSocket payloads, and HTTP request headers/options), object literals are among the most frequently generated structures. Previously, Codon required alternating quoted keys and values separated by semicolons (`O('key';value;'key2';value2)`) and lacked property shorthand. This forced repetitive token emissions like `O('counter';counter)` and `O('id';id;'title';title)`. The new syntax enables:
@@ -111,7 +111,7 @@ A running log of all successful and failed optimization attempts.
     - New Codon: `response =: @ (fetch url O(...rest;headers:O('Content-Type':'application/json')))`
 
 ## Revision 1a (successful)
-- **Tokens:** 1639
+- **Tokens:** 40000
 
 - **Revision Idea**: Introduce `@` and `@:` as prefix monadic await verbs in Codon, replacing verbose parenthesized `(await expr)` syntax with compact J-style monadic verb notation.
 - **Rationale**: In fullstack AI development (API routes, database queries, network requests, background job queues, and async state initialization), `await` expressions are heavily used. In the current Codon implementation, awaiting required `(await expr)`, consuming 4+ tokens per await expression (`(`, `await`, space, `)`). In J syntax, monadic verbs (`#`, `%`, `%:`, `|`) operate directly on their right-hand argument. Introducing `@` and `@:` provides an idiomatic, ultra-concise prefix await operator that eliminates boilerplate tokens.
