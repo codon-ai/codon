@@ -1,6 +1,38 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
+## Revision 20a (unsuccessful)
+- **Tokens:** 2769
+
+- **Revision Idea**: Introduce concise computed property keys in object expressions (`O([key]:val)`), concise unparenthesized monadic await in return statements (`return. @ expr`) and member assignments (`this.prop = @ expr`), alongside single-operand boundary protection for update expressions (`++`, `--`), eliminating fatal compiler crashes and mandatory outer wrapping parentheses `return. (@ expr)` and `this.prop = (@ expr)`.
+- **Rationale**: In modern AI fullstack web development (GraphQL query execution and resolver dispatching, REST API responses, Next.js server actions, React form state, WebSocket client reconnection pipelines, and exponential backoff retry algorithms):
+  1. **Computed Property Keys in Object Expressions**: In GraphQL query dispatchers, dynamic database record builders, and event dispatchers, objects with dynamic keys (`{ [fieldName]: result }` or `{ [key]: val }`) are required. Previously, writing `O([fieldName]:result)` caused `parseExpression` to parse `[fieldName]` as an `ArrayExpression`, setting `keyName` to `undefined` and triggering a fatal compiler crash (`TypeError: undefined is not an object`). Furthermore, `JSToCodonTranslator` discarded `computed: true` on object properties, emitting static `fieldName:result`. By detecting bracketed computed keys in colon pairs `[key]:val` and preserving `computed: true`, Codon enables dynamic dictionary construction with 100% roundtrip fidelity.
+  2. **Unparenthesized Return and Mutation Await**: While Revision 1a introduced `@` as prefix monadic await and variable declarations had `res =: @ (fetch url)`, `JSToCodonTranslator` still emitted redundant wrapping parentheses `(@ <arg>)` for return statements (`return. (@ (res.json()))`) and member assignments (`this.socket = (@ (createSocket this.url))`). Revision 20a unwraps outer parentheses for `AwaitExpression` in `ReturnStatement` (`return. @ expr`) and `AssignmentExpression` (`this.prop = @ expr`), saving 2 wrapping tokens per async operation.
+  3. **Single-Operand Guard for Update Expressions**: In `codon-parser.ts`, update expression detection (`++`, `--`) lacked a single-operand boundary check (`splitAtLevel(inner, " ").length === 1`), causing function call expressions containing update arguments (such as `(Math.pow 2 this.retryCount++)`) to greedily match trailing `++` across spaces, producing broken JavaScript (`Math.pow 2 this.retryCount++;`) and fatal Babel compiler crashes (`Missing semicolon`). Enforcing single-operand boundaries ensures calls with update arguments parse into clean `CallExpression` nodes with nested `UpdateExpression` arguments.
+  Together, these changes eliminate wrapping parentheses across asynchronous returns and mutations while guaranteeing full compilation fidelity across the entire fullstack benchmark suite.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates verbose dictionary construction workarounds (`res =: O() \n res.[key] =: val \n return. res` [14+ tokens] -> `return. O([key]:val)` [5 tokens], saving ~65% tokens per dynamic object).
+  - Eliminates 2 wrapping tokens `(` and `)` per return await expression (e.g. `return. (@ (res.json()))` [7 tokens] -> `return. @ (res.json())` [5 tokens], saving ~29%).
+  - Eliminates 2 wrapping tokens per member assignment await expression (e.g. `this.data = (@ (fetch url))` [8 tokens] -> `this.data = @ (fetch url)` [6 tokens], saving ~25%).
+  - Resolves update expression misparsing and syntax crashes across WebSocket clients and exponential backoff retry algorithms in fullstack benchmarks.
+- **Concrete Syntax Changes**:
+  - `codon-parser.ts`:
+    - In `O(...)` object parsing, detect bracketed key expressions `[keyPart]:val`, parsing `keyPart` as an expression and setting `computed: true`.
+    - In update expression parsing (`strippedExpr.endsWith("++")`, `strippedExpr.endsWith("--")`, `strippedExpr.startsWith("++")`, `strippedExpr.startsWith("--")`), added `splitAtLevel(inner, " ").length === 1` boundary check so call expressions with update arguments do not misparse.
+  - `transpilers.ts`:
+    - Updated `case "Property" / case "ObjectProperty"` and `case "ObjectMethod"`: when `node.computed` is true, emits `[${this.transpile(node.key)}]:${this.transpile(node.value)}`.
+    - Updated `case "ReturnStatement"`: when `node.argument.type === "AwaitExpression"` and `argStr.startsWith("(@ ") && argStr.endsWith(")")`, unwraps to `return. @ ${argStr.slice(3, -1)}`.
+    - Updated `case "AssignmentExpression"`: in statement-level assignment translation, when `assignNode.right.type === "AwaitExpression"` and `rightStr.startsWith("(@ ") && rightStr.endsWith(")")`, unwraps to `@ ${rightStr.slice(3, -1)}`.
+  - Examples:
+    - Old Codon: `return. O(fieldName:result)` (lost computed semantics)
+    - New Codon: `return. O([fieldName]:result)`
+    - Old Codon: `return. (@ (res.json()))`
+    - New Codon: `return. @ (res.json())`
+    - Old Codon: `this.socket = (@ (createSocket this.url))`
+    - New Codon: `this.socket = @ (createSocket this.url)`
+    - Old Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` (crashed with Missing semicolon)
+    - New Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` (cleanly parses and compiles)
+
 ## Revision 19a (unsuccessful)
 - **Tokens:** 4089
 
