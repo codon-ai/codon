@@ -2420,9 +2420,14 @@ export class CodonToASTParser {
             return node;
         }
 
-        // JSX Element
+        // JSX Element / Fragment
         if (strippedExpr.startsWith("<") && strippedExpr.endsWith(">")) {
-            return this.parseJSXElement(strippedExpr);
+            try {
+                const babelParser = require("@babel/parser");
+                return babelParser.parseExpression(strippedExpr, { plugins: ["jsx"] });
+            } catch {
+                return this.parseJSXElement(strippedExpr);
+            }
         }
 
         return { type: "Identifier", name: strippedExpr };

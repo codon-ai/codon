@@ -78,8 +78,10 @@ flowchart TD
 | **Tacit Fork (Average)** | `const avg = (arr) => sum(arr) / arr.length;` | `avg =: (fork sum div tally)` | **~40%** |
 | **Sum Reduction** | `const total = nums.reduce((a, b) => a + b, 0);` | `total =: +/ nums` | **~70%** |
 | **Numeric Vector** | `const primes = [2, 3, 5, 7, 11];` | `primes = 2 3 5 7 11` | **~50%** |
-| **Function Declaration** | `function add(a, b) { return a + b; }` | `fn. add a,b do. return. (a + b) end.` | **~35%** |
+| **Function Declaration** | `function add(a, b) { return a + b; }` | `fn. add a,b do. return. a + b end.` | **~40%** |
 | **ES Module Import** | `import { useState, useRef } from "react";` | `import. {useState,useRef} from 'react'` | **~45%** |
+| **Native JSX Return** | `return <div>{count}</div>;` | `return. <div>{count}</div>` | **~30%** |
+| **Unparenthesized Return** | `return result.changes > 0;` | `return. result.changes > 0` | **~25%** |
 
 ---
 

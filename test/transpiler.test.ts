@@ -1404,4 +1404,123 @@ end.
     });
 });
 
+describe("Concise Native JSX Expressions & Unparenthesized Returns (Rev 14a)", () => {
+    test("Transpiles unparenthesized JSXElement and JSXFragment in return and variable assignments", () => {
+        const codonCode = `
+header =: <h1>Title</h1>
+fn. renderItem text do.
+  return. <li>{text}</li>
+end.
+fn. renderApp do.
+  return. <><div>Header</div><p>Content</p></>
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("const header = <h1>Title</h1>;");
+        expect(js).toContain("return <li>{text}</li>;");
+        expect(js).toContain("<><div>Header</div><p>Content</p></>");
+        expect(() => parser.parse(js, { sourceType: "module", plugins: ["jsx"] })).not.toThrow();
+    });
+
+    test("Transpiles unparenthesized binary, logical, and await expressions in return statements", () => {
+        const codonCode = `
+fn. checkStatus changes do.
+  return. changes > 0
+end.
+fn. computeSum a,b do.
+  return. a + b
+end.
+async_fn. fetchProfile api,id do.
+  return. @ (api.getUser id)
+end.
+fn. validateInput name,age do.
+  return. name && age >= 18
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("return changes > 0;");
+        expect(js).toContain("return a + b;");
+        expect(js).toContain("return await api.getUser(id);");
+        expect(js).toContain("return name && age >= 18;");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles unparenthesized binary and logical expressions in variable declarations", () => {
+        const codonCode = `
+fn. calculate items,fallback do.
+  idx =: items.length - 1
+  resolver =: customResolver || fallback
+  return. idx
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("const idx = items.length - 1;");
+        expect(js).toContain("const resolver = customResolver || fallback;");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips React components with native JSX elements, returns, and variable initializers", () => {
+        const jsSource = `
+import React, { useState } from "react";
+export function TodoApp() {
+  const [items, setItems] = useState([]);
+  const hasItems = items.length > 0;
+  return <div>
+      <h1>Todos</h1>
+      <ul>
+        {items.map(i => <li key={i.id}>{i.title}</li>)}
+      </ul>
+    </div>;
+}
+`;
+        const jsAst = parser.parse(jsSource, { sourceType: "module", plugins: ["jsx"] });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(jsAst.program as any);
+
+        expect(codonCode).toContain("hasItems =: items.length > 0");
+        expect(codonCode).toContain("return. (<div>");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(roundtrippedJs).toContain("hasItems = items.length > 0;");
+        expect(roundtrippedJs).toContain("return <div>");
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module", plugins: ["jsx"] })).not.toThrow();
+    });
+
+    test("Retains backward compatibility with legacy parenthesized returns and JSX", () => {
+        const codonCode = `
+fn. legacyReturn a,b do.
+  return. (a + b)
+end.
+fn. legacyJSX do.
+  return. (<div><span>Legacy</span></div>)
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("return a + b;");
+        expect(js).toContain("return <div><span>Legacy</span></div>;");
+        expect(() => parser.parse(js, { sourceType: "module", plugins: ["jsx"] })).not.toThrow();
+    });
+});
+
+
 

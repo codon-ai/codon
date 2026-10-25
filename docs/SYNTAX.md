@@ -161,13 +161,20 @@ In Codon, assignment uses `=:` (transpiling to `const` for new declarations, or 
 ```codon
 total =: 100
 name =: 'Codon'
+idx =: this.heap.length - 1
+resolver =: keyResolver || fallback
 ```
 
 Transpiles to:
 ```javascript
 const total = 100;
 const name = "Codon";
+const idx = this.heap.length - 1;
+const resolver = keyResolver || fallback;
 ```
+
+Binary arithmetic (`-`, `+`, `*`, `/`) and logical expressions (`||`, `&&`, `??`) in variable declarations can be written cleanly without enclosing parentheses.
+
 
 ### Member, Property, and Compound Assignments
 
@@ -524,8 +531,15 @@ end.
 ```codon
 return. result
 return.
+return. a + b                     NB. Unparenthesized binary arithmetic
+return. result.changes > 0        NB. Unparenthesized relational/comparison
+return. keyResolver || fallback   NB. Unparenthesized logical expression
+return. @ res.json()              NB. Unparenthesized await expression
+return. <div>Hello {name}</div>   NB. Unparenthesized single-line JSX element
+return. <><span>A</span><span>B</span></> NB. Unparenthesized JSX fragment
 throw. (new Error 'Operation failed')
 ```
+
 
 ---
 
@@ -572,7 +586,16 @@ For full multi-file application structure, `codon.json` configuration, and proje
 
 ## 11. React & JSX Support
 
-Codon natively supports React and JSX elements, components, attributes, interpolations, and fragments:
+Codon natively supports React and JSX elements, components, attributes, interpolations, and fragments without mandatory surrounding parentheses for single-line expressions:
+
+- **Single-line JSX Elements & Fragments**:
+  ```codon
+  card =: <div className="card"><span>{title}</span></div>
+  frag =: <><h1>Title</h1><p>{body}</p></>
+  return. <button onClick={handleClick}>Submit</button>
+  ```
+- **Multi-line JSX**:
+  When formatting JSX across multiple lines, wrap the JSX element in parentheses `(...)` to preserve indentation and statement boundaries:
 
 ```codon
 fn. ChatApp props do.
@@ -594,6 +617,7 @@ fn. ChatApp props do.
   )
 end.
 ```
+
 
 ---
 

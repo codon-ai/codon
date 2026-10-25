@@ -226,6 +226,14 @@ export class JSToCodonTranslator {
                         if (d.init?.type === "AwaitExpression" && initStr.startsWith("(@ ") && initStr.endsWith(")")) {
                             initStr = "@ " + initStr.slice(3, -1);
                         }
+                        if (
+                            (d.init?.type === "BinaryExpression" ||
+                             d.init?.type === "LogicalExpression") &&
+                            initStr.startsWith("(") &&
+                            initStr.endsWith(")")
+                        ) {
+                            initStr = initStr.slice(1, -1);
+                        }
                         return `${idStr} =: ${initStr}`;
                     })
                     .join("\n");
@@ -310,8 +318,25 @@ export class JSToCodonTranslator {
             case "ThrowStatement":
                 return `throw. ${this.transpile(node.argument)}`;
 
-            case "ReturnStatement":
-                return node.argument ? `return. ${this.transpile(node.argument)}` : "return.";
+            case "ReturnStatement": {
+                if (!node.argument) return "return.";
+                let argStr = this.transpile(node.argument);
+                if (
+                    node.argument.type === "AwaitExpression" &&
+                    argStr.startsWith("(@ ") &&
+                    argStr.endsWith(")")
+                ) {
+                    argStr = "@ " + argStr.slice(3, -1);
+                } else if (
+                    (node.argument.type === "BinaryExpression" ||
+                     node.argument.type === "LogicalExpression") &&
+                    argStr.startsWith("(") &&
+                    argStr.endsWith(")")
+                ) {
+                    argStr = argStr.slice(1, -1);
+                }
+                return `return. ${argStr}`;
+            }
 
             case "YieldExpression":
                 return (node as any).argument ? `yield. ${this.transpile((node as any).argument)}` : "yield.";
@@ -651,8 +676,7 @@ export class JSToCodonTranslator {
             }
 
             case "JSXFragment": {
-                const children = node.children.map((c) => this.transpile(c)).join("");
-                return `<>${children}</>`;
+                return `(${generate(node as any).code})`;
             }
 
             case "JSXText":
