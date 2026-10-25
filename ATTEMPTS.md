@@ -2,7 +2,7 @@
 A running log of all successful and failed optimization attempts. (JavaScript: 3822)
 
 ## Revision 6a (successful)
-- **Tokens:** 40000
+- **Tokens:** 3261
 
 - **Revision Idea**: Introduce native concise array expressions via bracket notation `[...]`, supporting empty arrays `[]`, single/multiple element lists `[elem]`, `[a, b]`, and spread expressions `[...spread, item]`, replacing verbose J boxed array syntax `(0$0)`, `(,elem)`, and `(a;b;c)`.
 - **Rationale**: In modern AI fullstack development (React state arrays `useState([])`, list state updates `setItems(prev => [...prev, newItem])`, database query result sets, API route validation error collectors `errors = []`, middleware chains, and array pipelines), array construction is one of the most fundamental and frequent operations. Previously, Codon lacked direct bracket array expression syntax on the expression level; writing `[]` or `[a, b]` was erroneously parsed as a single literal Identifier named `"[]"` or `"[a, b]"`. Codon forced developers and LLMs to use J-style boxed arrays: `(0$0)` for empty arrays (5 tokens: `(`, `0`, `$`, `0`, `)`), `(,elem)` for single-element arrays (4 tokens), and `(a;b;c)` for multi-element lists. This imposed high token penalties, caused confusion with parenthesized expressions, function calls, and tacit trains `(f g h)`, and created syntax asymmetry with Codon's existing bracket destructuring `[a, b] =: list`. Introducing native `[...]` bracket syntax eliminates this boilerplate, brings symmetry between array creation and destructuring, and significantly reduces token count:
