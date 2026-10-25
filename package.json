@@ -1,5 +1,5 @@
 {
-  "name": "codon",
+  "name": "codon-lang",
   "version": "0.1.0",
   "description": "Codon compiler and translator for JavaScript",
   "main": "index.ts",
@@ -12,8 +12,7 @@
     "verify": "bun run index.ts verify"
   },
   "bin": {
-    "codon": "index.ts",
-    "codonc": "index.ts"
+    "codon": "index.ts"
   },
   "dependencies": {
     "@babel/generator": "^8.0.6",

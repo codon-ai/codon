@@ -265,7 +265,7 @@ export class JSToCodonTranslator {
 
             case "ForOfStatement": {
                 const leftStr =
-                    node.left.type === "VariableDeclaration"
+                    node.left.type === "VariableDeclaration" && node.left.declarations[0]
                         ? this.transpilePattern(node.left.declarations[0].id)
                         : this.transpilePattern(node.left);
                 const rightStr = this.transpile(node.right);
@@ -274,7 +274,7 @@ export class JSToCodonTranslator {
 
             case "ForInStatement": {
                 const leftStr =
-                    node.left.type === "VariableDeclaration"
+                    node.left.type === "VariableDeclaration" && node.left.declarations[0]
                         ? this.transpilePattern(node.left.declarations[0].id)
                         : this.transpilePattern(node.left);
                 const rightStr = this.transpile(node.right);
@@ -597,9 +597,11 @@ export class JSToCodonTranslator {
             case "TemplateLiteral": {
                 let tpl = "`";
                 for (let i = 0; i < node.quasis.length; i++) {
-                    tpl += node.quasis[i].value.raw;
-                    if (i < node.expressions.length) {
-                        tpl += "${" + this.transpile(node.expressions[i]) + "}";
+                    const quasi = node.quasis[i];
+                    if (quasi) tpl += quasi.value.raw;
+                    const expr = node.expressions[i];
+                    if (expr) {
+                        tpl += "${" + this.transpile(expr) + "}";
                     }
                 }
                 tpl += "`";

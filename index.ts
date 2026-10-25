@@ -72,9 +72,9 @@ if (args.length === 0) {
             console.error(`Usage: codon ${command} <file>`);
             process.exit(1);
         }
-        const filePath = args[1];
+        const filePath = args[1]!;
         transpileSingleFile(command, filePath);
-    } else if (!command.startsWith("-") && fs.existsSync(command) && fs.statSync(command).isDirectory()) {
+    } else if (command && !command.startsWith("-") && fs.existsSync(command) && fs.statSync(command).isDirectory()) {
         // If passed a directory directly: codon my-project [options] -> build that directory
         runProjectBuild(args);
     } else {
@@ -105,14 +105,18 @@ function runProjectBuild(buildArgs: string[]): void {
 
     for (let i = 0; i < buildArgs.length; i++) {
         const arg = buildArgs[i];
+        if (!arg) continue;
         if (arg === "-w" || arg === "--watch") {
             watchMode = true;
         } else if (arg === "-o" || arg === "--outDir") {
-            overrides.outDir = buildArgs[++i];
+            const next = buildArgs[++i];
+            if (next) overrides.outDir = next;
         } else if (arg === "-r" || arg === "--rootDir") {
-            overrides.rootDir = buildArgs[++i];
+            const next = buildArgs[++i];
+            if (next) overrides.rootDir = next;
         } else if (arg === "-p" || arg === "--project") {
-            targetDir = buildArgs[++i];
+            const next = buildArgs[++i];
+            if (next) targetDir = next;
         } else if (arg === "--clean") {
             overrides.clean = true;
         } else if (arg === "--no-copy-assets") {

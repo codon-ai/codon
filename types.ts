@@ -73,6 +73,7 @@ export type Node =
     | ConditionalExpression
     | SequenceExpression
     | AwaitExpression
+    | YieldExpression
     | TemplateLiteral
     | TemplateElement
     | TaggedTemplateExpression
@@ -548,6 +549,12 @@ export interface SequenceExpression {
 export interface AwaitExpression {
     type: "AwaitExpression";
     argument: Node;
+}
+
+export interface YieldExpression {
+    type: "YieldExpression";
+    argument?: Node | null;
+    delegate?: boolean;
 }
 
 export interface TemplateLiteral {

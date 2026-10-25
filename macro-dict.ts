@@ -451,12 +451,14 @@ export class MacroDictionary {
 
         for (let i = 0; i < macro.parameters.length; i++) {
             const param = macro.parameters[i];
-            const arg = args[i] !== undefined ? args[i] : param.kind === "literal" ? "null" : "undefined";
+            if (!param) continue;
+            const arg = args[i] !== undefined && args[i] !== null ? args[i]! : param.kind === "literal" ? "null" : "undefined";
             code = code.replaceAll(param.name, arg);
         }
 
         for (let i = 0; i < macro.locals.length; i++) {
             const loc = macro.locals[i];
+            if (!loc) continue;
             code = code.replaceAll(loc.name, `_${loc.example || "loc"}_${i}`);
         }
 
@@ -478,11 +480,12 @@ export class MacroDictionary {
             throw new Error(`Macro ${macro.name} expanded to empty AST`);
         }
 
-        if (macro.category === "expression" && body[0].type === "ExpressionStatement") {
-            return (body[0] as any).expression;
+        const first = body[0];
+        if (first && macro.category === "expression" && first.type === "ExpressionStatement") {
+            return (first as any).expression;
         }
 
-        return body[0];
+        return first;
     }
 }
 

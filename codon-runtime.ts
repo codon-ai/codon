@@ -41,7 +41,7 @@ export function atop(f: any, g: any) {
     };
 }
 
-export function rank(fn: any, k: number = 0) {
+export function rank(fn: any, k: number = 0): any {
     return function (target: any) {
         if (!Array.isArray(target)) return fn(target);
         if (k === 0) {
