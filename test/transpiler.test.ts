@@ -353,7 +353,7 @@ for (let i = 0, j = 10; i < j; i++, j--) {
         const translator = new JSToCodonTranslator();
         const codonCode = translator.transpile(ast.program as any);
 
-        expect(codonCode).toContain("((i++), (j--))");
+        expect(codonCode).toContain("(i++, j--)");
 
         const astParser = new CodonToASTParser();
         const parsedAst = astParser.parse(codonCode);
@@ -1400,6 +1400,145 @@ end.
 
         expect(js).toContain("this.count = 0;");
         expect(js).toContain("this.total = this.total + 10;");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+});
+
+describe("Concise Unparenthesized Logical NOT & Update Expressions Support", () => {
+    test("Transpiles unparenthesized logical NOT !expr and !obj.method()", () => {
+        const codonCode = `
+fn. check input,isValid,cache,key do.
+  if. !input.trim() do.
+    return.
+  end.
+
+  if. !isValid do.
+    return. false
+  end.
+
+  if. !cache.has(key) do.
+    return. null
+  end.
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("if (!input.trim())");
+        expect(js).toContain("if (!isValid)");
+        expect(js).toContain("if (!cache.has(key))");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles unparenthesized update expressions expr++, expr--, ++expr, --expr", () => {
+        const codonCode = `
+i++
+len--
+++step
+--remaining
+nextId.current++
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("i++;");
+        expect(js).toContain("len--;");
+        expect(js).toContain("++step;");
+        expect(js).toContain("--remaining;");
+        expect(js).toContain("nextId.current++;");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles update expressions in object properties and for loops", () => {
+        const codonCode = `
+item =: O(id:nextId.current++; user:'Me')
+for. i =: 0 ; i < 10 ; i++ do.
+  (console.log i)
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("id: nextId.current++");
+        expect(js).toContain("user: \"Me\"");
+        expect(js).toContain("for (const i = 0; i < 10; i++)");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles compound logical conditions with ! without ambiguity", () => {
+        const codonCode = `
+valid =: !error && !loading
+canSubmit =: !isSubmitting && hasChanges
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("const valid = !error && !loading;");
+        expect(js).toContain("const canSubmit = !isSubmitting && hasChanges;");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips JS logical NOT and update expressions using concise notation", () => {
+        const jsCode = `
+function process(input, nextId) {
+  if (!input.trim()) {
+    return null;
+  }
+  const item = {
+    id: nextId.current++,
+    text: input
+  };
+  let count = 0;
+  count++;
+  return item;
+}
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("!input.trim()");
+        expect(codonCode).toContain("id:nextId.current++");
+        expect(codonCode).toContain("count++");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(roundtrippedJs).toContain("!input.trim()");
+        expect(roundtrippedJs).toContain("id: nextId.current++");
+        expect(roundtrippedJs).toContain("count++;");
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Retains backward compatibility with legacy parenthesized forms (! expr) and (x++)", () => {
+        const codonCode = `
+fn. check input do.
+  if. (! input.trim()) do.
+    return.
+  end.
+  (x++)
+  todo =: O(id:(nextId.current++); text:'Test')
+  return. todo
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("if (!input.trim())");
+        expect(js).toContain("x++;");
+        expect(js).toContain("id: nextId.current++");
         expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
     });
 });

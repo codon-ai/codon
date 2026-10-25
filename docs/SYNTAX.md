@@ -289,6 +289,59 @@ Computes `Math.abs(x)`:
 pos = | _10           NB. const pos = Math.abs(-10);
 ```
 
+### Logical NOT (`!`) and Update Operators (`++`, `--`)
+Revision 15a introduces concise unparenthesized logical NOT and increment/decrement update expressions:
+
+- **Logical NOT**: `!expr` operates on any operand without wrapping parentheses:
+  ```codon
+  if. !input.trim() do.
+    return.
+  end.
+
+  if. !cache.has(key) do.
+    return. null
+  end.
+
+  valid =: !error && !loading
+  ```
+- **Update Expressions**: `expr++`, `expr--`, `++expr`, and `--expr` operate on variables and member properties:
+  ```codon
+  i++
+  nextId.current++
+  len--
+
+  NB. Inside object literals and state updates
+  todo =: O(id:nextId.current++; title:text)
+
+  NB. Inside for loop statements
+  for. i =: 0 ; i < 10 ; i++ do.
+    (console.log i)
+  end.
+  ```
+
+Transpiles to:
+```javascript
+if (!input.trim()) {
+  return;
+}
+if (!cache.has(key)) {
+  return null;
+}
+const valid = !error && !loading;
+
+i++;
+nextId.current++;
+len--;
+
+const todo = { id: nextId.current++, title: text };
+
+for (const i = 0; i < 10; i++) {
+  console.log(i);
+}
+```
+
+Legacy parenthesized expressions `(! expr)` and `(x++)` remain fully supported.
+
 ---
 
 ## 6. Tacit Trains & Higher-Order Verbs

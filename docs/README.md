@@ -80,6 +80,8 @@ flowchart TD
 | **Numeric Vector** | `const primes = [2, 3, 5, 7, 11];` | `primes = 2 3 5 7 11` | **~50%** |
 | **Function Declaration** | `function add(a, b) { return a + b; }` | `fn. add a,b do. return. (a + b) end.` | **~35%** |
 | **ES Module Import** | `import { useState, useRef } from "react";` | `import. {useState,useRef} from 'react'` | **~45%** |
+| **Logical NOT** | `if (!input.trim()) return;` | `if. !input.trim() do. return. end.` | **~50%** |
+| **Update Expression** | `nextId.current++;` | `nextId.current++` | **~40%** |
 
 ---
 
