@@ -1,8 +1,8 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
-## Revision 25a (successful)
-- **Tokens:** 450
+## Revision 25a (unsuccessful)
+- **Tokens:** 4263
 
 - **Revision Idea**: Introduce concise unparenthesized return expressions (`return. expr`) across JSX components, await expressions, relational/binary comparisons, and boolean checks (`return. <div>...</div>`, `return. @ res.json()`, `return. result.changes > 0`, `return. !isValid`), direct unparenthesized JSX element emission, first-class computed property keys in object literals (`O([key]:val)`, `O([fieldName]:result)`), and single-operand boundary protection for update expressions (`++`, `--`) in function call arguments (`(Math.pow 2 this.retryCount++)`).
 - **Rationale**: In modern AI fullstack web development (React component rendering, Express/Koa API controllers, GraphQL resolver dispatchers, WebSocket client reconnection loops, database query results, and state validation):
