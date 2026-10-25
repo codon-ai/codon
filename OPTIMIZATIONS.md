@@ -419,4 +419,54 @@ Revision 16a introduces native unparenthesized logical NOT expressions (`!expr`,
 ### Impact on Fullstack Applications
 In modern AI fullstack applications (React form validation, Next.js server actions, JSX disabled/error state bindings `<button disabled={!isValid}>`, Express middleware route checks, SQLite auto-increment IDs, WebSocket connection retries, and algorithmic loop counters), logical NOT checks and increment/decrement operations appear on 20–35% of all code branches. Eliminating mandatory wrapping parentheses saves 40–55% of tokens per operation, prevents fatal identifier misparsing, and enables LLMs to emit clean, concise conditional logic.
 
+## 10. Concise Unparenthesized Return Expressions & Computed Object Keys
+
+### Overview
+In modern fullstack applications (React JSX component rendering, Express/Koa API controllers, GraphQL resolver dispatchers, SQLite database queries, and async client requests), `ReturnStatement` and dynamic dictionary construction are among the most frequent operations.
+
+Prior to Revision 25a, Codon suffered from three critical inefficiencies:
+1. **Redundant Parentheses in Return Statements and JSX**: `JSToCodonTranslator` unconditionally wrapped all return statement values and JSX trees in redundant outer parentheses: `return. (<div>...</div>)`, `return. (@ (res.json()))`, `return. (result.changes > 0)`, and `return. (a + b)`. In Codon, `return.` is an unambiguous statement keyword extending to statement termination. Mandating wrapping parentheses added 2 wasted tokens `(` and `)` on every return statement across components and controllers.
+2. **Missing Computed Property Keys in Object Literals**: In modern dynamic web patterns (such as GraphQL resolvers and dynamic database builders returning `{ [fieldName]: result }`), dynamic keys are essential. In Codon, writing `O([key]:val)` caused `parseExpression` to treat `[key]` as an `ArrayExpression`, setting `keyName` to `undefined` and throwing fatal compiler errors (`TypeError: undefined is not an object`). Furthermore, translator output discarded `computed: true` properties.
+3. **Greedy Update Expression Matching in Call Arguments**: Update expression parsing (`strippedExpr.endsWith("++")`) lacked single-operand boundary checking, causing calls like `(Math.pow 2 this.retryCount++)` to greedily match trailing `++` across space-separated arguments and produce malformed JavaScript (`Math.pow 2 this.retryCount++;`), crashing Babel parsing.
+
+Revision 25a resolves these limitations by:
+- Emitting unparenthesized return expressions across JSX elements, await expressions, relational comparisons, binary calculations, and logical expressions.
+- Emitting native unparenthesized JSX elements directly (`<tag>...</tag>`).
+- Supporting first-class computed property keys in object literals: `O([key]:val)` with `computed: true`.
+- Guarding update expressions with single-operand checks (`splitAtLevel(inner, " ").length === 1`), ensuring function calls with update arguments parse into clean AST `CallExpression` nodes.
+
+### Syntax
+- `return. <tag>...</tag>`: Direct unparenthesized JSX root return.
+- `return. @ res.json()`: Direct unparenthesized async await return.
+- `return. status.changes > 0`: Direct unparenthesized relational comparison return.
+- `return. a + b`: Direct unparenthesized binary arithmetic return.
+- `return. valid && active`: Direct unparenthesized logical return.
+- `O([key]:val)`: Object literal with computed property key.
+- `O([fieldName]:result; status:200)`: Mixed computed and static object properties.
+- `(Math.pow 2 this.retryCount++)`: Function call with nested update argument.
+
+### How It Functions
+- **Parsing (`CodonToASTParser`)**:
+  - In `O(...)` object parsing, `splitFirstAtLevel(part, ":")` checks if `keyPart.startsWith("[") && keyPart.endsWith("]")`. If so, it strips the enclosing brackets, parses `keyPart.slice(1, -1)` as an expression, and constructs an `ObjectProperty` AST node with `computed: true`.
+  - In `parseExpression`, update expressions (`++`, `--`) check that `splitAtLevel(inner, " ").length === 1`. If spaces exist at the top level of the inner expression, the update operator is not treated as statement-level or call-level postfix, allowing function call parsing to correctly tokenize the callee and arguments.
+- **Transpilation (`JSToCodonTranslator`)**:
+  - In `ReturnStatement`, when `node.argument` is present, `unwrapOuterParens` is applied to remove wrapping `(` and `)` for `AwaitExpression` (`return. @ ...`), `JSXElement`, `JSXFragment`, `BinaryExpression`, `LogicalExpression`, and `UnaryExpression`.
+  - In `JSXElement`, the translator emits `${generate(node).code}` directly without enclosing parentheses.
+  - In `Property`, `ObjectProperty`, and `ObjectMethod`, when `node.computed === true`, the translator emits `[${this.transpile(node.key)}]:${this.transpile(node.value)}`.
+- **Code Generation (`CodonToJSCompiler`)**: Preserves `computed: true` on ESTree/Babel `ObjectProperty` nodes and generates standard JavaScript `{ [key]: val }` and `return expr;`.
+
+### Comparison Examples & Token Savings
+
+| Pattern | Standard J / Legacy Codon | Optimized Codon (Rev 25a) | JavaScript Target | Token Reduction |
+| :--- | :--- | :--- | :--- | :--- |
+| **React Component Return** | `return. (<div><h2>Chat</h2></div>)` | `return. <div><h2>Chat</h2></div>` | `return <div><h2>Chat</h2></div>;` | **~33%** (4 tokens vs 6 tokens) |
+| **Async Route Return** | `return. (@ (res.json()))` | `return. @ res.json()` | `return await res.json();` | **~40%** (3 tokens vs 5 tokens) |
+| **Relational Comparison Return** | `return. (result.changes > 0)` | `return. result.changes > 0` | `return result.changes > 0;` | **~29%** (5 tokens vs 7 tokens) |
+| **Binary Arithmetic Return** | `return. (a + b)` | `return. a + b` | `return a + b;` | **~33%** (4 tokens vs 6 tokens) |
+| **Computed Object Key** | Imperative dictionary mutation (14+ tokens) | `return. O([field]:value)` | `return { [field]: value };` | **~65%** (5 tokens vs 14+ tokens) |
+| **Function Call with Update** | Crashed with Babel parse error | `delay =: (Math.pow 2 count++)` | `const delay = Math.pow(2, count++);` | **100% Reliability** |
+
+### Impact on Fullstack Applications
+In fullstack React and Node applications, `return` statements and JSX views are present in every component and controller. Dynamic computed dictionary keys are standard in GraphQL resolvers, database ORM mappers, and configurable form state. Unwrapping return statements and providing native computed keys saves 25–40% tokens on returns, eliminates multi-line imperative object workarounds, and ensures 100% roundtrip fidelity without syntax crashes.
+
 

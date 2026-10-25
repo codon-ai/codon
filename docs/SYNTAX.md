@@ -121,19 +121,20 @@ Codon provides ultra-compact object literals via `O(...)`:
 
 - **Colon Key-Value Pairs**: `O(key:val;key2:val2)`
 - **Identifier Property Shorthand**: `O(prop1;prop2)` compiles to `{ prop1, prop2 }`
+- **Computed Property Keys**: `O([key]:val)` compiles to `{ [key]: val }`
 - **Prefix Spread**: `O(...rest;key:val)` compiles to `{ ...rest, key: val }`
 - **Quoted Keys**: `O('Content-Type':'application/json')` for special characters
 - **Empty Objects**: `O()` or `O''` compiles to `{}`
 - **Legacy Alternating Pairs**: `O('key';val)` remains supported for backward compatibility
 
 ```codon
-NB. Modern concise object literal
-config =: O(...baseConfig;port:8080;host:'localhost';timeout)
+NB. Modern concise object literal with spread, shorthand, and computed key
+config =: O(...baseConfig;port:8080;host:'localhost';[dynamicKey]:value;timeout)
 ```
 
 Transpiles to:
 ```javascript
-const config = { ...baseConfig, port: 8080, host: "localhost", timeout };
+const config = { ...baseConfig, port: 8080, host: "localhost", [dynamicKey]: value, timeout };
 ```
 
 ### Arrays (`[...]`)
@@ -605,11 +606,30 @@ end.
 
 ### Jumps & Returns (`return.`, `throw.`)
 
+Codon supports concise unparenthesized return expressions across identifiers, JSX trees, await expressions, relational comparisons, and binary calculations:
+
 ```codon
 return. result
 return.
+return. <div><h2>Chat Room</h2></div>
+return. @ res.json()
+return. status.changes > 0
+return. a + b
 throw. (new Error 'Operation failed')
 ```
+
+Transpiles to:
+```javascript
+return result;
+return;
+return <div><h2>Chat Room</h2></div>;
+return await res.json();
+return status.changes > 0;
+return a + b;
+throw new Error("Operation failed");
+```
+
+Parenthesized forms `return. (a + b)` and `return. (@ res.json())` remain supported for backward compatibility.
 
 ---
 
@@ -656,26 +676,24 @@ For full multi-file application structure, `codon.json` configuration, and proje
 
 ## 11. React & JSX Support
 
-Codon natively supports React and JSX elements, components, attributes, interpolations, and fragments:
+Codon natively supports React and JSX elements, components, attributes, interpolations, and fragments with concise unparenthesized root returns:
 
 ```codon
 fn. ChatApp props do.
   [messages, setMessages] =: (useState [])
 
-  return. (
-    <div className="chat-container">
-      <h1>Chat Window</h1>
-      <ul>
-        {(messages.map {{msg => (
-          <li key={msg.id}>
-            <strong>{msg.user}: </strong>
-            <span>{msg.text}</span>
-          </li>
-        )}})}
-      </ul>
-      <button onClick={{=> (setMessages [])}}>Clear</button>
-    </div>
-  )
+  return. <div className="chat-container">
+    <h1>Chat Window</h1>
+    <ul>
+      {(messages.map {{msg => (
+        <li key={msg.id}>
+          <strong>{msg.user}: </strong>
+          <span>{msg.text}</span>
+        </li>
+      )}})}
+    </ul>
+    <button onClick={{=> (setMessages [])}}>Clear</button>
+  </div>
 end.
 ```
 

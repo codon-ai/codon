@@ -76,6 +76,27 @@ export interface CompilerOptions {
     runtimeModule?: string;
 }
 
+export function unwrapOuterParens(s: string): string {
+    const trimmed = s.trim();
+    if (trimmed.startsWith("(") && trimmed.endsWith(")")) {
+        let depth = 0;
+        let inStr = false;
+        let inTpl = false;
+        for (let i = 0; i < trimmed.length - 1; i++) {
+            const ch = trimmed[i];
+            if (ch === "'" && !inTpl) inStr = !inStr;
+            else if (ch === "`" && !inStr) inTpl = !inTpl;
+            else if (!inStr && !inTpl) {
+                if (ch === "(") depth++;
+                else if (ch === ")") depth--;
+                if (depth === 0) return trimmed;
+            }
+        }
+        return trimmed.slice(1, -1).trim();
+    }
+    return trimmed;
+}
+
 export class JSToCodonTranslator {
     private resolution?: ScopeResolution;
 
@@ -310,8 +331,22 @@ export class JSToCodonTranslator {
             case "ThrowStatement":
                 return `throw. ${this.transpile(node.argument)}`;
 
-            case "ReturnStatement":
-                return node.argument ? `return. ${this.transpile(node.argument)}` : "return.";
+            case "ReturnStatement": {
+                if (!node.argument) return "return.";
+                let argStr = this.transpile(node.argument);
+                if (node.argument.type === "AwaitExpression" && argStr.startsWith("(@ ") && argStr.endsWith(")")) {
+                    argStr = "@ " + argStr.slice(3, -1);
+                } else if (
+                    node.argument.type === "BinaryExpression" ||
+                    node.argument.type === "LogicalExpression" ||
+                    node.argument.type === "ConditionalExpression" ||
+                    node.argument.type === "JSXElement" ||
+                    node.argument.type === "JSXFragment"
+                ) {
+                    argStr = unwrapOuterParens(argStr);
+                }
+                return `return. ${argStr}`;
+            }
 
             case "YieldExpression":
                 return (node as any).argument ? `yield. ${this.transpile((node as any).argument)}` : "yield.";
@@ -507,6 +542,16 @@ export class JSToCodonTranslator {
             case "Property":
             case "ObjectProperty" as any: {
                 const p = node as any;
+                if (p.computed) {
+                    const keyStr = this.transpile(p.key);
+                    if (p.method) {
+                        const fnVal = p.value;
+                        const pStr = fnVal.params.map((param: any) => this.transpilePattern(param)).join(",");
+                        const fnHeader = fnVal.async ? (pStr ? `async fn ${pStr}` : "async fn") : (pStr ? `fn ${pStr}` : "fn");
+                        return `[${keyStr}]:{{${fnHeader} => do.\n${this.transpile(fnVal.body)}\n}}`;
+                    }
+                    return `[${keyStr}]:${this.transpile(p.value)}`;
+                }
                 const keyStr = p.key.type === "Identifier" ? p.key.name : String(p.key.value ?? this.transpile(p.key));
                 if (p.method) {
                     const fnVal = p.value;
@@ -524,9 +569,13 @@ export class JSToCodonTranslator {
 
             case "ObjectMethod" as any: {
                 const p = node as any;
-                const keyStr = p.key.type === "Identifier" ? p.key.name : String(p.key.value ?? this.transpile(p.key));
                 const pStr = p.params.map((param: any) => this.transpilePattern(param)).join(",");
                 const fnHeader = p.async ? (pStr ? `async fn ${pStr}` : "async fn") : (pStr ? `fn ${pStr}` : "fn");
+                if (p.computed) {
+                    const keyStr = this.transpile(p.key);
+                    return `[${keyStr}]:{{${fnHeader} => do.\n${this.transpile(p.body)}\n}}`;
+                }
+                const keyStr = p.key.type === "Identifier" ? p.key.name : String(p.key.value ?? this.transpile(p.key));
                 const formattedKey = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(keyStr) ? keyStr : `'${keyStr}'`;
                 return `${formattedKey}:{{${fnHeader} => do.\n${this.transpile(p.body)}\n}}`;
             }
