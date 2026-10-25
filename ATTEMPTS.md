@@ -1,8 +1,8 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
-## Revision 14a (successful)
-- **Tokens:** 772
+## Revision 14a (unsuccessful)
+- **Tokens:** 4889
 
 - **Revision Idea**: Introduce concise native unparenthesized JSX expressions (`<tag ...>...</tag>`, `<>...</>`), unparenthesized return statements (`return. expr`), and unparenthesized variable initializers (`x =: a + b`, `resolver =: a || b`) in Codon, eliminating redundant outer wrapping parentheses `(<div>...</div>)`, `(return. (a + b))`, and `(idx =: (this.heap.length - 1))`.
 - **Rationale**: In modern AI fullstack web development (React component rendering, JSX layout composition, Next.js / Remix page routes, Express API controllers, database query resolvers, algorithmic data structures, and state mutations):
