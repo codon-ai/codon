@@ -1505,5 +1505,121 @@ end.
     });
 });
 
+describe("Concise Computed Property Keys, Unparenthesized Return/Mutation Await & Update Operand Protection (Rev 20a)", () => {
+    test("Transpiles computed property keys in object literals: O([fieldName]:result)", () => {
+        const codonCode = `
+fn. formatResult key,val do.
+  res =: O([key]:val;status:200)
+  return. res
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("[key]: val");
+        expect(js).toContain("status: 200");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles nested computed object properties in GraphQL query dispatcher pattern", () => {
+        const codonCode = `
+async_fn. execute query do.
+  return. O(data:O([fieldName]:result))
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("[fieldName]: result");
+        expect(js).toContain("data: {");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles unparenthesized await in return statements: return. @ expr", () => {
+        const codonCode = `
+async_fn. fetchUser id do.
+  return. @ (api.getUser id)
+end.
+async_fn. getJson res do.
+  return. @ (res.json())
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("return await api.getUser(id);");
+        expect(js).toContain("return await res.json();");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles unparenthesized await in member assignments: this.prop = @ expr", () => {
+        const codonCode = `
+async_fn. connectClient do.
+  this.socket = @ (createSocket this.url)
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("this.socket = await createSocket(this.url);");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Correctly parses function calls with update arguments without greedy suffix collision", () => {
+        const codonCode = `
+delay =: (baseDelay * (Math.pow 2 this.retryCount++))
+result =: (compute a b++)
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("const delay = baseDelay * Math.pow(2, this.retryCount++);");
+        expect(js).toContain("const result = compute(a, b++);");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips JS computed object properties, return await, and member assignment await", () => {
+        const jsCode = `
+export async function queryData(url, fieldName) {
+  const res = await fetch(url);
+  const result = await res.json();
+  return { data: { [fieldName]: result } };
+}
+export class Client {
+  async init() {
+    this.session = await startSession();
+  }
+}
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("[fieldName]:result");
+        expect(codonCode).toContain("this.session = @ startSession()");
+        expect(codonCode).not.toContain("this.session = (@");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(roundtrippedJs).toContain("[fieldName]: result");
+        expect(roundtrippedJs).toContain("this.session = await startSession();");
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+    });
+});
+
+
 
 

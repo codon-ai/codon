@@ -120,6 +120,7 @@ floats   = 1.5 2.5 3.5      NB. const floats = [1.5, 2.5, 3.5];
 Codon provides ultra-compact object literals via `O(...)`:
 
 - **Colon Key-Value Pairs**: `O(key:val;key2:val2)`
+- **Computed Property Keys**: `O([key]:val)` or `O([fieldName]:result)` for dynamic dictionary keys
 - **Identifier Property Shorthand**: `O(prop1;prop2)` compiles to `{ prop1, prop2 }`
 - **Prefix Spread**: `O(...rest;key:val)` compiles to `{ ...rest, key: val }`
 - **Quoted Keys**: `O('Content-Type':'application/json')` for special characters
@@ -127,13 +128,13 @@ Codon provides ultra-compact object literals via `O(...)`:
 - **Legacy Alternating Pairs**: `O('key';val)` remains supported for backward compatibility
 
 ```codon
-NB. Modern concise object literal
-config =: O(...baseConfig;port:8080;host:'localhost';timeout)
+NB. Modern concise object literal with computed keys & spread
+config =: O(...baseConfig;[dynamicKey]:value;host:'localhost';timeout)
 ```
 
 Transpiles to:
 ```javascript
-const config = { ...baseConfig, port: 8080, host: "localhost", timeout };
+const config = { ...baseConfig, [dynamicKey]: value, host: "localhost", timeout };
 ```
 
 ### Arrays (`[...]`)
@@ -287,15 +288,20 @@ Codon supports full ES6 destructuring:
 Monadic verbs operate on their right-hand argument with zero wrapping boilerplate:
 
 ### Await (`@` and `@:`)
-Revision 1a introduced `@` and `@:` as prefix monadic await verbs, eliminating verbose `(await expr)` syntax:
+Revisions 1a and 20a establish `@` and `@:` as prefix monadic await verbs, eliminating verbose `(await expr)` syntax across standalone statements, variable declarations, member assignments, and return statements:
 
 ```codon
 NB. Standalone await
 @ (delay 100)
 
-NB. Await assignment
+NB. Await assignment & member mutation
 response =: @ (fetch url)
 data =: @ (response.json())
+this.socket = @ (createSocket this.url)
+
+NB. Return await
+return. @ res.json()
+return. @ (fetch url)
 
 NB. Colon-inflected verb form
 user =: @: (getUser id)
@@ -306,6 +312,9 @@ Transpiles to:
 await delay(100);
 const response = await fetch(url);
 const data = await response.json();
+this.socket = await createSocket(this.url);
+return await res.json();
+return await fetch(url);
 const user = await getUser(id);
 ```
 
