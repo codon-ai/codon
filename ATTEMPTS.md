@@ -1,6 +1,39 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
+## Revision 26a (unsuccessful)
+- **Tokens:** 708
+
+- **Revision Idea**: Introduce concise unparenthesized `typeof` and bitwise NOT unary expressions (`typeof expr`, `typeof x === 'string'`, `~expr`), direct native J negative number literal emission (`_1`, `_2`, `_0.5`, `__`), and single-operand boundary protection for update expressions (`++`, `--`) in function call arguments (`(Math.pow 2 this.retryCount++)`).
+- **Rationale**: In modern AI fullstack web development (API request validation, runtime type guards, string/array slicing, sentinel return values, search indexing, event listeners, and exponential backoff retry algorithms):
+  1. **Concise Unparenthesized `typeof` and Unary Expressions**: Runtime type checking (`typeof x === 'string'`, `typeof cb === 'function'`, `typeof window !== 'undefined'`) is ubiquitous across fullstack JavaScript, API controllers, and schema validators. Previously in Codon, `typeof` strictly required outer parentheses `((typeof x) === 'string')` or `(typeof x)`. Placing unparenthesized `typeof ` parsing after binary operator splitting ensures `typeof x === 'string'` correctly splits at `===` with the left operand cleanly parsed as a `UnaryExpression` (`operator: "typeof"`), eliminating 2–4 redundant wrapping tokens and outer parentheses on every type check.
+  2. **Native Negative Numeric Literals (`_n`)**: In standard J and Codon syntax, negative numbers natively use a prefix underscore `_` (e.g. `_1` for `-1`, `_42` for `-42`, `__` for `-Infinity`). While `CodonToASTParser` already supports `_1` as a literal `-1`, `JSToCodonTranslator` previously emitted all negative numeric literals as verbose 4-token parenthesized expressions `(- 1)`, `(- 2)`. Emitting `_1` replaces 4 tokens `(`, `-`, `1`, `)` with a single token `_1` across array slicing (`inner.slice 1 _1`), index searches (`indexOf !== _1`), and negative offsets.
+  3. **Single-Operand Guard for Update Expressions**: In `codon-parser.ts`, update expression detection (`++`, `--`) lacked a single-operand boundary check (`splitAtLevel(inner, " ").length === 1`), causing function call expressions containing update arguments (such as `(Math.pow 2 this.retryCount++)`) to greedily match trailing `++` across spaces, producing broken JavaScript (`Math.pow 2 this.retryCount++;`) and fatal Babel compiler crashes (`Missing semicolon`). Enforcing single-operand boundaries ensures calls with update arguments parse into clean `CallExpression` nodes with nested `UpdateExpression` arguments.
+  Together, these changes eliminate redundant parentheses across type checking and negative numbers while fixing update expression parsing across all fullstack benchmarks.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates 3 tokens per negative numeric literal: `(- 1)` [4 tokens] -> `_1` [1 token], saving 75% per negative constant or slice index.
+  - Eliminates 2 wrapping tokens `(` and `)` per `typeof` check: `((typeof x) === 'string')` [7 tokens] -> `typeof x === 'string'` [5 tokens], saving ~29%.
+  - Resolves update expression misparsing and syntax crashes across WebSocket clients and exponential backoff algorithms (`Math.pow 2 this.retryCount++`).
+- **Concrete Syntax Changes**:
+  - `codon-parser.ts`:
+    - In `parseExpression`, detect unparenthesized `typeof ` placed after binary splitting (`strippedExpr.startsWith("typeof ")`), constructing a `UnaryExpression` with `operator: "typeof"`.
+    - In update expression parsing (`strippedExpr.endsWith("++")`, `strippedExpr.endsWith("--")`, `strippedExpr.startsWith("++")`, `strippedExpr.startsWith("--")`), added `splitAtLevel(inner, " ").length === 1` boundary check so call expressions with update arguments do not misparse.
+  - `transpilers.ts`:
+    - In `JSToCodonTranslator.prototype.transpile`:
+      - `case "UnaryExpression"`:
+        - When `node.operator === "typeof"`, emits `typeof ${this.transpile(node.argument)}`.
+        - When `node.operator === "-" && (node.argument.type === "NumericLiteral" || (node.argument.type === "Literal" && typeof (node.argument as any).value === "number"))`, emits `_${(node.argument as any).value}`.
+        - When `node.operator === "~"`, emits `~${this.transpile(node.argument)}`.
+  - Examples:
+    - Old Codon: `(parenIdx !== (- 1))`
+    - New Codon: `(parenIdx !== _1)`
+    - Old Codon: `(inner.slice 1 (- 1))`
+    - New Codon: `(inner.slice 1 _1)`
+    - Old Codon: `((typeof x) === 'string')`
+    - New Codon: `typeof x === 'string'`
+    - Old Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` *(crashed with Missing semicolon)*
+    - New Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` *(cleanly compiles to Math.pow(2, this.retryCount++))*
+
 ## Revision 25a (unsuccessful)
 - **Tokens:** 4263
 
