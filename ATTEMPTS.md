@@ -1,6 +1,34 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
+## Revision 27a (unsuccessful)
+- **Tokens:** 5581
+
+- **Revision Idea**: Introduce first-class native Tagged Template Expressions (`tag\`template\``, `db.exec\`sql\``, `sql\`query\``), native Regular Expression Literals (`/pattern/flags`), and single-operand boundary protection for update expressions (`++`, `--`) in function call arguments (`(Math.pow 2 this.retryCount++)`).
+- **Rationale**: In modern AI fullstack web development (database query execution in SQLite/PostgreSQL/MySQL, ORM data access, GraphQL client queries, styled UI components, route parameter pattern matching, input sanitization, token validation, event stream handling, and exponential backoff retry algorithms):
+  1. **Native Tagged Template Expressions (`tag\`...\``)**: Tagged template literals (`db.exec\`CREATE TABLE...\``, `sql\`SELECT * FROM todos\``, `gql\`query { ... }\``, `styled.div\`color: red;\``) are fundamental in fullstack JavaScript and TypeScript. Previously in Codon, `CodonToASTParser` lacked any parser rule for tagged templates, causing `db.exec\`...\`` and `sql\`...\`` to fail or misparse as malformed Identifiers. Database execution and tagged invocations were forced into verbose parenthesized function calls `(db.exec \`...\`)`, adding 2 redundant wrapping tokens `(` and `)` per query. Introducing native tagged template parsing allows direct emission and evaluation of `tag\`...\`` across statement and expression positions.
+  2. **Native Regular Expression Literals (`/pattern/flags`)**: Regular expression literals (`/[a-zA-Z0-9]+/g`, `/^\d+$/`, `/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i`) are standard across input validation, route matching, header parsing, and text sanitization. In Codon, writing `/pattern/flags` had no dedicated AST parser rule in `parseExpression`, falling through to plain `Identifier` nodes. Supporting first-class `/pattern/flags` parsing constructs valid ESTree `Literal` (RegExp) AST nodes directly without requiring verbose constructor calls `(new RegExp '...' 'flags')`, saving up to 85% tokens per regular expression.
+  3. **Single-Operand Guard for Update Expressions**: In `codon-parser.ts`, update expression detection (`++`, `--`) lacked a single-operand boundary check (`splitAtLevel(inner, " ").length === 1`), causing function call expressions containing update arguments (such as `(Math.pow 2 this.retryCount++)`) to greedily match trailing `++` across spaces, producing broken JavaScript (`Math.pow 2 this.retryCount++;`) and fatal Babel compiler crashes (`Missing semicolon`). Enforcing single-operand boundaries ensures calls with update arguments parse into clean `CallExpression` nodes with nested `UpdateExpression` arguments.
+  Together, these changes eliminate redundant parentheses across database queries and fullstack template operations, support native regex validation, and resolve update expression misparsing across all fullstack benchmarks.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates 2 wrapping tokens `(` and `)` per tagged template query: `(db.exec \`CREATE TABLE...\`)` [5+ tokens] -> `db.exec\`CREATE TABLE...\`` [2+ tokens], saving ~40%.
+  - Eliminates 7 tokens per regular expression: `(new RegExp '^[a-z]+$' 'i')` [8 tokens] -> `/^[a-z]+$/i` [1 token], saving ~87%.
+  - Resolves update expression misparsing and syntax crashes across WebSocket clients and exponential backoff retry algorithms in fullstack benchmarks (`Math.pow 2 this.retryCount++`).
+- **Concrete Syntax Changes**:
+  - `codon-parser.ts`:
+    - In `parseExpression`, detect tagged template literals `tag\`quasi\`` where `strippedExpr` ends with `` ` `` and contains a tag prefix before the template literal, parsing into a `TaggedTemplateExpression` ESTree AST node.
+    - In `parseExpression`, detect regular expression literals `^\/((?:\\.|[^\/\\\r\n])+)\/([gimsuy]*)$`, constructing an ESTree `Literal` node with regex metadata.
+    - In update expression parsing (`strippedExpr.endsWith("++")`, `strippedExpr.endsWith("--")`, `strippedExpr.startsWith("++")`, `strippedExpr.startsWith("--")`), added `splitAtLevel(inner, " ").length === 1` boundary check so call expressions with update arguments do not misparse.
+  - `transpilers.ts`:
+    - In `CodonToJSCompiler`, normalized `TaggedTemplateExpression` and `RegExpLiteral` AST nodes for clean JavaScript generation via `@babel/generator`.
+  - Examples:
+    - Old Codon: `(db.exec \`CREATE TABLE todos (id INTEGER);\`)`
+    - New Codon: `db.exec\`CREATE TABLE todos (id INTEGER);\``
+    - Old Codon: `regex =: (new RegExp '^[a-z0-9]+$' 'i')`
+    - New Codon: `regex =: /^[a-z0-9]+$/i`
+    - Old Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` *(crashed with Missing semicolon)*
+    - New Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` *(cleanly compiles to Math.pow(2, this.retryCount++))*
+
 ## Revision 26a (unsuccessful)
 - **Tokens:** 708
 
