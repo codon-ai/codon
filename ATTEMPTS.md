@@ -1,6 +1,39 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
+## Revision 28a (unsuccessful)
+- **Tokens:** 7557
+
+- **Revision Idea**: Introduce native unparenthesized JSX elements and fragments (`<tag ...>...</tag>`, `<tag />`, `<>...</>`) across return statements (`return. <div>...</div>`), variable declarations (`view =: <div>...</div>`), and arrow function callbacks (`messages.map {{m => <li key={m.id}>...</li>}}`), with depth-aware JSX statement scanning in `splitCodonStatements`, and single-operand boundary protection for update expressions (`++`, `--`) in function call arguments (`(Math.pow 2 this.retryCount++)`).
+- **Rationale**: In modern AI fullstack web development (React client and server components, Next.js JSX rendering, UI event handling, list mapping, and WebSocket reconnection backoff loops):
+  1. **Concise Unparenthesized JSX Elements & Fragments**: In fullstack JavaScript and React development, JSX elements are the foundational building blocks for UI views, template rendering, and component hierarchies. Previously in Codon:
+     - `JSToCodonTranslator` unconditionally wrapped every `JSXElement` and `JSXFragment` in redundant outer parentheses `(<div>...</div>)` and `(<>...</>)`.
+     - In `splitCodonStatements`, multi-line JSX trees were split into separate statements across newlines because the statement scanner tracked parentheses (`parenDepth`), braces, and brackets, but lacked JSX element depth tracking (`jsxDepth`). When developers or LLMs wrote unparenthesized multi-line JSX `return. <div>\n<h2>...</h2>\n</div>`, the scanner split after `<div>`, producing malformed JavaScript (`return <div >; <h2>...</h2>`) and failing compilation.
+     - Consequently, LLMs were forced to wrap every JSX view and return statement in outer parentheses `return. (<div>...</div>)` and `{{m => (<li ...>)}}`, adding 2 redundant tokens `(` and `)` per component root, map callback, and JSX fragment.
+     - By adding depth-aware JSX tag tracking (`jsxDepth`) to `splitCodonStatements` and removing outer parentheses in `JSToCodonTranslator` for `JSXElement` and `JSXFragment`, Codon enables first-class native JSX emission and parsing directly at statement level, within return statements, and inside arrow function expressions without wrapping parentheses.
+  2. **Single-Operand Guard for Update Expressions**: In `codon-parser.ts`, update expression detection (`++`, `--`) lacked a single-operand boundary check (`splitAtLevel(inner, " ").length === 1`), causing function call expressions containing update arguments (such as `(Math.pow 2 this.retryCount++)`) to greedily match trailing `++` across spaces, producing broken JavaScript (`Math.pow 2 this.retryCount++;`) and fatal Babel compiler crashes (`Missing semicolon`). Enforcing single-operand boundaries ensures calls with update arguments parse into clean `CallExpression` nodes with nested `UpdateExpression` arguments.
+  Together, these changes eliminate redundant parentheses across React JSX views and list item renderings, enable clean multi-line JSX component declarations, and resolve update expression misparsing across all fullstack benchmarks.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates 2 wrapping tokens `(` and `)` per JSX return statement across React components: `return. (<div>...</div>)` [6 tokens] -> `return. <div>...</div>` [4 tokens], saving ~33%.
+  - Eliminates 2 wrapping tokens per mapped JSX list item: `{{m => (<li key={m.id}>...</li>)}}` -> `{{m => <li key={m.id}>...</li>}}`, saving ~25%.
+  - Eliminates 2 wrapping tokens per JSX fragment and variable assignment: `view =: (<div>...</div>)` -> `view =: <div>...</div>`.
+  - Resolves update expression misparsing and syntax crashes across WebSocket clients and exponential backoff retry algorithms in fullstack benchmarks (`Math.pow 2 this.retryCount++`).
+- **Concrete Syntax Changes**:
+  - `codon-parser.ts`:
+    - In `splitCodonStatements`: Track `jsxDepth` by scanning unclosed JSX opening tags `<tag...>` (incrementing `jsxDepth`) and closing tags `</tag>` (decrementing `jsxDepth`) outside string and template literals. Enforce that newlines only split statements when `jsxDepth === 0`, preserving multi-line JSX trees.
+    - In update expression parsing (`strippedExpr.endsWith("++")`, `strippedExpr.endsWith("--")`, `strippedExpr.startsWith("++")`, `strippedExpr.startsWith("--")`), added `splitAtLevel(inner, " ").length === 1` boundary check so call expressions with update arguments do not misparse.
+  - `transpilers.ts`:
+    - In `JSToCodonTranslator`:
+      - `case "JSXElement"`: Emits `${generate(node as any).code}` directly without outer wrapping parentheses `(...)`.
+      - `case "JSXFragment"`: Emits `<>${children}</>` directly without outer wrapping parentheses `(...)`.
+  - Examples:
+    - Old Codon: `return. (<div><h2>Chat Room</h2></div>)`
+    - New Codon: `return. <div><h2>Chat Room</h2></div>`
+    - Old Codon: `(messages.map {{m => (<li key={m.id}><strong>{m.user}:</strong> {m.text}</li>)}})`
+    - New Codon: `(messages.map {{m => <li key={m.id}><strong>{m.user}:</strong> {m.text}</li>}})`
+    - Old Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` *(crashed with Missing semicolon)*
+    - New Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` *(cleanly compiles to Math.pow(2, this.retryCount++))*
+
 ## Revision 27a (unsuccessful)
 - **Tokens:** 5581
 
