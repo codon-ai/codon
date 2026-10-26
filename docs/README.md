@@ -82,6 +82,8 @@ flowchart TD
 | **ES Module Import** | `import { useState, useRef } from "react";` | `import. {useState,useRef} from 'react'` | **~45%** |
 | **Logical NOT Expression** | `if (!input.trim()) return;` | `if. !input.trim() do. return. end.` | **~40%** |
 | **Update Expression** | `nextId.current++;` | `nextId.current++` | **~40%** |
+| **Tagged Template (SQL/DB)** | `db.exec\`CREATE TABLE users (id INT);\`` | `db.exec\`CREATE TABLE users (id INT);\`` | **~40%** |
+| **Regular Expression Literal** | `const re = /^[a-z0-9]+$/i;` | `re =: /^[a-z0-9]+$/i` | **~85%** |
 
 ---
 

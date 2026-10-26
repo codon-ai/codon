@@ -1596,7 +1596,7 @@ export class CodonToASTParser {
         // Update Expression: (++x), (--x), (x++), (x--), x++, x--, ++x, --x
         if (strippedExpr.endsWith("++") && strippedExpr.length > 2) {
             const inner = strippedExpr.slice(0, -2).trim();
-            if (inner && !inner.includes(",") && !inner.includes(";")) {
+            if (inner && !inner.includes(",") && !inner.includes(";") && splitAtLevel(inner, " ").length === 1) {
                 return {
                     type: "UpdateExpression",
                     operator: "++",
@@ -1607,7 +1607,7 @@ export class CodonToASTParser {
         }
         if (strippedExpr.endsWith("--") && strippedExpr.length > 2) {
             const inner = strippedExpr.slice(0, -2).trim();
-            if (inner && !inner.includes(",") && !inner.includes(";")) {
+            if (inner && !inner.includes(",") && !inner.includes(";") && splitAtLevel(inner, " ").length === 1) {
                 return {
                     type: "UpdateExpression",
                     operator: "--",
@@ -1618,7 +1618,7 @@ export class CodonToASTParser {
         }
         if (strippedExpr.startsWith("++") && strippedExpr.length > 2) {
             const inner = strippedExpr.slice(2).trim();
-            if (inner && !inner.includes(",") && !inner.includes(";")) {
+            if (inner && !inner.includes(",") && !inner.includes(";") && splitAtLevel(inner, " ").length === 1) {
                 return {
                     type: "UpdateExpression",
                     operator: "++",
@@ -1629,7 +1629,7 @@ export class CodonToASTParser {
         }
         if (strippedExpr.startsWith("--") && strippedExpr.length > 2) {
             const inner = strippedExpr.slice(2).trim();
-            if (inner && !inner.includes(",") && !inner.includes(";")) {
+            if (inner && !inner.includes(",") && !inner.includes(";") && splitAtLevel(inner, " ").length === 1) {
                 return {
                     type: "UpdateExpression",
                     operator: "--",
@@ -1746,6 +1746,25 @@ export class CodonToASTParser {
         }
         if (/^_\d+(\.\d+)?([eE][+-]?\d+)?$/.test(strippedExpr)) {
             return { type: "Literal", value: Number("-" + strippedExpr.slice(1)) };
+        }
+
+        // Regular Expression Literals: /pattern/flags (checked before binary splitting so operators like +, -, /, @ inside regex do not split)
+        if (strippedExpr.startsWith("/") && !strippedExpr.startsWith("//") && !strippedExpr.startsWith("/*") && !strippedExpr.startsWith("/=") && !strippedExpr.startsWith("/:")) {
+            const regexMatch = strippedExpr.match(/^\/((?:\\.|[^\/\\\r\n])+)\/([gimsuy]*)$/);
+            if (regexMatch && regexMatch[1]) {
+                const pattern = regexMatch[1];
+                const flags = regexMatch[2] || "";
+                try {
+                    new RegExp(pattern, flags);
+                    return {
+                        type: "Literal",
+                        value: new RegExp(pattern, flags),
+                        regex: { pattern, flags },
+                    };
+                } catch {
+                    // fall through if not valid regex
+                }
+            }
         }
 
         // Binary or Assignment Expression
@@ -2365,6 +2384,24 @@ export class CodonToASTParser {
         }
         if (strippedExpr === "this") return { type: "ThisExpression" };
         if (strippedExpr === "super") return { type: "Super" };
+
+        // Tagged Template Literals: tag`...` or (tag`...`)
+        if (strippedExpr.endsWith("`") && strippedExpr.includes("`") && !strippedExpr.startsWith("`")) {
+            const firstBacktick = strippedExpr.indexOf("`");
+            if (firstBacktick > 0) {
+                const tagPart = strippedExpr.substring(0, firstBacktick).trim();
+                const tplPart = strippedExpr.substring(firstBacktick).trim();
+                if (tplPart.startsWith("`") && tplPart.endsWith("`")) {
+                    const tagNode = this.parseExpression(tagPart);
+                    const quasiNode = this.parseTemplateLiteral(tplPart);
+                    return {
+                        type: "TaggedTemplateExpression",
+                        tag: tagNode,
+                        quasi: quasiNode,
+                    };
+                }
+            }
+        }
 
         // Template Literals: `...`
         if (strippedExpr.startsWith("`") && strippedExpr.endsWith("`")) {

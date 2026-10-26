@@ -11,6 +11,7 @@ This document provides a comprehensive, rigorous specification of the Codon lang
 3. [Literals & Data Types](#3-literals--data-types)
    - [Numeric Vectors & Negative Numbers](#numeric-vectors--negative-numbers)
    - [Strings & Template Literals](#strings--template-literals)
+   - [Regular Expression Literals](#regular-expression-literals)
    - [Objects (`O(...)`)](#objects-o)
    - [Arrays (`[...]`)](#arrays-)
 4. [Variable Declarations & Assignments](#4-variable-declarations--assignments)
@@ -114,8 +115,25 @@ floats   = 1.5 2.5 3.5      NB. const floats = [1.5, 2.5, 3.5];
   ```codon
   greeting =: `Hello, ${user.name}! Count: ${count + 1}`
   ```
+- **Tagged Template Expressions**: Direct invocation of template tags without wrapping parentheses:
+  ```codon
+  db.exec`CREATE TABLE todos (id INTEGER PRIMARY KEY, title TEXT);`
+  query =: sql`SELECT * FROM users WHERE active = ${true}`
+  styledBox =: styled.div`color: red; padding: 8px;`
+  ```
+
+### Regular Expression Literals
+
+Codon supports first-class JavaScript regular expression literals `/pattern/flags`:
+```codon
+re =: /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i
+matches =: str.match(/\d+/g)
+```
+- Standard regex flags (`g`, `i`, `m`, `s`, `u`, `y`) are fully supported.
+- Parsed prior to binary operator splitting, ensuring internal regex characters like `+`, `-`, `/`, and `@` are not interpreted as arithmetic or monadic verbs.
 
 ### Objects (`O(...)`)
+
 
 Codon provides ultra-compact object literals via `O(...)`:
 

@@ -1505,5 +1505,72 @@ end.
     });
 });
 
+describe("Revision 27a: Native Tagged Template Expressions, Regular Expressions, and Update Expression Guard", () => {
+    test("Transpiles native tagged template expressions tag\`template\` and db.exec\`...\`", () => {
+        const codonCode = `
+db.exec\`CREATE TABLE todos (id INTEGER PRIMARY KEY, title TEXT NOT NULL);\`
+query =: sql\`SELECT * FROM users WHERE active = true\`
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("db.exec`CREATE TABLE todos (id INTEGER PRIMARY KEY, title TEXT NOT NULL);`;");
+        expect(js).toContain("const query = sql`SELECT * FROM users WHERE active = true`;");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles native regular expression literals /pattern/flags", () => {
+        const codonCode = `
+regex =: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$/i
+clean =: (text.replace /\\s+/g ' ')
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("const regex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$/i;");
+        expect(js).toContain("text.replace(/\\s+/g, \" \");");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles function call with update argument (Math.pow 2 this.retryCount++) without syntax error", () => {
+        const codonCode = `
+delay =: (this.baseDelayMs * (Math.pow 2 this.retryCount++))
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("Math.pow(2, this.retryCount++)");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips JS tagged template literals and regular expression literals", () => {
+        const jsCode = `
+const emailRegex = /^[a-z0-9]+@[a-z0-9]+\\.[a-z]+$/gi;
+db.exec\`CREATE TABLE test (id INT);\`;
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("/^[a-z0-9]+@[a-z0-9]+\\.[a-z]+$/gi");
+        expect(codonCode).toContain("db.exec`CREATE TABLE test (id INT);`");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(roundtrippedJs).toContain("/^[a-z0-9]+@[a-z0-9]+\\.[a-z]+$/gi");
+        expect(roundtrippedJs).toContain("db.exec`CREATE TABLE test (id INT);`");
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+    });
+});
+
 
 
