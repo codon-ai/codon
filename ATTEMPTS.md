@@ -1,8 +1,8 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
-## Revision 26a (successful)
-- **Tokens:** 485
+## Revision 26a (unsuccessful)
+- **Tokens:** 708
 
 - **Revision Idea**: Introduce concise unparenthesized `typeof` and bitwise NOT unary expressions (`typeof expr`, `typeof x === 'string'`, `~expr`), direct native J negative number literal emission (`_1`, `_2`, `_0.5`, `__`), and single-operand boundary protection for update expressions (`++`, `--`) in function call arguments (`(Math.pow 2 this.retryCount++)`).
 - **Rationale**: In modern AI fullstack web development (API request validation, runtime type guards, string/array slicing, sentinel return values, search indexing, event listeners, and exponential backoff retry algorithms):
