@@ -1,8 +1,8 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
-## Revision 27a (successful)
-- **Tokens:** 500
+## Revision 27a (unsuccessful)
+- **Tokens:** 5581
 
 - **Revision Idea**: Introduce first-class native Tagged Template Expressions (`tag\`template\``, `db.exec\`sql\``, `sql\`query\``), native Regular Expression Literals (`/pattern/flags`), and single-operand boundary protection for update expressions (`++`, `--`) in function call arguments (`(Math.pow 2 this.retryCount++)`).
 - **Rationale**: In modern AI fullstack web development (database query execution in SQLite/PostgreSQL/MySQL, ORM data access, GraphQL client queries, styled UI components, route parameter pattern matching, input sanitization, token validation, event stream handling, and exponential backoff retry algorithms):
