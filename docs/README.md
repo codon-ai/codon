@@ -82,6 +82,7 @@ flowchart TD
 | **ES Module Import** | `import { useState, useRef } from "react";` | `import. {useState,useRef} from 'react'` | **~45%** |
 | **Logical NOT Expression** | `if (!input.trim()) return;` | `if. !input.trim() do. return. end.` | **~40%** |
 | **Update Expression** | `nextId.current++;` | `nextId.current++` | **~40%** |
+| **Native JSX Component** | `return <div><h2>Chat</h2></div>;` | `return. <div><h2>Chat</h2></div>` | **~35%** |
 
 ---
 

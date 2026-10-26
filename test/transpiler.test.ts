@@ -1505,5 +1505,114 @@ end.
     });
 });
 
+describe("Concise Native Unparenthesized JSX Elements & Fragments Support", () => {
+    test("Transpiles native unparenthesized multi-line JSX in return statements and components", () => {
+        const codonCode = `
+fn. ChatApp do.
+  return. <div>
+    <h2>Chat Room</h2>
+    <ul>
+      <li>Item</li>
+    </ul>
+  </div>
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("return <div>");
+        expect(js).toContain("<h2>Chat Room</h2>");
+        expect(js).toContain("<ul>");
+        expect(js).toContain("<li>Item</li>");
+        expect(() => parser.parse(js, { sourceType: "module", plugins: ["jsx"] })).not.toThrow();
+    });
+
+    test("Transpiles native unparenthesized JSX elements in arrow functions and variable assignments", () => {
+        const codonCode = `
+fn. RenderList messages do.
+  view =: <div className="container">Header</div>
+  items =: (messages.map {{m => <li key={m.id}><strong>{m.user}:</strong> {m.text}</li>}})
+  return. view
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain('const view = <div className="container">Header</div>;');
+        expect(js).toContain("messages.map(m => <li key={m.id}><strong>{m.user}:</strong> {m.text}</li>)");
+        expect(() => parser.parse(js, { sourceType: "module", plugins: ["jsx"] })).not.toThrow();
+    });
+
+    test("Transpiles native unparenthesized JSX fragments", () => {
+        const codonCode = `
+fn. FragmentView do.
+  return. <><span>One</span><span>Two</span></>
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("return <><span>One</span><span>Two</span></>;");
+        expect(() => parser.parse(js, { sourceType: "module", plugins: ["jsx"] })).not.toThrow();
+    });
+
+    test("Transpiles call expressions containing update arguments (Math.pow 2 this.retryCount++) without syntax error", () => {
+        const codonCode = `
+delay =: (this.baseDelayMs * (Math.pow 2 this.retryCount++))
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("Math.pow(2, this.retryCount++)");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips React JSX components with concise unparenthesized JSX syntax", () => {
+        const jsCode = `
+export function ChatApp() {
+  const [messages, setMessages] = useState([]);
+  return <div><h2>Chat Room</h2><ul>{messages.map(m => <li key={m.id}>{m.text}</li>)}</ul></div>;
+}
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module", plugins: ["jsx"] });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("return. <div><h2>Chat Room</h2><ul>{messages.map(m => <li key={m.id}>{m.text}</li>)}</ul></div>");
+        expect(codonCode).not.toContain("return. (<div>");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(roundtrippedJs).toContain("<h2>Chat Room</h2>");
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module", plugins: ["jsx"] })).not.toThrow();
+    });
+
+    test("Retains backward compatibility with parenthesized JSX (<div>...</div>)", () => {
+        const codonCode = `
+fn. App do.
+  return. (<div><h2>Legacy</h2></div>)
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("return <div><h2>Legacy</h2></div>;");
+        expect(() => parser.parse(js, { sourceType: "module", plugins: ["jsx"] })).not.toThrow();
+    });
+});
+
 
 

@@ -656,27 +656,46 @@ For full multi-file application structure, `codon.json` configuration, and proje
 
 ## 11. React & JSX Support
 
-Codon natively supports React and JSX elements, components, attributes, interpolations, and fragments:
+Codon natively supports React and JSX elements, components, attributes, interpolations, and fragments without requiring wrapping outer parentheses:
 
 ```codon
 fn. ChatApp props do.
   [messages, setMessages] =: (useState [])
 
-  return. (
-    <div className="chat-container">
-      <h1>Chat Window</h1>
-      <ul>
-        {(messages.map {{msg => (
-          <li key={msg.id}>
-            <strong>{msg.user}: </strong>
-            <span>{msg.text}</span>
-          </li>
-        )}})}
-      </ul>
-      <button onClick={{=> (setMessages [])}}>Clear</button>
-    </div>
-  )
+  return. <div className="chat-container">
+    <h1>Chat Window</h1>
+    <ul>
+      {(messages.map {{msg => <li key={msg.id}>
+        <strong>{msg.user}: </strong>
+        <span>{msg.text}</span>
+      </li>}})}
+    </ul>
+    <button onClick={{=> (setMessages [])}}>Clear</button>
+  </div>
 end.
+```
+
+- **Unparenthesized Component Return**: `return. <div>...</div>` without wrapping parentheses.
+- **Multi-Line JSX Trees**: Depth-aware scanner tracks `<tag...>` and `</tag>`, preserving multi-line JSX trees as unified statements.
+- **Unparenthesized List Mapping**: `items.map {{m => <li key={m.id}>{m.text}</li>}}` directly renders child elements.
+- **Fragments**: Supports `<><span>A</span><span>B</span></>` natively.
+- **Backward Compatibility**: Legacy parenthesized JSX `return. (<div>...</div>)` remains fully supported.
+
+Transpiles to:
+```javascript
+function ChatApp(props) {
+  const [messages, setMessages] = useState([]);
+  return <div className="chat-container">
+    <h1>Chat Window</h1>
+    <ul>
+      {messages.map(msg => <li key={msg.id}>
+        <strong>{msg.user}: </strong>
+        <span>{msg.text}</span>
+      </li>)}
+    </ul>
+    <button onClick={() => setMessages([])}>Clear</button>
+  </div>;
+}
 ```
 
 ---

@@ -650,7 +650,7 @@ export class JSToCodonTranslator {
                 return node.name;
 
             case "JSXElement": {
-                return `(${generate(node as any).code})`;
+                return generate(node as any).code;
             }
 
             case "JSXFragment": {

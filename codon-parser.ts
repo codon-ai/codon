@@ -53,6 +53,7 @@ export function splitCodonStatements(code: string): string[] {
     let braceDepth = 0;
     let bracketDepth = 0;
     let blockDepth = 0;
+    let jsxDepth = 0;
     let inString = false;
     let inTpl = false;
     let i = 0;
@@ -88,7 +89,7 @@ export function splitCodonStatements(code: string): string[] {
             }
             if (i < code.length && code[i] === "\n") {
                 current += code[i++];
-                if (parenDepth === 0 && braceDepth === 0 && bracketDepth === 0 && blockDepth === 0) {
+                if (parenDepth === 0 && braceDepth === 0 && bracketDepth === 0 && blockDepth === 0 && jsxDepth === 0) {
                     if (current.trim()) {
                         statements.push(current.trim());
                         current = "";
@@ -144,6 +145,67 @@ export function splitCodonStatements(code: string): string[] {
         else if (char === "[") bracketDepth++;
         else if (char === "]") bracketDepth = Math.max(0, bracketDepth - 1);
 
+        // JSX tag detection and depth tracking
+        if (char === "<" && !inString && !inTpl && parenDepth === 0 && braceDepth === 0 && bracketDepth === 0) {
+            let p = i - 1;
+            while (p >= 0 && /\s/.test(code[p]!)) p--;
+            const prev = p >= 0 ? code[p] : "";
+            const isFollowedByOperand = prev && (/[a-zA-Z0-9_\'\"]/.test(prev) || prev === ")" || prev === "]");
+            if (!isFollowedByOperand || jsxDepth > 0) {
+                const rest = code.slice(i);
+                const closeMatch = rest.match(/^<\/([a-zA-Z_$][a-zA-Z0-9_$.-]*)?\s*>/);
+                if (closeMatch) {
+                    jsxDepth = Math.max(0, jsxDepth - 1);
+                    current += closeMatch[0];
+                    i += closeMatch[0].length;
+                    continue;
+                } else if (rest.startsWith("<>")) {
+                    jsxDepth++;
+                    current += "<>";
+                    i += 2;
+                    continue;
+                } else {
+                    const openMatch = rest.match(/^<([a-zA-Z_$][a-zA-Z0-9_$.-]*)/);
+                    if (openMatch) {
+                        const nextCh = rest[openMatch[0].length];
+                        if (nextCh === ">" || nextCh === "/" || (nextCh && /\s/.test(nextCh))) {
+                            let j = i + openMatch[0].length;
+                            let inTagStr = false;
+                            let tagQuote = "";
+                            let inTagTpl = false;
+                            let tagBrace = 0;
+                            while (j < code.length) {
+                                const tc = code[j];
+                                if (!inTagStr && !inTagTpl) {
+                                    if (tc === "'" || tc === '"') { inTagStr = true; tagQuote = tc; }
+                                    else if (tc === "`") { inTagTpl = true; }
+                                    else if (tc === "{") { tagBrace++; }
+                                    else if (tc === "}") { tagBrace = Math.max(0, tagBrace - 1); }
+                                    else if (tc === ">" && tagBrace === 0) {
+                                        const tagSlice = code.substring(i, j + 1);
+                                        if (!tagSlice.endsWith("/>")) {
+                                            jsxDepth++;
+                                        }
+                                        current += tagSlice;
+                                        i = j + 1;
+                                        break;
+                                    }
+                                } else if (inTagStr) {
+                                    if (tc === "\\" && j + 1 < code.length) j++;
+                                    else if (tc === tagQuote) inTagStr = false;
+                                } else if (inTagTpl) {
+                                    if (tc === "\\" && j + 1 < code.length) j++;
+                                    else if (tc === "`") inTagTpl = false;
+                                }
+                                j++;
+                            }
+                            if (i === j + 1) continue;
+                        }
+                    }
+                }
+            }
+        }
+
         // Check for block openers
         for (const opener of blockOpeners) {
             if (code.startsWith(opener, i)) {
@@ -162,7 +224,7 @@ export function splitCodonStatements(code: string): string[] {
                 blockDepth = Math.max(0, blockDepth - 1);
                 current += "end.";
                 i += 4;
-                if (parenDepth === 0 && braceDepth === 0 && bracketDepth === 0 && blockDepth === 0) {
+                if (parenDepth === 0 && braceDepth === 0 && bracketDepth === 0 && blockDepth === 0 && jsxDepth === 0) {
                     if (current.trim()) {
                         statements.push(current.trim());
                         current = "";
@@ -174,7 +236,7 @@ export function splitCodonStatements(code: string): string[] {
 
         current += code[i];
 
-        if (parenDepth === 0 && braceDepth === 0 && bracketDepth === 0 && blockDepth === 0 && code[i] === "\n") {
+        if (parenDepth === 0 && braceDepth === 0 && bracketDepth === 0 && blockDepth === 0 && jsxDepth === 0 && code[i] === "\n") {
             if (current.trim()) {
                 statements.push(current.trim());
                 current = "";
@@ -1596,7 +1658,7 @@ export class CodonToASTParser {
         // Update Expression: (++x), (--x), (x++), (x--), x++, x--, ++x, --x
         if (strippedExpr.endsWith("++") && strippedExpr.length > 2) {
             const inner = strippedExpr.slice(0, -2).trim();
-            if (inner && !inner.includes(",") && !inner.includes(";")) {
+            if (inner && !inner.includes(",") && !inner.includes(";") && splitAtLevel(inner, " ").length === 1) {
                 return {
                     type: "UpdateExpression",
                     operator: "++",
@@ -1607,7 +1669,7 @@ export class CodonToASTParser {
         }
         if (strippedExpr.endsWith("--") && strippedExpr.length > 2) {
             const inner = strippedExpr.slice(0, -2).trim();
-            if (inner && !inner.includes(",") && !inner.includes(";")) {
+            if (inner && !inner.includes(",") && !inner.includes(";") && splitAtLevel(inner, " ").length === 1) {
                 return {
                     type: "UpdateExpression",
                     operator: "--",
@@ -1618,7 +1680,7 @@ export class CodonToASTParser {
         }
         if (strippedExpr.startsWith("++") && strippedExpr.length > 2) {
             const inner = strippedExpr.slice(2).trim();
-            if (inner && !inner.includes(",") && !inner.includes(";")) {
+            if (inner && !inner.includes(",") && !inner.includes(";") && splitAtLevel(inner, " ").length === 1) {
                 return {
                     type: "UpdateExpression",
                     operator: "++",
@@ -1629,7 +1691,7 @@ export class CodonToASTParser {
         }
         if (strippedExpr.startsWith("--") && strippedExpr.length > 2) {
             const inner = strippedExpr.slice(2).trim();
-            if (inner && !inner.includes(",") && !inner.includes(";")) {
+            if (inner && !inner.includes(",") && !inner.includes(";") && splitAtLevel(inner, " ").length === 1) {
                 return {
                     type: "UpdateExpression",
                     operator: "--",
