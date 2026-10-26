@@ -1,8 +1,8 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
-## Revision 28a (successful)
-- **Tokens:** 480
+## Revision 28a (unsuccessful)
+- **Tokens:** 7557
 
 - **Revision Idea**: Introduce native unparenthesized JSX elements and fragments (`<tag ...>...</tag>`, `<tag />`, `<>...</>`) across return statements (`return. <div>...</div>`), variable declarations (`view =: <div>...</div>`), and arrow function callbacks (`messages.map {{m => <li key={m.id}>...</li>}}`), with depth-aware JSX statement scanning in `splitCodonStatements`, and single-operand boundary protection for update expressions (`++`, `--`) in function call arguments (`(Math.pow 2 this.retryCount++)`).
 - **Rationale**: In modern AI fullstack web development (React client and server components, Next.js JSX rendering, UI event handling, list mapping, and WebSocket reconnection backoff loops):
