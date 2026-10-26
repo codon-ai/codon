@@ -120,6 +120,7 @@ floats   = 1.5 2.5 3.5      NB. const floats = [1.5, 2.5, 3.5];
 Codon provides ultra-compact object literals via `O(...)`:
 
 - **Colon Key-Value Pairs**: `O(key:val;key2:val2)`
+- **Computed Property Keys**: `O([key]:val)` or `O([fieldName]:result)` compiles to `{ [key]: val }`
 - **Identifier Property Shorthand**: `O(prop1;prop2)` compiles to `{ prop1, prop2 }`
 - **Prefix Spread**: `O(...rest;key:val)` compiles to `{ ...rest, key: val }`
 - **Quoted Keys**: `O('Content-Type':'application/json')` for special characters
@@ -127,13 +128,13 @@ Codon provides ultra-compact object literals via `O(...)`:
 - **Legacy Alternating Pairs**: `O('key';val)` remains supported for backward compatibility
 
 ```codon
-NB. Modern concise object literal
-config =: O(...baseConfig;port:8080;host:'localhost';timeout)
+NB. Modern concise object literal with computed keys
+response =: O([fieldName]:result;status:200;timestamp:Date.now())
 ```
 
 Transpiles to:
 ```javascript
-const config = { ...baseConfig, port: 8080, host: "localhost", timeout };
+const response = { [fieldName]: result, status: 200, timestamp: Date.now() };
 ```
 
 ### Arrays (`[...]`)
@@ -264,6 +265,51 @@ for (const i = 0; i < 10; i++) {
 ```
 
 Legacy parenthesized update expressions `(x++)` and `(++x)` remain fully supported.
+
+### Object Instantiation (`new Callee`)
+
+Codon natively supports concise unparenthesized `new` expressions across variable declarations, member assignments, class properties, return statements, throw statements, and standalone expressions:
+
+- **Variable Initialization**:
+  ```codon
+  db =: new Database ':memory:'
+  cache =: new Map
+  agent =: new http.Agent O(keepAlive:true)
+  ```
+- **Member Assignment**:
+  ```codon
+  this.socket = new WebSocket this.url
+  this.root = new BTreeNode true
+  ```
+- **Class Properties**:
+  ```codon
+  class. SchemaExecutor do.
+    resolvers =: new Map
+    indices =: new Map
+  end.
+  ```
+- **Return & Throw Statements**:
+  ```codon
+  return. new Promise {{resolve,reject => do. ... }}
+  throw. new Error 'Record not found'
+  ```
+
+Transpiles to:
+```javascript
+const db = new Database(":memory:");
+const cache = new Map();
+const agent = new http.Agent({ keepAlive: true });
+this.socket = new WebSocket(this.url);
+this.root = new BTreeNode(true);
+class SchemaExecutor {
+  resolvers = new Map();
+  indices = new Map();
+}
+return new Promise((resolve, reject) => { ... });
+throw new Error("Record not found");
+```
+
+Legacy parenthesized form `(new Callee args)` remains fully supported.
 
 ### Pattern Destructuring
 
@@ -605,10 +651,23 @@ end.
 
 ### Jumps & Returns (`return.`, `throw.`)
 
+Codon supports concise return and throw statements, including unparenthesized `new` instantiations and monadic `@` await returns:
+
 ```codon
 return. result
 return.
-throw. (new Error 'Operation failed')
+return. @ (res.json())
+return. new Promise {{resolve,reject => do. ... }}
+throw. new Error 'Operation failed'
+```
+
+Transpiles to:
+```javascript
+return result;
+return;
+return await res.json();
+return new Promise((resolve, reject) => { ... });
+throw new Error("Operation failed");
 ```
 
 ---

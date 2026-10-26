@@ -82,6 +82,9 @@ flowchart TD
 | **ES Module Import** | `import { useState, useRef } from "react";` | `import. {useState,useRef} from 'react'` | **~45%** |
 | **Logical NOT Expression** | `if (!input.trim()) return;` | `if. !input.trim() do. return. end.` | **~40%** |
 | **Update Expression** | `nextId.current++;` | `nextId.current++` | **~40%** |
+| **Unparenthesized New** | `const db = new Database(":memory:");` | `db =: new Database ':memory:'` | **~35%** |
+| **Computed Property Key** | `{ [key]: val }` | `O([key]:val)` | **~40%** |
+| **Return Await** | `return await res.json();` | `return. @ (res.json())` | **~30%** |
 
 ---
 

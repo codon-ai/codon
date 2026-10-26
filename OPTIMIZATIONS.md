@@ -419,4 +419,55 @@ Revision 16a introduces native unparenthesized logical NOT expressions (`!expr`,
 ### Impact on Fullstack Applications
 In modern AI fullstack applications (React form validation, Next.js server actions, JSX disabled/error state bindings `<button disabled={!isValid}>`, Express middleware route checks, SQLite auto-increment IDs, WebSocket connection retries, and algorithmic loop counters), logical NOT checks and increment/decrement operations appear on 20–35% of all code branches. Eliminating mandatory wrapping parentheses saves 40–55% of tokens per operation, prevents fatal identifier misparsing, and enables LLMs to emit clean, concise conditional logic.
 
+## 10. Concise Unparenthesized `new` Expressions, Computed Object Keys, and Return Await
+
+### Overview
+In standard J and prior versions of Codon, object instantiation with `new` strictly required outer wrapping parentheses `(new Callee arg1 arg2)`. Omitting parentheses caused `new Callee` to fall through to plain identifier parsing, producing syntax errors when generating JavaScript. Furthermore, object literals `O(...)` lacked support for dynamic computed property keys (`O([fieldName]:result)`), discarding computed keys or crashing during code generation, while `ReturnStatement` with await expressions unconditionally emitted wrapping parentheses `return. (@ (res.json()))`.
+
+Revision 29a introduces:
+- **Concise Unparenthesized `new` Expressions**: `new Callee`, `new Callee arg1 arg2`, and `new Callee O(...)` can be written directly without wrapping parentheses across variable initializers (`db =: new Database ':memory:'`), member assignments (`this.socket = new WebSocket this.url`), class properties (`resolvers =: new Map`), return statements (`return. new Promise {{...}}`), throw statements (`throw. new Error '...'`), and standalone statements.
+- **Computed Object Property Keys**: `O([key]:val)` and `O([fieldName]:result)` cleanly construct objects with dynamic computed keys, preserving `computed: true` semantics.
+- **Concise Return Await Expressions**: `return. @ (res.json())` eliminates redundant outer wrapping parentheses on return await statements.
+- **Single-Operand Guard for Update Expressions**: Enforces `splitAtLevel(inner, " ").length === 1` in update operator parsing, allowing function call expressions containing update arguments (such as `(Math.pow 2 this.retryCount++)`) to cleanly parse as `CallExpression` nodes without syntax crashes.
+- **Backward Compatibility**: Parenthesized forms `(new Callee)` and legacy object patterns remain 100% supported.
+
+### Syntax
+- `new Callee`: Unparenthesized parameterless object instantiation.
+- `new Callee arg1 arg2`: Unparenthesized object instantiation with arguments.
+- `id =: new Callee args`: Variable declaration with unparenthesized instantiation.
+- `this.prop = new Callee args`: Member assignment with unparenthesized instantiation.
+- `return. new Promise {{...}}`: Return statement with unparenthesized promise construction.
+- `throw. new Error '...'`: Throw statement with unparenthesized error instantiation.
+- `O([key]:val)`: Object literal with dynamic computed property key.
+- `return. @ expr`: Return statement with concise monadic await.
+
+### How It Functions
+- **Parsing (`CodonToASTParser`)**:
+  - In `parseExpression`, `strippedExpr.startsWith("new ") && strippedExpr.length > 4` is recognized at expression level without requiring `wasWrapped`, extracting the callee and arguments into an ESTree `NewExpression` AST node.
+  - In `O(...)` object parsing, bracketed key expressions `[keyPart]:val` are detected. The bracketed expression is parsed as an AST expression with `computed: true`, constructing valid ESTree `Property` AST nodes.
+  - In update expression detection (`++`, `--`), the single-operand check `splitAtLevel(inner, " ").length === 1` prevents function calls with update arguments from greedily matching trailing `++`.
+- **Transpilation (`JSToCodonTranslator`)**:
+  - In `VariableDeclaration`, `AssignmentExpression`, `ReturnStatement`, `ThrowStatement`, and `ClassProperty`, outer `(new ...)` wrappers are stripped to emit concise unparenthesized `new Callee` notation.
+  - In `ReturnStatement`, outer `(@ ...)` wrappers are stripped to emit `return. @ ...`.
+  - In `Property` / `ObjectProperty` and `ObjectMethod`, when `node.computed === true`, the translator emits `[${this.transpile(node.key)}]:...`.
+- **Code Generation (`CodonToJSCompiler`)**: Compiles `NewExpression` and computed `ObjectProperty` AST nodes directly into clean standard JavaScript `new Callee(args)` and `{ [key]: val }` via `@babel/generator`.
+
+### Comparison Examples & Token Savings
+
+| Pattern | Standard J / Legacy Codon | Optimized Codon (Rev 29a) | JavaScript Target | Token Reduction |
+| :--- | :--- | :--- | :--- | :--- |
+| **Database Connection** | `db =: (new Database ':memory:')` | `db =: new Database ':memory:'` | `const db = new Database(":memory:");` | **~33%** (4 tokens vs 6 tokens) |
+| **Map / Set Instantiation** | `cache =: (new Map)` | `cache =: new Map` | `const cache = new Map();` | **~50%** (2 tokens vs 4 tokens) |
+| **WebSocket Client** | `this.socket = (new WebSocket this.url)` | `this.socket = new WebSocket this.url` | `this.socket = new WebSocket(this.url);` | **~33%** (4 tokens vs 6 tokens) |
+| **Class Field Property** | `resolvers =: (new Map)` | `resolvers =: new Map` | `resolvers = new Map();` | **~50%** (2 tokens vs 4 tokens) |
+| **Async Promise Return** | `return. (new Promise {{...}})` | `return. new Promise {{...}}` | `return new Promise(...);` | **~33%** (4 tokens vs 6 tokens) |
+| **Error Throwing** | `throw. (new Error 'Not found')` | `throw. new Error 'Not found'` | `throw new Error("Not found");` | **~33%** (4 tokens vs 6 tokens) |
+| **Computed Property Key** | `res =: O()\nres.[key] =: val\nreturn. res` | `return. O([key]:val)` | `return { [key]: val };` | **~65%** (5 tokens vs 14+ tokens) |
+| **Return Await Call** | `return. (@ (res.json()))` | `return. @ (res.json())` | `return await res.json();` | **~29%** (5 tokens vs 7 tokens) |
+| **Call with Update Arg** | `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` *(compiler crashed)* | `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` | `const delay = baseDelay * Math.pow(2, this.retryCount++);` | **100% fidelity** (fixed fatal crash) |
+
+### Impact on Fullstack Applications
+In modern AI fullstack applications (Node HTTP servers, database clients, WebSocket servers, GraphQL resolvers, collections, and async pipelines), `new` instantiations and return statements appear across almost every service file. Supporting unparenthesized `new`, computed object keys, and concise return await saves 30–65% of tokens per construct, prevents dynamic dictionary crashes, and enables LLMs to emit natural, ultra-dense fullstack Codon code.
+
+
 

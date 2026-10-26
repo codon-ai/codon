@@ -1596,7 +1596,7 @@ export class CodonToASTParser {
         // Update Expression: (++x), (--x), (x++), (x--), x++, x--, ++x, --x
         if (strippedExpr.endsWith("++") && strippedExpr.length > 2) {
             const inner = strippedExpr.slice(0, -2).trim();
-            if (inner && !inner.includes(",") && !inner.includes(";")) {
+            if (inner && !inner.includes(",") && !inner.includes(";") && splitAtLevel(inner, " ").length === 1) {
                 return {
                     type: "UpdateExpression",
                     operator: "++",
@@ -1607,7 +1607,7 @@ export class CodonToASTParser {
         }
         if (strippedExpr.endsWith("--") && strippedExpr.length > 2) {
             const inner = strippedExpr.slice(0, -2).trim();
-            if (inner && !inner.includes(",") && !inner.includes(";")) {
+            if (inner && !inner.includes(",") && !inner.includes(";") && splitAtLevel(inner, " ").length === 1) {
                 return {
                     type: "UpdateExpression",
                     operator: "--",
@@ -1618,7 +1618,7 @@ export class CodonToASTParser {
         }
         if (strippedExpr.startsWith("++") && strippedExpr.length > 2) {
             const inner = strippedExpr.slice(2).trim();
-            if (inner && !inner.includes(",") && !inner.includes(";")) {
+            if (inner && !inner.includes(",") && !inner.includes(";") && splitAtLevel(inner, " ").length === 1) {
                 return {
                     type: "UpdateExpression",
                     operator: "++",
@@ -1629,7 +1629,7 @@ export class CodonToASTParser {
         }
         if (strippedExpr.startsWith("--") && strippedExpr.length > 2) {
             const inner = strippedExpr.slice(2).trim();
-            if (inner && !inner.includes(",") && !inner.includes(";")) {
+            if (inner && !inner.includes(",") && !inner.includes(";") && splitAtLevel(inner, " ").length === 1) {
                 return {
                     type: "UpdateExpression",
                     operator: "--",
@@ -2068,22 +2068,33 @@ export class CodonToASTParser {
                     continue;
                 }
 
-                // Key-value pair with colon: key:val or 'key':val
+                // Key-value pair with colon: key:val, 'key':val, or [key]:val
                 const colonSplit = splitFirstAtLevel(part, ":");
                 if (colonSplit) {
                     const [keyPart, valPart] = colonSplit;
-                    const keyNode = this.parseExpression(keyPart);
-                    const keyName = keyNode.type === "Literal" ? String(keyNode.value) : (keyNode as Identifier).name;
+                    const trimmedKey = keyPart.trim();
+                    let keyProp: any;
+                    let isComputed = false;
+
+                    if (trimmedKey.startsWith("[") && trimmedKey.endsWith("]")) {
+                        isComputed = true;
+                        keyProp = this.parseExpression(trimmedKey.slice(1, -1).trim());
+                    } else {
+                        const keyNode = this.parseExpression(trimmedKey);
+                        const keyName = keyNode.type === "Literal" ? String(keyNode.value) : (keyNode as Identifier).name;
+                        keyProp = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(keyName)
+                            ? { type: "Identifier", name: keyName }
+                            : { type: "Literal", value: keyName };
+                    }
+
                     const valNode = this.parseExpression(valPart);
                     const isMethod = valNode.type === "FunctionExpression" || (valNode as any).type === "ObjectMethod";
                     properties.push({
                         type: "Property",
-                        key: /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(keyName)
-                            ? { type: "Identifier", name: keyName }
-                            : { type: "Literal", value: keyName },
+                        key: keyProp,
                         value: valNode,
                         kind: "init",
-                        computed: false,
+                        computed: isComputed,
                         method: isMethod,
                         shorthand: false,
                     });
@@ -2197,6 +2208,18 @@ export class CodonToASTParser {
                 target: this.parseExpression(scanMatch[2]),
                 scan: true,
             };
+        }
+
+        // New Expression: new Callee [args...] or (new Callee [args...])
+        if (strippedExpr.startsWith("new ") && strippedExpr.length > 4) {
+            const spaceParts = splitAtLevel(strippedExpr, " ");
+            if (spaceParts[0] === "new" && spaceParts[1]) {
+                return {
+                    type: "NewExpression",
+                    callee: this.parseExpression(spaceParts[1]),
+                    arguments: spaceParts.slice(2).map((a) => this.parseExpression(a)),
+                };
+            }
         }
 
         // Function Calls, New, or Codon Verb Trains (Forks & Hooks)

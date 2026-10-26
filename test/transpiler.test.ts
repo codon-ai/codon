@@ -1505,5 +1505,137 @@ end.
     });
 });
 
+describe("Concise Unparenthesized New, Computed Keys, and Return Await (Rev 29a)", () => {
+    test("Transpiles unparenthesized new expressions to JS", () => {
+        const codonCode = `
+map =: new Map
+db =: new Database ':memory:'
+this.socket = new WebSocket this.url
+throw. new Error 'Invalid'
+fn. createPromise do.
+  return. new Promise {{resolve,reject => do.
+    (resolve 42)
+  }}
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("const map = new Map();");
+        expect(js).toContain('const db = new Database(":memory:");');
+        expect(js).toContain("this.socket = new WebSocket(this.url);");
+        expect(js).toContain('throw new Error("Invalid");');
+        expect(js).toContain("return new Promise((resolve, reject) => {");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles computed property keys in object literals O([key]:val)", () => {
+        const codonCode = `
+res1 =: O([fieldName]:result)
+res2 =: O([key]:val;id:1;[calcKey()]:'dynamic')
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("[fieldName]: result");
+        expect(js).toContain("[key]: val");
+        expect(js).toContain("id: 1");
+        expect(js).toContain("[calcKey()]: \"dynamic\"");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles unparenthesized return await expressions", () => {
+        const codonCode = `
+async_fn. fetchUser id do.
+  return. @ (res.json())
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("return await res.json();");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Safely parses call expressions containing update arguments (Math.pow 2 count++)", () => {
+        const codonCode = `
+delay =: (this.baseDelayMs * (Math.pow 2 this.retryCount++))
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("Math.pow(2, this.retryCount++)");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips JS fullstack patterns (new, computed keys, return await, update args)", () => {
+        const jsCode = `
+import { Database } from "better-sqlite3";
+const db = new Database(":memory:");
+class Service {
+  socket = new WebSocket(url);
+  connect() {
+    this.socket = new WebSocket(url);
+    const delay = baseDelay * Math.pow(2, this.retryCount++);
+  }
+}
+function getResult(fieldName, result) {
+  return { data: { [fieldName]: result } };
+}
+async function getData(res) {
+  return await res.json();
+}
+function fail(msg) {
+  throw new Error(msg);
+}
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("db =: new Database ':memory:'");
+        expect(codonCode).toContain("this.socket = new WebSocket url");
+        expect(codonCode).toContain("return. @ res.json()");
+        expect(codonCode).toContain("throw. new Error msg");
+        expect(codonCode).toContain("[fieldName]:result");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(roundtrippedJs).toContain('new Database(":memory:")');
+        expect(roundtrippedJs).toContain("Math.pow(2, this.retryCount++)");
+        expect(roundtrippedJs).toContain("[fieldName]: result");
+        expect(roundtrippedJs).toContain("return await res.json();");
+        expect(roundtrippedJs).toContain("throw new Error(msg);");
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Retains backward compatibility with parenthesized (new Callee)", () => {
+        const codonCode = `
+map =: (new Map)
+client =: (new WebSocket this.url)
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("const map = new Map();");
+        expect(js).toContain("const client = new WebSocket(this.url);");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+});
+
+
 
 
