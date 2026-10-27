@@ -235,6 +235,10 @@ export class JSToCodonTranslator {
                     const argStr = this.transpile((node.expression as any).argument);
                     return `@ ${argStr}`;
                 }
+                if (node.expression.type === "AssignmentExpression") {
+                    const assignNode = node.expression as AssignmentExpression;
+                    return `${this.transpile(assignNode.left)} ${assignNode.operator} ${this.transpile(assignNode.right)}`;
+                }
                 return this.transpile(node.expression);
 
             case "BlockStatement":
@@ -576,12 +580,15 @@ export class JSToCodonTranslator {
                 return `(${this.transpile(node.left)} ${node.operator} ${this.transpile(node.right)})`;
 
             case "UnaryExpression":
+                if (node.operator === "!") {
+                    return `!${this.transpile(node.argument)}`;
+                }
                 return `(${node.operator} ${this.transpile(node.argument)})`;
 
             case "UpdateExpression":
                 return node.prefix
-                    ? `(${node.operator}${this.transpile(node.argument)})`
-                    : `(${this.transpile(node.argument)}${node.operator})`;
+                    ? `${node.operator}${this.transpile(node.argument)}`
+                    : `${this.transpile(node.argument)}${node.operator}`;
 
             case "ConditionalExpression":
                 return `(${this.transpile(node.test)} ? ${this.transpile(node.consequent)} : ${this.transpile(node.alternate)})`;

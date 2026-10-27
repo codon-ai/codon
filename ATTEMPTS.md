@@ -1,6 +1,741 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 4571)
 
+## Revision 29a (unsuccessful)
+- **Tokens:** 4766
+
+- **Revision Idea**: Introduce concise unparenthesized `new` object instantiation expressions (`new Callee`, `new Callee arg1 arg2`, `new Callee O(...)`) across variable declarations (`map =: new Map`), member assignments (`this.socket = new WebSocket this.url`), class properties (`resolvers =: new Map`), return statements (`return. new Promise {{...}}`), throw statements (`throw. new Error '...'`), and standalone statements; concise computed property keys in object literals (`O([key]:val)`, `O([fieldName]:result)`); concise unparenthesized return await expressions (`return. @ expr`); and single-operand boundary protection for update expressions (`++`, `--`) in function call arguments (`(Math.pow 2 this.retryCount++)`).
+- **Rationale**: In modern AI fullstack web development (React components, Express/Koa API routes, database connections, GraphQL query resolvers, WebSocket clients, Promise async chains, Maps, Sets, and error boundaries):
+  1. **Concise Unparenthesized `new` Expressions**: `NewExpression` is among the most pervasive expressions in fullstack applications (`new Map()`, `new Set()`, `new WebSocket()`, `new Database()`, `new Promise()`, `new Error()`, `new http.Agent()`). Prior to Revision 29a, Codon strictly required every `new` expression to be wrapped in outer parentheses: `(new Map)`, `(new WebSocket this.url)`, `(new Database ':memory:')`, `(new http.Agent ...)`. Omitting parentheses caused `parseExpression` to bypass `NewExpression` parsing, interpreting `new Callee` as an invalid Identifier. Revision 29a introduces native unparenthesized `new` expression parsing at expression level and updates `JSToCodonTranslator` to emit concise unparenthesized `new` across variable initializers, member mutations, return statements, throw statements, and class properties, eliminating 2 wrapping tokens `(` and `)` on every instantiation while preserving 100% backward compatibility with parenthesized calls.
+  2. **Computed Property Keys in Object Literals (`O([key]:val)`)**: In dynamic fullstack applications (such as GraphQL query dispatchers and database record builders returning `{ data: { [fieldName]: result } }`), dynamic dictionary keys are essential. Previously in Codon, writing `O([fieldName]:result)` caused `parseExpression` to parse `[fieldName]` as an `ArrayExpression`, setting `keyName` to `undefined` and triggering a fatal compiler crash (`TypeError: Cannot read properties of undefined (reading 'length')`). Furthermore, `JSToCodonTranslator` discarded `computed: true` on object properties, emitting static `fieldName:result`. Enabling `[key]:val` parsing and preserving `computed: true` allows dynamic objects to be constructed concisely in a single expression.
+  3. **Concise Unparenthesized Return Await Expressions (`return. @ expr`)**: In API controllers, server actions, and asynchronous data fetching, returning an awaited promise (`return await res.json()`) is extremely common. Previously, `JSToCodonTranslator` wrapped all return await expressions in outer parentheses `return. (@ (res.json()))`. Unwrapping outer parentheses produces `return. @ (res.json())`, eliminating 2 redundant tokens `(` and `)`.
+  4. **Single-Operand Guard for Update Expressions**: In `codon-parser.ts`, update expression detection (`++`, `--`) lacked a single-operand boundary check (`splitAtLevel(inner, " ").length === 1`), causing function call expressions containing update arguments (such as `(Math.pow 2 this.retryCount++)`) to greedily match trailing `++` across spaces, producing broken JavaScript (`Math.pow 2 this.retryCount++;`) and fatal Babel compiler crashes (`Missing semicolon`). Enforcing single-operand boundaries ensures calls with update arguments parse into clean `CallExpression` nodes with nested `UpdateExpression` arguments.
+  Together, these changes eliminate wrapping parentheses across object instantiations, dynamic dictionary definitions, and async return statements while resolving update expression misparsing and guaranteeing 100% compilation and roundtrip fidelity across all fullstack benchmarks.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates 2 wrapping tokens `(` and `)` per `new` expression across services, controllers, connections, and collections (e.g. `(new Map)` [4 tokens] -> `new Map` [2 tokens], saving 50%; `(new WebSocket this.url)` [6 tokens] -> `new WebSocket this.url` [4 tokens], saving 33%).
+  - Eliminates 2 wrapping tokens on asynchronous Promise construction: `return. (new Promise ...)` -> `return. new Promise ...`.
+  - Eliminates 2 wrapping tokens on database connections: `db =: (new Database ':memory:')` -> `db =: new Database ':memory:'`.
+  - Eliminates 2 wrapping tokens on return await expressions: `return. (@ (res.json()))` [7 tokens] -> `return. @ (res.json())` [5 tokens], saving ~29%.
+  - Eliminates verbose dictionary construction workarounds for dynamic keys (`res =: O() \n res.[key] =: val \n return. res` [14+ tokens] -> `return. O([key]:val)` [5 tokens], saving ~65%).
+  - Resolves update expression misparsing and syntax crashes across WebSocket clients and exponential backoff retry algorithms in fullstack benchmarks (`Math.pow 2 this.retryCount++`).
+- **Concrete Syntax Changes**:
+  - `codon-parser.ts`:
+    - In `parseExpression`, detect `strippedExpr.startsWith("new ") && strippedExpr.length > 4`, parsing into `NewExpression` without requiring `wasWrapped`.
+    - In `O(...)` object parsing, detect bracketed key expressions `[keyPart]:val`, parsing `keyPart` as an expression and setting `computed: true`.
+    - In update expression parsing (`strippedExpr.endsWith("++")`, `strippedExpr.endsWith("--")`, `strippedExpr.startsWith("++")`, `strippedExpr.startsWith("--")`), added `splitAtLevel(inner, " ").length === 1` boundary check so call expressions with update arguments do not misparse.
+  - `transpilers.ts`:
+    - In `JSToCodonTranslator`:
+      - `case "VariableDeclaration"`: When `d.init` is a `NewExpression`, unwrap outer `(new ...)` to `new ...`.
+      - `case "ExpressionStatement"`: When the assignment right-hand side or standalone expression is a `NewExpression`, unwrap outer `(new ...)` to `new ...`.
+      - `case "ReturnStatement"`: When `node.argument` is a `NewExpression` or `AwaitExpression`, unwrap outer `(new ...)` and `(@ ...)` to `return. new ...` and `return. @ ...`.
+      - `case "ThrowStatement"`: When `node.argument` is a `NewExpression`, unwrap outer `(new ...)` to `throw. new ...`.
+      - `case "PropertyDefinition" / "ClassProperty"`: When `node.value` is a `NewExpression`, unwrap outer `(new ...)` to `prop =: new ...`.
+      - `case "Property" / case "ObjectProperty"` and `case "ObjectMethod"`: When `node.computed === true`, emit `[${this.transpile(node.key)}]:${this.transpile(node.value)}`.
+  - Examples:
+    - Old Codon: `db =: (new Database ':memory:')`
+    - New Codon: `db =: new Database ':memory:'`
+    - Old Codon: `map =: (new Map)`
+    - New Codon: `map =: new Map`
+    - Old Codon: `this.socket = (new WebSocket this.url)`
+    - New Codon: `this.socket = new WebSocket this.url`
+    - Old Codon: `return. (new Promise {{resolve,reject => do. ... end.}})`
+    - New Codon: `return. new Promise {{resolve,reject => do. ... end.}}`
+    - Old Codon: `return. (@ (res.json()))`
+    - New Codon: `return. @ (res.json())`
+    - Old Codon: `throw. (new Error 'Not found')`
+    - New Codon: `throw. new Error 'Not found'`
+    - Old Codon: `return. O(fieldName:result)` *(lost computed semantics)*
+    - New Codon: `return. O([fieldName]:result)`
+    - Old Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` *(crashed with Missing semicolon)*
+    - New Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` *(cleanly compiles to Math.pow(2, this.retryCount++))*
+
+## Revision 28a (unsuccessful)
+- **Tokens:** 7557
+
+- **Revision Idea**: Introduce native unparenthesized JSX elements and fragments (`<tag ...>...</tag>`, `<tag />`, `<>...</>`) across return statements (`return. <div>...</div>`), variable declarations (`view =: <div>...</div>`), and arrow function callbacks (`messages.map {{m => <li key={m.id}>...</li>}}`), with depth-aware JSX statement scanning in `splitCodonStatements`, and single-operand boundary protection for update expressions (`++`, `--`) in function call arguments (`(Math.pow 2 this.retryCount++)`).
+- **Rationale**: In modern AI fullstack web development (React client and server components, Next.js JSX rendering, UI event handling, list mapping, and WebSocket reconnection backoff loops):
+  1. **Concise Unparenthesized JSX Elements & Fragments**: In fullstack JavaScript and React development, JSX elements are the foundational building blocks for UI views, template rendering, and component hierarchies. Previously in Codon:
+     - `JSToCodonTranslator` unconditionally wrapped every `JSXElement` and `JSXFragment` in redundant outer parentheses `(<div>...</div>)` and `(<>...</>)`.
+     - In `splitCodonStatements`, multi-line JSX trees were split into separate statements across newlines because the statement scanner tracked parentheses (`parenDepth`), braces, and brackets, but lacked JSX element depth tracking (`jsxDepth`). When developers or LLMs wrote unparenthesized multi-line JSX `return. <div>\n<h2>...</h2>\n</div>`, the scanner split after `<div>`, producing malformed JavaScript (`return <div >; <h2>...</h2>`) and failing compilation.
+     - Consequently, LLMs were forced to wrap every JSX view and return statement in outer parentheses `return. (<div>...</div>)` and `{{m => (<li ...>)}}`, adding 2 redundant tokens `(` and `)` per component root, map callback, and JSX fragment.
+     - By adding depth-aware JSX tag tracking (`jsxDepth`) to `splitCodonStatements` and removing outer parentheses in `JSToCodonTranslator` for `JSXElement` and `JSXFragment`, Codon enables first-class native JSX emission and parsing directly at statement level, within return statements, and inside arrow function expressions without wrapping parentheses.
+  2. **Single-Operand Guard for Update Expressions**: In `codon-parser.ts`, update expression detection (`++`, `--`) lacked a single-operand boundary check (`splitAtLevel(inner, " ").length === 1`), causing function call expressions containing update arguments (such as `(Math.pow 2 this.retryCount++)`) to greedily match trailing `++` across spaces, producing broken JavaScript (`Math.pow 2 this.retryCount++;`) and fatal Babel compiler crashes (`Missing semicolon`). Enforcing single-operand boundaries ensures calls with update arguments parse into clean `CallExpression` nodes with nested `UpdateExpression` arguments.
+  Together, these changes eliminate redundant parentheses across React JSX views and list item renderings, enable clean multi-line JSX component declarations, and resolve update expression misparsing across all fullstack benchmarks.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates 2 wrapping tokens `(` and `)` per JSX return statement across React components: `return. (<div>...</div>)` [6 tokens] -> `return. <div>...</div>` [4 tokens], saving ~33%.
+  - Eliminates 2 wrapping tokens per mapped JSX list item: `{{m => (<li key={m.id}>...</li>)}}` -> `{{m => <li key={m.id}>...</li>}}`, saving ~25%.
+  - Eliminates 2 wrapping tokens per JSX fragment and variable assignment: `view =: (<div>...</div>)` -> `view =: <div>...</div>`.
+  - Resolves update expression misparsing and syntax crashes across WebSocket clients and exponential backoff retry algorithms in fullstack benchmarks (`Math.pow 2 this.retryCount++`).
+- **Concrete Syntax Changes**:
+  - `codon-parser.ts`:
+    - In `splitCodonStatements`: Track `jsxDepth` by scanning unclosed JSX opening tags `<tag...>` (incrementing `jsxDepth`) and closing tags `</tag>` (decrementing `jsxDepth`) outside string and template literals. Enforce that newlines only split statements when `jsxDepth === 0`, preserving multi-line JSX trees.
+    - In update expression parsing (`strippedExpr.endsWith("++")`, `strippedExpr.endsWith("--")`, `strippedExpr.startsWith("++")`, `strippedExpr.startsWith("--")`), added `splitAtLevel(inner, " ").length === 1` boundary check so call expressions with update arguments do not misparse.
+  - `transpilers.ts`:
+    - In `JSToCodonTranslator`:
+      - `case "JSXElement"`: Emits `${generate(node as any).code}` directly without outer wrapping parentheses `(...)`.
+      - `case "JSXFragment"`: Emits `<>${children}</>` directly without outer wrapping parentheses `(...)`.
+  - Examples:
+    - Old Codon: `return. (<div><h2>Chat Room</h2></div>)`
+    - New Codon: `return. <div><h2>Chat Room</h2></div>`
+    - Old Codon: `(messages.map {{m => (<li key={m.id}><strong>{m.user}:</strong> {m.text}</li>)}})`
+    - New Codon: `(messages.map {{m => <li key={m.id}><strong>{m.user}:</strong> {m.text}</li>}})`
+    - Old Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` *(crashed with Missing semicolon)*
+    - New Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` *(cleanly compiles to Math.pow(2, this.retryCount++))*
+
+## Revision 27a (unsuccessful)
+- **Tokens:** 5581
+
+- **Revision Idea**: Introduce first-class native Tagged Template Expressions (`tag\`template\``, `db.exec\`sql\``, `sql\`query\``), native Regular Expression Literals (`/pattern/flags`), and single-operand boundary protection for update expressions (`++`, `--`) in function call arguments (`(Math.pow 2 this.retryCount++)`).
+- **Rationale**: In modern AI fullstack web development (database query execution in SQLite/PostgreSQL/MySQL, ORM data access, GraphQL client queries, styled UI components, route parameter pattern matching, input sanitization, token validation, event stream handling, and exponential backoff retry algorithms):
+  1. **Native Tagged Template Expressions (`tag\`...\``)**: Tagged template literals (`db.exec\`CREATE TABLE...\``, `sql\`SELECT * FROM todos\``, `gql\`query { ... }\``, `styled.div\`color: red;\``) are fundamental in fullstack JavaScript and TypeScript. Previously in Codon, `CodonToASTParser` lacked any parser rule for tagged templates, causing `db.exec\`...\`` and `sql\`...\`` to fail or misparse as malformed Identifiers. Database execution and tagged invocations were forced into verbose parenthesized function calls `(db.exec \`...\`)`, adding 2 redundant wrapping tokens `(` and `)` per query. Introducing native tagged template parsing allows direct emission and evaluation of `tag\`...\`` across statement and expression positions.
+  2. **Native Regular Expression Literals (`/pattern/flags`)**: Regular expression literals (`/[a-zA-Z0-9]+/g`, `/^\d+$/`, `/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i`) are standard across input validation, route matching, header parsing, and text sanitization. In Codon, writing `/pattern/flags` had no dedicated AST parser rule in `parseExpression`, falling through to plain `Identifier` nodes. Supporting first-class `/pattern/flags` parsing constructs valid ESTree `Literal` (RegExp) AST nodes directly without requiring verbose constructor calls `(new RegExp '...' 'flags')`, saving up to 85% tokens per regular expression.
+  3. **Single-Operand Guard for Update Expressions**: In `codon-parser.ts`, update expression detection (`++`, `--`) lacked a single-operand boundary check (`splitAtLevel(inner, " ").length === 1`), causing function call expressions containing update arguments (such as `(Math.pow 2 this.retryCount++)`) to greedily match trailing `++` across spaces, producing broken JavaScript (`Math.pow 2 this.retryCount++;`) and fatal Babel compiler crashes (`Missing semicolon`). Enforcing single-operand boundaries ensures calls with update arguments parse into clean `CallExpression` nodes with nested `UpdateExpression` arguments.
+  Together, these changes eliminate redundant parentheses across database queries and fullstack template operations, support native regex validation, and resolve update expression misparsing across all fullstack benchmarks.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates 2 wrapping tokens `(` and `)` per tagged template query: `(db.exec \`CREATE TABLE...\`)` [5+ tokens] -> `db.exec\`CREATE TABLE...\`` [2+ tokens], saving ~40%.
+  - Eliminates 7 tokens per regular expression: `(new RegExp '^[a-z]+$' 'i')` [8 tokens] -> `/^[a-z]+$/i` [1 token], saving ~87%.
+  - Resolves update expression misparsing and syntax crashes across WebSocket clients and exponential backoff retry algorithms in fullstack benchmarks (`Math.pow 2 this.retryCount++`).
+- **Concrete Syntax Changes**:
+  - `codon-parser.ts`:
+    - In `parseExpression`, detect tagged template literals `tag\`quasi\`` where `strippedExpr` ends with `` ` `` and contains a tag prefix before the template literal, parsing into a `TaggedTemplateExpression` ESTree AST node.
+    - In `parseExpression`, detect regular expression literals `^\/((?:\\.|[^\/\\\r\n])+)\/([gimsuy]*)$`, constructing an ESTree `Literal` node with regex metadata.
+    - In update expression parsing (`strippedExpr.endsWith("++")`, `strippedExpr.endsWith("--")`, `strippedExpr.startsWith("++")`, `strippedExpr.startsWith("--")`), added `splitAtLevel(inner, " ").length === 1` boundary check so call expressions with update arguments do not misparse.
+  - `transpilers.ts`:
+    - In `CodonToJSCompiler`, normalized `TaggedTemplateExpression` and `RegExpLiteral` AST nodes for clean JavaScript generation via `@babel/generator`.
+  - Examples:
+    - Old Codon: `(db.exec \`CREATE TABLE todos (id INTEGER);\`)`
+    - New Codon: `db.exec\`CREATE TABLE todos (id INTEGER);\``
+    - Old Codon: `regex =: (new RegExp '^[a-z0-9]+$' 'i')`
+    - New Codon: `regex =: /^[a-z0-9]+$/i`
+    - Old Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` *(crashed with Missing semicolon)*
+    - New Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` *(cleanly compiles to Math.pow(2, this.retryCount++))*
+
+## Revision 26a (unsuccessful)
+- **Tokens:** 708
+
+- **Revision Idea**: Introduce concise unparenthesized `typeof` and bitwise NOT unary expressions (`typeof expr`, `typeof x === 'string'`, `~expr`), direct native J negative number literal emission (`_1`, `_2`, `_0.5`, `__`), and single-operand boundary protection for update expressions (`++`, `--`) in function call arguments (`(Math.pow 2 this.retryCount++)`).
+- **Rationale**: In modern AI fullstack web development (API request validation, runtime type guards, string/array slicing, sentinel return values, search indexing, event listeners, and exponential backoff retry algorithms):
+  1. **Concise Unparenthesized `typeof` and Unary Expressions**: Runtime type checking (`typeof x === 'string'`, `typeof cb === 'function'`, `typeof window !== 'undefined'`) is ubiquitous across fullstack JavaScript, API controllers, and schema validators. Previously in Codon, `typeof` strictly required outer parentheses `((typeof x) === 'string')` or `(typeof x)`. Placing unparenthesized `typeof ` parsing after binary operator splitting ensures `typeof x === 'string'` correctly splits at `===` with the left operand cleanly parsed as a `UnaryExpression` (`operator: "typeof"`), eliminating 2–4 redundant wrapping tokens and outer parentheses on every type check.
+  2. **Native Negative Numeric Literals (`_n`)**: In standard J and Codon syntax, negative numbers natively use a prefix underscore `_` (e.g. `_1` for `-1`, `_42` for `-42`, `__` for `-Infinity`). While `CodonToASTParser` already supports `_1` as a literal `-1`, `JSToCodonTranslator` previously emitted all negative numeric literals as verbose 4-token parenthesized expressions `(- 1)`, `(- 2)`. Emitting `_1` replaces 4 tokens `(`, `-`, `1`, `)` with a single token `_1` across array slicing (`inner.slice 1 _1`), index searches (`indexOf !== _1`), and negative offsets.
+  3. **Single-Operand Guard for Update Expressions**: In `codon-parser.ts`, update expression detection (`++`, `--`) lacked a single-operand boundary check (`splitAtLevel(inner, " ").length === 1`), causing function call expressions containing update arguments (such as `(Math.pow 2 this.retryCount++)`) to greedily match trailing `++` across spaces, producing broken JavaScript (`Math.pow 2 this.retryCount++;`) and fatal Babel compiler crashes (`Missing semicolon`). Enforcing single-operand boundaries ensures calls with update arguments parse into clean `CallExpression` nodes with nested `UpdateExpression` arguments.
+  Together, these changes eliminate redundant parentheses across type checking and negative numbers while fixing update expression parsing across all fullstack benchmarks.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates 3 tokens per negative numeric literal: `(- 1)` [4 tokens] -> `_1` [1 token], saving 75% per negative constant or slice index.
+  - Eliminates 2 wrapping tokens `(` and `)` per `typeof` check: `((typeof x) === 'string')` [7 tokens] -> `typeof x === 'string'` [5 tokens], saving ~29%.
+  - Resolves update expression misparsing and syntax crashes across WebSocket clients and exponential backoff algorithms (`Math.pow 2 this.retryCount++`).
+- **Concrete Syntax Changes**:
+  - `codon-parser.ts`:
+    - In `parseExpression`, detect unparenthesized `typeof ` placed after binary splitting (`strippedExpr.startsWith("typeof ")`), constructing a `UnaryExpression` with `operator: "typeof"`.
+    - In update expression parsing (`strippedExpr.endsWith("++")`, `strippedExpr.endsWith("--")`, `strippedExpr.startsWith("++")`, `strippedExpr.startsWith("--")`), added `splitAtLevel(inner, " ").length === 1` boundary check so call expressions with update arguments do not misparse.
+  - `transpilers.ts`:
+    - In `JSToCodonTranslator.prototype.transpile`:
+      - `case "UnaryExpression"`:
+        - When `node.operator === "typeof"`, emits `typeof ${this.transpile(node.argument)}`.
+        - When `node.operator === "-" && (node.argument.type === "NumericLiteral" || (node.argument.type === "Literal" && typeof (node.argument as any).value === "number"))`, emits `_${(node.argument as any).value}`.
+        - When `node.operator === "~"`, emits `~${this.transpile(node.argument)}`.
+  - Examples:
+    - Old Codon: `(parenIdx !== (- 1))`
+    - New Codon: `(parenIdx !== _1)`
+    - Old Codon: `(inner.slice 1 (- 1))`
+    - New Codon: `(inner.slice 1 _1)`
+    - Old Codon: `((typeof x) === 'string')`
+    - New Codon: `typeof x === 'string'`
+    - Old Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` *(crashed with Missing semicolon)*
+    - New Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` *(cleanly compiles to Math.pow(2, this.retryCount++))*
+
+## Revision 25a (unsuccessful)
+- **Tokens:** 4263
+
+- **Revision Idea**: Introduce concise unparenthesized return expressions (`return. expr`) across JSX components, await expressions, relational/binary comparisons, and boolean checks (`return. <div>...</div>`, `return. @ res.json()`, `return. result.changes > 0`, `return. !isValid`), direct unparenthesized JSX element emission, first-class computed property keys in object literals (`O([key]:val)`, `O([fieldName]:result)`), and single-operand boundary protection for update expressions (`++`, `--`) in function call arguments (`(Math.pow 2 this.retryCount++)`).
+- **Rationale**: In modern AI fullstack web development (React component rendering, Express/Koa API controllers, GraphQL resolver dispatchers, WebSocket client reconnection loops, database query results, and state validation):
+  1. **Concise Unparenthesized Return Expressions & JSX Elements**: `ReturnStatement` and `JSXElement` are ubiquitous in fullstack code. Previously, `JSToCodonTranslator` unconditionally wrapped all return values and JSX elements in redundant outer parentheses: `return. (<div>...</div>)`, `return. (@ (res.json()))`, `return. (result.changes > 0)`, and `return. (a + b)`. In Codon, `return.` is an unambiguous statement-level keyword extending to the end of the statement; requiring wrapping parentheses consumes 2 redundant tokens `(` and `)` on every single return statement in functions, API route handlers, and React component roots. Furthermore, emitting native unparenthesized JSX elements `<tag ...>...</tag>` directly mirrors standard JSX and eliminates wrapping parentheses.
+  2. **Computed Property Keys in Object Literals**: In dynamic fullstack applications (such as GraphQL query dispatchers and database record builders returning `{ data: { [fieldName]: result } }`), dynamic dictionary keys are essential. Previously in Codon, writing `O([fieldName]:result)` caused `parseExpression` to parse `[fieldName]` as an `ArrayExpression`, setting `keyName` to `undefined` and triggering a fatal compiler crash (`TypeError: undefined is not an object (evaluating 'str.length')`). Furthermore, `JSToCodonTranslator` discarded `computed: true` on object properties, emitting static `fieldName:result`. Enabling `[key]:val` parsing and preserving `computed: true` allows dynamic objects to be constructed concisely in a single expression.
+  3. **Single-Operand Guard for Update Expressions**: In `codon-parser.ts`, update expression detection (`++`, `--`) lacked a single-operand boundary check (`splitAtLevel(inner, " ").length === 1`), causing function call expressions containing update arguments (such as `(Math.pow 2 this.retryCount++)`) to greedily match trailing `++` across spaces, producing broken JavaScript (`Math.pow 2 this.retryCount++;`) and fatal Babel compiler crashes (`Missing semicolon`). Enforcing single-operand boundaries ensures calls with update arguments parse into clean `CallExpression` nodes with nested `UpdateExpression` arguments.
+  Together, these changes eliminate redundant wrapping parentheses across return statements and JSX views, support dynamic object construction, and guarantee 100% roundtrip compilation fidelity across all fullstack benchmarks.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates 2 wrapping tokens `(` and `)` per return statement across React components, route handlers, and utility functions (e.g. `return. (<div>...</div>)` [6 tokens] -> `return. <div>...</div>` [4 tokens], saving ~33%; `return. (result.changes > 0)` [7 tokens] -> `return. result.changes > 0` [5 tokens], saving ~29%).
+  - Eliminates 2 wrapping tokens on async return await expressions: `return. (@ (res.json()))` [7 tokens] -> `return. @ (res.json())` [5 tokens], saving ~29%.
+  - Eliminates multi-statement imperative dictionary workarounds for dynamic keys (`res =: O() \n res.[key] =: val \n return. res` [14+ tokens] -> `return. O([key]:val)` [5 tokens], saving ~65%).
+  - Resolves update expression misparsing and syntax crashes across WebSocket clients and exponential retry algorithms in fullstack benchmarks.
+- **Concrete Syntax Changes**:
+  - `transpilers.ts`:
+    - In `JSToCodonTranslator.prototype.transpile`:
+      - `case "ReturnStatement"`: When `node.argument` is present, unwraps outer parentheses for `AwaitExpression` (`return. @ ...`), `JSXElement`, `JSXFragment`, `BinaryExpression`, `LogicalExpression`, and `UnaryExpression`.
+      - `case "JSXElement"`: Emits `${generate(node as any).code}` directly without outer wrapping parentheses `(...)`.
+      - `case "Property" / case "ObjectProperty"` and `case "ObjectMethod"`: When `node.computed === true`, emits `[${this.transpile(node.key)}]:${this.transpile(node.value)}`.
+  - `codon-parser.ts`:
+    - In `O(...)` object parsing, detect bracketed key expressions `[keyPart]:val`, parsing `keyPart` as an expression and setting `computed: true`.
+    - In update expression parsing (`strippedExpr.endsWith("++")`, `strippedExpr.endsWith("--")`, `strippedExpr.startsWith("++")`, `strippedExpr.startsWith("--")`), added `splitAtLevel(inner, " ").length === 1` boundary check so call expressions with update arguments do not misparse.
+  - Examples:
+    - Old Codon: `return. (<div><h2>Chat Room</h2></div>)`
+    - New Codon: `return. <div><h2>Chat Room</h2></div>`
+    - Old Codon: `return. (@ (res.json()))`
+    - New Codon: `return. @ (res.json())`
+    - Old Codon: `return. (result.changes > 0)`
+    - New Codon: `return. result.changes > 0`
+    - Old Codon: `return. (a + b)`
+    - New Codon: `return. a + b`
+    - Old Codon: `return. O(fieldName:result)` *(lost computed semantics)*
+    - New Codon: `return. O([fieldName]:result)`
+    - Old Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` *(crashed with Missing semicolon)*
+    - New Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` *(cleanly parses and compiles to Math.pow(2, this.retryCount++))*
+
+## Revision 24a (unsuccessful)
+- **Tokens:** 686
+
+- **Revision Idea**: Introduce concise unparenthesized `new` object instantiation expressions (`new Callee`, `new Callee arg1 arg2`, `new Callee O(...)`) across variable declarations (`map =: new Map`), member assignments (`this.socket = new WebSocket this.url`), class properties (`resolvers =: new Map`), return statements (`return. new Promise {{...}}`), throw statements (`throw. new Error '...'`), and standalone statements, alongside single-operand boundary protection for update expressions (`++`, `--`) in function call arguments (`(Math.pow 2 this.retryCount++)`).
+- **Rationale**: In modern AI fullstack web development (React component refs, WebSocket clients, Node/Express HTTP servers, database drivers, async Promises, Maps, Sets, and error boundaries):
+  1. **Concise Unparenthesized `new` Expressions**: `NewExpression` is among the most pervasive expressions in fullstack applications (`new Map()`, `new Set()`, `new WebSocket()`, `new Database()`, `new Promise()`, `new Error()`, `new http.Agent()`). Prior to Revision 24a, Codon strictly required every `new` expression to be wrapped in outer parentheses: `(new Map)`, `(new WebSocket this.url)`, `(new Database ':memory:')`, `(new http.Agent ...)`. Omitting parentheses caused `parseExpression` to bypass `NewExpression` parsing, interpreting `new Callee` as an invalid Identifier. Revision 24a introduces native unparenthesized `new` expression parsing at expression level and updates `JSToCodonTranslator` to emit concise unparenthesized `new` across variable initializers, member mutations, return statements, throw statements, and class properties, eliminating 2 wrapping tokens `(` and `)` on every instantiation while preserving 100% backward compatibility with parenthesized calls.
+  2. **Single-Operand Guard for Update Expressions**: In `codon-parser.ts`, update expression detection (`++`, `--`) lacked a single-operand boundary check (`splitAtLevel(inner, " ").length === 1`), causing function call expressions containing update arguments (such as `(Math.pow 2 this.retryCount++)`) to greedily match trailing `++` across spaces, producing broken JavaScript (`Math.pow 2 this.retryCount++;`) and fatal Babel compiler crashes (`Missing semicolon`). Enforcing single-operand boundaries ensures calls with update arguments parse into clean `CallExpression` nodes with nested `UpdateExpression` arguments.
+  Together, these changes eliminate wrapping parentheses across object instantiations and fix update expression misparsing in fullstack applications with 100% compilation and roundtrip fidelity.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates 2 wrapping tokens `(` and `)` per `new` expression across services, controllers, connections, and collections (e.g. `(new Map)` [4 tokens] -> `new Map` [2 tokens], saving 50%; `(new WebSocket this.url)` [6 tokens] -> `new WebSocket this.url` [4 tokens], saving 33%).
+  - Eliminates 2 wrapping tokens on asynchronous Promise construction: `return. (new Promise ...)` -> `return. new Promise ...`.
+  - Eliminates 2 wrapping tokens on database connections: `db =: (new Database ':memory:')` -> `db =: new Database ':memory:'`.
+  - Resolves update expression misparsing and syntax crashes across WebSocket clients and exponential backoff retry algorithms in fullstack benchmarks.
+- **Concrete Syntax Changes**:
+  - `codon-parser.ts`:
+    - In `parseExpression`, detect `strippedExpr.startsWith("new ") && strippedExpr.length > 4`, parsing into `NewExpression` without requiring `wasWrapped`.
+    - In update expression parsing (`strippedExpr.endsWith("++")`, `strippedExpr.endsWith("--")`, `strippedExpr.startsWith("++")`, `strippedExpr.startsWith("--")`), added `splitAtLevel(inner, " ").length === 1` boundary check so call expressions with update arguments do not misparse.
+  - `transpilers.ts`:
+    - Updated `case "VariableDeclaration"`, `case "PropertyDefinition" / "ClassProperty"`, `case "ExpressionStatement"`, `case "ReturnStatement"`, and `case "ThrowStatement"`: when the expression or right-hand side is a `NewExpression` (or `AwaitExpression`), unwraps outer `(new ...)` and `(@ ...)` to emit concise unparenthesized forms.
+  - Examples:
+    - Old Codon: `map =: (new Map)`
+    - New Codon: `map =: new Map`
+    - Old Codon: `this.socket = (new WebSocket this.url)`
+    - New Codon: `this.socket = new WebSocket this.url`
+    - Old Codon: `return. (new Promise {{resolve,reject => do. ... end.}})`
+    - New Codon: `return. new Promise {{resolve,reject => do. ... end.}}`
+    - Old Codon: `throw. (new Error 'Not found')`
+    - New Codon: `throw. new Error 'Not found'`
+    - Old Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` *(crashed with Missing semicolon)*
+    - New Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` *(cleanly compiles to Math.pow(2, this.retryCount++))*
+
+## Revision 23a (unsuccessful)
+- **Tokens:** 3885
+
+- **Revision Idea**: Introduce concise computed property keys in object literals (`O([key]:val)`, `O([fieldName]:result)`) and single-operand boundary protection for update expressions (`++`, `--`), eliminating fatal compiler crashes when generating dynamic dictionaries and resolving call expression misparsing when call arguments contain update operations (`(Math.pow 2 this.retryCount++)`).
+- **Rationale**: In modern AI fullstack web development (GraphQL query execution and resolver dispatching, dynamic database queries, REST API payload constructors, WebSocket event dispatchers, React state reducers, and exponential backoff retry algorithms):
+  1. **Computed Property Keys in Object Expressions**: In GraphQL query dispatchers (e.g. `graphqlSchemaExecutor.md`), dynamic database record builders, and event dispatchers, objects with dynamic keys (`{ [fieldName]: result }` or `{ [key]: val }`) are standard requirements. Previously in Codon, writing `O([fieldName]:result)` caused `parseExpression` to parse `[fieldName]` as an `ArrayExpression`, setting `keyName` to `undefined` and triggering a fatal compiler crash (`TypeError: undefined is not an object (evaluating 'str.length')`). Furthermore, `JSToCodonTranslator` discarded `computed: true` on object properties, emitting static `fieldName:result`. By detecting bracketed computed keys in colon pairs `[key]:val` and preserving `computed: true`, Codon enables dynamic dictionary construction with 100% roundtrip fidelity.
+  2. **Single-Operand Guard for Update Expressions**: In `codon-parser.ts`, update expression detection (`++`, `--`) lacked a single-operand boundary check (`splitAtLevel(inner, " ").length === 1`), causing function call expressions containing update arguments (such as `(Math.pow 2 this.retryCount++)`) to greedily match trailing `++` across spaces, producing broken JavaScript (`Math.pow 2 this.retryCount++;`) and fatal Babel compiler crashes (`Missing semicolon`). Enforcing single-operand boundaries ensures calls with update arguments parse into clean `CallExpression` nodes with nested `UpdateExpression` arguments.
+  Together, these changes eliminate dynamic object construction crashes and update expression misparsing while guaranteeing 100% compilation and roundtrip fidelity across the fullstack benchmark suite.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates verbose dictionary construction workarounds (`res =: O() \n res.[key] =: val \n return. res` [14+ tokens] -> `return. O([key]:val)` [5 tokens], saving ~65% tokens per dynamic object).
+  - Allows dynamic GraphQL response construction `return. O(data:O([fieldName]:result))` in a single concise statement.
+  - Resolves update expression misparsing and syntax crashes across WebSocket clients and exponential backoff retry algorithms in fullstack benchmarks.
+- **Concrete Syntax Changes**:
+  - `codon-parser.ts`:
+    - In `O(...)` object parsing, detect bracketed key expressions `[keyPart]:val`, parsing `keyPart` as an expression and setting `computed: true`.
+    - In update expression parsing (`strippedExpr.endsWith("++")`, `strippedExpr.endsWith("--")`, `strippedExpr.startsWith("++")`, `strippedExpr.startsWith("--")`), added `splitAtLevel(inner, " ").length === 1` boundary check so call expressions with update arguments do not misparse.
+  - `transpilers.ts`:
+    - Updated `case "Property" / case "ObjectProperty"` and `case "ObjectMethod"`: when `node.computed` is true, emits `[${this.transpile(node.key)}]:${this.transpile(node.value)}`.
+  - Examples:
+    - Old Codon: `return. O(fieldName:result)` (lost computed semantics)
+    - New Codon: `return. O([fieldName]:result)`
+    - Old Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` (crashed with Missing semicolon)
+    - New Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` (cleanly parses and compiles to `Math.pow(2, this.retryCount++)`)
+
+## Revision 22a (unsuccessful)
+- **Tokens:** 3999
+
+- **Revision Idea**: Introduce concise unparenthesized function and method call statements (`callee arg1 arg2`, `this.socket.send data`, `this.messageListeners.push cb`, `setInput ''`, `setTimeout fn delay`), concise computed property keys in object literals (`O([key]:val)`, `O([fieldName]:result)`), and single-operand boundary protection for update expressions (`++`, `--`), eliminating mandatory outer wrapping parentheses across statement-level call expressions `(callee arg1 arg2)`, fatal compiler crashes in dynamic dictionaries, and syntax misparsing in call expressions with update arguments.
+- **Rationale**: In modern AI fullstack web development (React component state hooks, event dispatchers, Express/Koa route responses, GraphQL query resolvers, WebSocket client message streaming, database queries, and exponential retry backoff loops):
+  1. **Concise Unparenthesized Call Statements**: In prior versions of Codon, calling any function or method with arguments at statement level strictly required wrapping outer parentheses: `(console.log 'Hello')`, `(setInput '')`, `(setMessages {{prev => ...}})`, `(this.socket.send data)`, `(this.messageListeners.push cb)`, `(setTimeout fn delay)`, `(this.resolvers.set field resolver)`, `(this.heap.push val)`, and `(proxyRes.pipe res)`. Omitting outer parentheses caused Codon to parse the statement as an invalid single Identifier containing spaces, causing fatal Babel compilation errors. Revision 22a introduces native support for unparenthesized call statements `callee arg1 arg2 ...` and `new Callee arg1 arg2 ...` at statement level outside of expressions, saving 2 wrapping tokens `(` and `)` on almost every imperative action in fullstack code while preserving 100% backward compatibility with parenthesized calls.
+  2. **Computed Property Keys in Object Expressions**: In GraphQL query dispatchers, dynamic database record builders, and event dispatchers, objects with dynamic keys (`{ [fieldName]: result }` or `{ [key]: val }`) are required. Previously, writing `O([fieldName]:result)` caused `parseExpression` to parse `[fieldName]` as an `ArrayExpression`, setting `keyName` to `undefined` and triggering a fatal compiler crash (`TypeError: undefined is not an object`). Furthermore, `JSToCodonTranslator` discarded `computed: true` on object properties, emitting static `fieldName:result`. By detecting bracketed computed keys in colon pairs `[key]:val` and preserving `computed: true`, Codon enables dynamic dictionary construction with 100% roundtrip fidelity.
+  3. **Single-Operand Guard for Update Expressions**: In `codon-parser.ts`, update expression detection (`++`, `--`) lacked a single-operand boundary check (`splitAtLevel(inner, " ").length === 1`), causing function call expressions containing update arguments (such as `(Math.pow 2 this.retryCount++)`) to greedily match trailing `++` across spaces, producing broken JavaScript (`Math.pow 2 this.retryCount++;`) and fatal Babel compiler crashes (`Missing semicolon`). Enforcing single-operand boundaries ensures calls with update arguments parse into clean `CallExpression` nodes with nested `UpdateExpression` arguments.
+  Together, these changes eliminate wrapping parentheses across statement-level calls and dynamic object construction crashes, achieving optimal token efficiency and 100% compilation fidelity across the entire fullstack benchmark suite.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates 2 wrapping tokens `(` and `)` per statement-level call expression across controllers, handlers, and event listeners (e.g. `(this.socket.send data)` [6 tokens] -> `this.socket.send data` [4 tokens], saving ~33%).
+  - Eliminates 2 wrapping tokens per React state updater (e.g. `(setInput '')` [5 tokens] -> `setInput ''` [3 tokens], saving ~40%).
+  - Eliminates verbose dictionary construction workarounds (`res =: O() \n res.[key] =: val \n return. res` [14+ tokens] -> `return. O([key]:val)` [5 tokens], saving ~65% tokens per dynamic object).
+  - Resolves update expression misparsing and syntax crashes across WebSocket clients and exponential backoff retry algorithms in fullstack benchmarks.
+- **Concrete Syntax Changes**:
+  - `codon-parser.ts`:
+    - In `parseStatement`, detect unparenthesized statement-level calls where the first space-delimited token is an identifier or member expression, parsing into `ExpressionStatement` containing `CallExpression` (or `NewExpression` for `new`).
+    - In `O(...)` object parsing, detect bracketed key expressions `[keyPart]:val`, parsing `keyPart` as an expression and setting `computed: true`.
+    - In update expression parsing (`strippedExpr.endsWith("++")`, `strippedExpr.endsWith("--")`, `strippedExpr.startsWith("++")`, `strippedExpr.startsWith("--")`), added `splitAtLevel(inner, " ").length === 1` boundary check so call expressions with update arguments do not misparse.
+  - `transpilers.ts`:
+    - Updated `case "ExpressionStatement"`: when `node.expression.type === "CallExpression"`, emits unparenthesized `${calleeStr} ${args.join(" ")}`.
+    - Updated `case "Property" / case "ObjectProperty"` and `case "ObjectMethod"`: when `node.computed` is true, emits `[${this.transpile(node.key)}]:${this.transpile(node.value)}`.
+  - Examples:
+    - Old Codon: `(console.log 'Hello')`
+    - New Codon: `console.log 'Hello'`
+    - Old Codon: `(setInput '')`
+    - New Codon: `setInput ''`
+    - Old Codon: `(this.socket.send data)`
+    - New Codon: `this.socket.send data`
+    - Old Codon: `(this.messageListeners.push cb)`
+    - New Codon: `this.messageListeners.push cb`
+    - Old Codon: `return. O(fieldName:result)` (lost computed semantics)
+    - New Codon: `return. O([fieldName]:result)`
+    - Old Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` (crashed with Missing semicolon)
+    - New Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` (cleanly parses and compiles to `Math.pow(2, this.retryCount++)`)
+
+## Revision 21a (unsuccessful)
+- **Tokens:** 1208
+
+- **Revision Idea**: Introduce concise computed property keys in object literals (`O([key]:val)`, `O([fieldName]:result)`), flexible comma and semicolon delimiters in object expressions (`O(a:1, b:2)`), and single-operand boundary protection for update expressions (`++`, `--`), eliminating fatal compiler crashes and AST misparsing in dynamic dictionaries and call expressions with update arguments.
+- **Rationale**: In modern AI fullstack web development (GraphQL query execution and resolver dispatching, REST API responses, Next.js server actions, React form state, WebSocket client reconnection pipelines, and exponential backoff retry algorithms):
+  1. **Computed Property Keys in Object Expressions**: In GraphQL query dispatchers, dynamic database record builders, and event dispatchers, objects with dynamic keys (`{ [fieldName]: result }` or `{ [key]: val }`) are required. Previously, writing `O([fieldName]:result)` caused `parseExpression` to parse `[fieldName]` as an `ArrayExpression`, setting `keyName` to `undefined` and triggering a fatal compiler crash (`TypeError: undefined is not an object`). Furthermore, `JSToCodonTranslator` discarded `computed: true` on object properties, emitting static `fieldName:result`. By detecting bracketed computed keys in colon pairs `[key]:val` and preserving `computed: true`, Codon enables dynamic dictionary construction with 100% roundtrip fidelity.
+  2. **Flexible Comma and Semicolon Delimiters in Object Expressions**: Standard JavaScript and LLMs naturally use commas to separate properties in object literals (`O(a:1, b:2)` or `O(id, title)`). Codon previously only split by semicolon `;`, failing or misparsing comma-separated properties into corrupted key-value pairs. Supporting both `;` and `,` delimiters at depth 0 allows clean, natural object expression formatting.
+  3. **Single-Operand Guard for Update Expressions**: In `codon-parser.ts`, update expression detection (`++`, `--`) lacked a single-operand boundary check (`splitAtLevel(inner, " ").length === 1`), causing function call expressions containing update arguments (such as `(Math.pow 2 this.retryCount++)`) to greedily match trailing `++` across spaces, producing broken JavaScript (`Math.pow 2 this.retryCount++;`) and fatal Babel compiler crashes (`Missing semicolon`). Enforcing single-operand boundaries ensures calls with update arguments parse into clean `CallExpression` nodes with nested `UpdateExpression` arguments.
+  Together, these changes eliminate dynamic object construction crashes and update expression misparsing while guaranteeing 100% compilation and roundtrip fidelity across the entire fullstack benchmark suite.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates verbose dictionary construction workarounds (`res =: O() \n res.[key] =: val \n return. res` [14+ tokens] -> `return. O([key]:val)` [5 tokens], saving ~65% tokens per dynamic object).
+  - Allows dynamic GraphQL response construction `return. O(data:O([fieldName]:result))` in a single concise statement.
+  - Resolves update expression misparsing and syntax crashes across WebSocket clients and exponential backoff retry algorithms in fullstack benchmarks.
+- **Concrete Syntax Changes**:
+  - `codon-parser.ts`:
+    - In `O(...)` object parsing, detect bracketed key expressions `[keyPart]:val`, parsing `keyPart` as an expression and setting `computed: true`.
+    - In `O(...)` object parsing, split properties using both semicolon `;` and comma `,` delimiters at depth 0.
+    - In update expression parsing (`strippedExpr.endsWith("++")`, `strippedExpr.endsWith("--")`, `strippedExpr.startsWith("++")`, `strippedExpr.startsWith("--")`), added `splitAtLevel(inner, " ").length === 1` boundary check so call expressions with update arguments do not misparse.
+  - `transpilers.ts`:
+    - Updated `case "Property" / case "ObjectProperty"` and `case "ObjectMethod"`: when `node.computed` is true, emits `[${this.transpile(node.key)}]:${this.transpile(node.value)}`.
+  - Examples:
+    - Old Codon: `return. O(fieldName:result)` (lost computed semantics)
+    - New Codon: `return. O([fieldName]:result)`
+    - Old Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` (crashed with Missing semicolon)
+    - New Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` (cleanly parses and compiles to `Math.pow(2, this.retryCount++)`)
+    - Old Codon: `O(a:1, b:2)` (failed to split properties)
+    - New Codon: `O(a:1, b:2)` (cleanly compiles to `{ a: 1, b: 2 }`)
+
+## Revision 20a (unsuccessful)
+- **Tokens:** 2769
+
+- **Revision Idea**: Introduce concise computed property keys in object expressions (`O([key]:val)`), concise unparenthesized monadic await in return statements (`return. @ expr`) and member assignments (`this.prop = @ expr`), alongside single-operand boundary protection for update expressions (`++`, `--`), eliminating fatal compiler crashes and mandatory outer wrapping parentheses `return. (@ expr)` and `this.prop = (@ expr)`.
+- **Rationale**: In modern AI fullstack web development (GraphQL query execution and resolver dispatching, REST API responses, Next.js server actions, React form state, WebSocket client reconnection pipelines, and exponential backoff retry algorithms):
+  1. **Computed Property Keys in Object Expressions**: In GraphQL query dispatchers, dynamic database record builders, and event dispatchers, objects with dynamic keys (`{ [fieldName]: result }` or `{ [key]: val }`) are required. Previously, writing `O([fieldName]:result)` caused `parseExpression` to parse `[fieldName]` as an `ArrayExpression`, setting `keyName` to `undefined` and triggering a fatal compiler crash (`TypeError: undefined is not an object`). Furthermore, `JSToCodonTranslator` discarded `computed: true` on object properties, emitting static `fieldName:result`. By detecting bracketed computed keys in colon pairs `[key]:val` and preserving `computed: true`, Codon enables dynamic dictionary construction with 100% roundtrip fidelity.
+  2. **Unparenthesized Return and Mutation Await**: While Revision 1a introduced `@` as prefix monadic await and variable declarations had `res =: @ (fetch url)`, `JSToCodonTranslator` still emitted redundant wrapping parentheses `(@ <arg>)` for return statements (`return. (@ (res.json()))`) and member assignments (`this.socket = (@ (createSocket this.url))`). Revision 20a unwraps outer parentheses for `AwaitExpression` in `ReturnStatement` (`return. @ expr`) and `AssignmentExpression` (`this.prop = @ expr`), saving 2 wrapping tokens per async operation.
+  3. **Single-Operand Guard for Update Expressions**: In `codon-parser.ts`, update expression detection (`++`, `--`) lacked a single-operand boundary check (`splitAtLevel(inner, " ").length === 1`), causing function call expressions containing update arguments (such as `(Math.pow 2 this.retryCount++)`) to greedily match trailing `++` across spaces, producing broken JavaScript (`Math.pow 2 this.retryCount++;`) and fatal Babel compiler crashes (`Missing semicolon`). Enforcing single-operand boundaries ensures calls with update arguments parse into clean `CallExpression` nodes with nested `UpdateExpression` arguments.
+  Together, these changes eliminate wrapping parentheses across asynchronous returns and mutations while guaranteeing full compilation fidelity across the entire fullstack benchmark suite.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates verbose dictionary construction workarounds (`res =: O() \n res.[key] =: val \n return. res` [14+ tokens] -> `return. O([key]:val)` [5 tokens], saving ~65% tokens per dynamic object).
+  - Eliminates 2 wrapping tokens `(` and `)` per return await expression (e.g. `return. (@ (res.json()))` [7 tokens] -> `return. @ (res.json())` [5 tokens], saving ~29%).
+  - Eliminates 2 wrapping tokens per member assignment await expression (e.g. `this.data = (@ (fetch url))` [8 tokens] -> `this.data = @ (fetch url)` [6 tokens], saving ~25%).
+  - Resolves update expression misparsing and syntax crashes across WebSocket clients and exponential backoff retry algorithms in fullstack benchmarks.
+- **Concrete Syntax Changes**:
+  - `codon-parser.ts`:
+    - In `O(...)` object parsing, detect bracketed key expressions `[keyPart]:val`, parsing `keyPart` as an expression and setting `computed: true`.
+    - In update expression parsing (`strippedExpr.endsWith("++")`, `strippedExpr.endsWith("--")`, `strippedExpr.startsWith("++")`, `strippedExpr.startsWith("--")`), added `splitAtLevel(inner, " ").length === 1` boundary check so call expressions with update arguments do not misparse.
+  - `transpilers.ts`:
+    - Updated `case "Property" / case "ObjectProperty"` and `case "ObjectMethod"`: when `node.computed` is true, emits `[${this.transpile(node.key)}]:${this.transpile(node.value)}`.
+    - Updated `case "ReturnStatement"`: when `node.argument.type === "AwaitExpression"` and `argStr.startsWith("(@ ") && argStr.endsWith(")")`, unwraps to `return. @ ${argStr.slice(3, -1)}`.
+    - Updated `case "AssignmentExpression"`: in statement-level assignment translation, when `assignNode.right.type === "AwaitExpression"` and `rightStr.startsWith("(@ ") && rightStr.endsWith(")")`, unwraps to `@ ${rightStr.slice(3, -1)}`.
+  - Examples:
+    - Old Codon: `return. O(fieldName:result)` (lost computed semantics)
+    - New Codon: `return. O([fieldName]:result)`
+    - Old Codon: `return. (@ (res.json()))`
+    - New Codon: `return. @ (res.json())`
+    - Old Codon: `this.socket = (@ (createSocket this.url))`
+    - New Codon: `this.socket = @ (createSocket this.url)`
+    - Old Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` (crashed with Missing semicolon)
+    - New Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))` (cleanly parses and compiles)
+
+## Revision 19a (unsuccessful)
+- **Tokens:** 4089
+
+- **Revision Idea**: Introduce concise unparenthesized monadic await in return statements (`return. @ expr`), member assignments (`this.prop = @ expr`), class property definitions (`field =: @ expr`), and arrow closures (`{{async () => @ expr}}`), alongside single-operand boundary protection for update expressions (`++`, `--`), eliminating mandatory outer wrapping parentheses `return. (@ expr)`, `this.prop = (@ expr)`, and `(@ expr)`.
+- **Rationale**: In modern AI fullstack web development (Express/Koa API controllers, Next.js server actions, async database query pipelines, REST client response handlers, React event dispatchers, and WebSocket client reconnection handlers):
+  1. **Unparenthesized Return and Assignment Await**: While Revision 1a introduced `@` and `@:` as prefix monadic await verbs, and variable declarations had `res =: @ (fetch url)`, `JSToCodonTranslator` and expression generators still emitted redundant wrapping parentheses `(@ <arg>)` for return statements (`return. (@ (res.json()))`), member assignments (`this.data = (@ (fetch url))`), class properties (`field =: (@ (load()))`), and arrow closures (`{{async () => (@ (fetch url))}}`), consuming 2–4 extra tokens per await operation. Revision 19a unwraps outer parentheses for `AwaitExpression` in `ReturnStatement` (`return. @ expr`), `AssignmentExpression` (`this.prop = @ expr`), `ClassProperty` / `PropertyDefinition` (`field =: @ expr`), and `ArrowFunctionExpression` (`{{async () => @ expr}}`), standardizing concise unparenthesized await across all statement positions.
+  2. **Single-Operand Guard for Update Expressions**: In `codon-parser.ts`, update expression detection (`++`, `--`) lacked a single-operand boundary check (`splitAtLevel(inner, " ").length === 1`), causing function call expressions containing update arguments (such as `(Math.pow 2 this.retryCount++)`) to greedily match trailing `++` across spaces, producing broken JavaScript (`Math.pow 2 this.retryCount++;`) and fatal Babel compiler crashes (`Missing semicolon`). Enforcing single-operand boundaries ensures calls with update arguments parse into clean `CallExpression` nodes with nested `UpdateExpression` arguments, restoring 100% roundtrip fidelity across all fullstack benchmark suites.
+  Together, these changes eliminate wrapping parentheses across asynchronous returns and mutations while guaranteeing full compilation fidelity across the entire fullstack benchmark suite.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates 2 wrapping tokens `(` and `)` per return await expression (e.g. `return. (@ (res.json()))` [7 tokens] -> `return. @ (res.json())` [5 tokens], saving ~29%).
+  - Eliminates 2 wrapping tokens per member assignment await expression (e.g. `this.data = (@ (fetch url))` [8 tokens] -> `this.data = @ (fetch url)` [6 tokens], saving ~25%).
+  - Eliminates 2 wrapping tokens per concise async arrow expression (e.g. `{{async () => (@ (fetch url))}}` [9 tokens] -> `{{async () => @ (fetch url)}}` [7 tokens], saving ~22%).
+  - Resolves update expression misparsing and syntax crashes across WebSocket clients and exponential backoff retry algorithms in fullstack benchmarks.
+- **Concrete Syntax Changes**:
+  - `codon-parser.ts`: In update expression parsing (`strippedExpr.endsWith("++")`, `strippedExpr.endsWith("--")`, `strippedExpr.startsWith("++")`, `strippedExpr.startsWith("--")`), added `splitAtLevel(inner, " ").length === 1` boundary check so call expressions with update arguments do not misparse.
+  - `transpilers.ts`:
+    - Updated `case "ReturnStatement"`: when `node.argument.type === "AwaitExpression"` and `argStr.startsWith("(@ ") && argStr.endsWith(")")`, unwraps to `return. @ ${argStr.slice(3, -1)}`.
+    - Updated `case "AssignmentExpression"`: in statement-level assignment translation, when `assignNode.right.type === "AwaitExpression"` and `rightStr.startsWith("(@ ") && rightStr.endsWith(")")`, unwraps to `@ ${rightStr.slice(3, -1)}`.
+    - Updated `case "ClassProperty"`: when `pNode.value?.type === "AwaitExpression"` and `initStr.startsWith("(@ ") && initStr.endsWith(")")`, unwraps to `@ ${initStr.slice(3, -1)}`.
+    - Updated `case "ArrowFunctionExpression"`: when `node.body.type === "AwaitExpression"` and `bodyStr.startsWith("(@ ") && bodyStr.endsWith(")")`, unwraps to `@ ${bodyStr.slice(3, -1)}`.
+  - Examples:
+    - Old Codon: `return. (@ (res.json()))`
+    - New Codon: `return. @ (res.json())`
+    - Old Codon: `this.data = (@ (fetch url))`
+    - New Codon: `this.data = @ (fetch url)`
+    - Old Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))`
+    - New Codon: `delay =: (baseDelay * (Math.pow 2 this.retryCount++))`
+
+## Revision 18a (unsuccessful)
+- **Tokens:** 4799
+
+- **Revision Idea**: Introduce concise unparenthesized variable reassignment statements (`id = expr`), unparenthesized monadic await in return statements (`return. @ expr`) and standalone expression statements (`@ expr`), alongside single-operand boundary protection for update expressions (`++`, `--`), eliminating mandatory outer wrapping parentheses `(id = expr)`, `return. (@ expr)`, and `(@ expr)`.
+- **Rationale**: In modern AI fullstack web development (React state machines, event handlers, Express/Koa API controllers, database query execution, network fetch pipelines, async background tasks, and iterative algorithms):
+  1. **Variable Reassignments**: Prior to Revision 18a, writing `id = expr` (plain `=` without pattern markers) was misclassified as a `VariableDeclaration` (`const id = expr;`), causing fatal Babel compiler errors (`Identifier 'id' has already been declared` or `Assignment to constant variable`) whenever variables were updated or reassigned in controllers, loops, and state reducers (such as `order = (transition order 'pay')` in state machines or `parsed = (parsed.replace ...)` in text parsing). By tracking declared identifiers in scope, initial declarations with `=:` (or first-time `=`) establish `const` bindings, while subsequent assignments with plain `=` cleanly construct statement-level `AssignmentExpression` nodes (`id = expr;`) without requiring outer wrapping parentheses `(id = expr)`.
+  2. **Unparenthesized Standalone and Return Await Expressions**: While Revision 1a introduced `@` and `@:` as prefix monadic await verbs, `JSToCodonTranslator` and expression generators still emitted redundant wrapping parentheses `(@ <arg>)` for standalone statements (`(@ (delay 50))`) and return statements (`return. (@ (res.json()))`), consuming 2–4 extra tokens per await call. Revision 18a unwraps outer parentheses for `AwaitExpression` in `ReturnStatement` (`return. @ expr`) and `ExpressionStatement` (`@ expr`), matching variable declaration initializers (`res =: @ expr`).
+  3. **Single-Operand Guard for Update Expressions**: In `codon-parser.ts`, update expression detection (`++`, `--`) now enforces single-operand boundaries (`splitAtLevel(inner, " ").length === 1`), preventing call expressions with update arguments (such as `(Math.pow 2 this.retryCount++)`) from greedily matching trailing `++` across spaces.
+  Together, these changes eliminate wrapping parentheses across variable updates and asynchronous return/standalone operations, while ensuring 100% roundtrip fidelity across all fullstack benchmark suites.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates 2 wrapping tokens `(` and `)` per variable reassignment statement (e.g. `(order = (transition order 'pay'))` [9 tokens] -> `order = (transition order 'pay')` [7 tokens], saving ~22%).
+  - Eliminates 2 wrapping tokens per return await expression (e.g. `return. (@ (res.json()))` [7 tokens] -> `return. @ (res.json())` [5 tokens], saving ~29%).
+  - Eliminates 2 wrapping tokens per standalone await statement (e.g. `(@ (delay 50))` [6 tokens] -> `@ (delay 50)` [4 tokens], saving ~33%).
+  - Resolves duplicate declaration syntax crashes across state machine and text transformation pipelines in fullstack benchmarks.
+- **Concrete Syntax Changes**:
+  - `codon-parser.ts`:
+    - Added `scopeVars: Set<string>` to `CodonToASTParser` to track declared identifiers across the parse run.
+    - Updated `parseStatement`: when `assignOp === "="` on a bare identifier that is already present in `scopeVars`, constructs an `ExpressionStatement` containing an `AssignmentExpression` (`operator: "="`). If not previously declared, declares with `const` and registers the identifier in `scopeVars`. Also registers bare identifier targets of `=:` in `scopeVars`.
+    - Updated `parseExpression`: in update expression parsing (`strippedExpr.endsWith("++")`, `strippedExpr.endsWith("--")`, `strippedExpr.startsWith("++")`, `strippedExpr.startsWith("--")`), added `splitAtLevel(inner, " ").length === 1` boundary check so call expressions with update arguments do not misparse.
+  - `transpilers.ts`:
+    - Updated `case "ReturnStatement"`: when `node.argument.type === "AwaitExpression"` and `argStr.startsWith("(@ ") && argStr.endsWith(")")`, unwraps to `return. @ ${argStr.slice(3, -1)}`.
+    - Updated `case "ExpressionStatement"`: when `node.expression.type === "AwaitExpression"`, unwraps `(@ ...)` to `@ ...`.
+  - Examples:
+    - Old Codon: `(order = (transition order 'pay'))`
+    - New Codon: `order = (transition order 'pay')`
+    - Old Codon: `(parsed = (parsed.replace regex ''))`
+    - New Codon: `parsed = (parsed.replace regex '')`
+    - Old Codon: `return. (@ (res.json()))`
+    - New Codon: `return. @ (res.json())`
+    - Old Codon: `(@ (delay 50))`
+    - New Codon: `@ (delay 50)`
+    - Old Codon: `delay =: (baseDelay * (Math.pow 2 retryCount++))`
+    - New Codon: `delay =: (baseDelay * (Math.pow 2 retryCount++))`
+
+## Revision 17a (unsuccessful)
+- **Tokens:** 776
+
+- **Revision Idea**: Introduce concise unparenthesized binary, logical, conditional, and await expressions across return statements (`return. expr`), variable declarations (`x =: expr`), member assignments (`this.prop = expr`), property definitions (`field =: expr`), and control flow conditions (`if. expr do.`, `while. expr do.`), eliminating mandatory outer wrapping parentheses `return. (a + b)`, `return. (result.changes > 0)`, `return. (@ res.json())`, `idx =: (this.heap.length - 1)`, `resolver =: (keyResolver || fallback)`, and `if. (retryCount < maxRetries) do.`.
+- **Rationale**: In modern AI fullstack web development (React component state and JSX rendering, Express/Koa API controllers, database query execution, WebSocket client connection state, and algorithmic pipelines):
+  1. Return statements containing binary operations, relational comparisons, logical short-circuits, and monadic await expressions were emitted with redundant wrapping parentheses `return. (result.changes > 0)`, `return. (a + b)`, `return. (keyResolver || fallback)`, and `return. (@ (res.json()))`.
+  2. Variable declarations with binary arithmetic, comparisons, or logical fallbacks were unconditionally wrapped as `idx =: (this.heap.length - 1)` and `resolver =: (keyResolver || fallback)`.
+  3. Control flow statements in `if.` and `while.` conditionally wrapped test expressions as `if. (retryCount < maxRetries) do.`, `if. (!isClosedManually && (retryCount < maxRetries)) do.`, and `while. (i < 10) do.`.
+  4. In `codon-parser.ts`, update expression detection (`x++`, `x--`) lacked a single-operand boundary check, causing space-delimited argument lists in function calls (e.g. `(Math.pow 2 this.retryCount++)`) to greedily match trailing `++` across spaces. Adding single-operand boundaries ensures calls with update arguments parse with 100% roundtrip fidelity.
+  By enabling concise unparenthesized emission across return statements, variable declarations, member assignments, and control flow conditions, Codon removes 2 wrapping tokens per expression across the majority of lines in fullstack code while preserving 100% backward compatibility with parenthesized forms and maintaining full Babel AST roundtrip validation.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates 2 wrapping tokens `(` and `)` on return statements for binary, relational, logical, and await expressions across API handlers, controllers, and utility functions (e.g., `return. (result.changes > 0)` [7 tokens] -> `return. result.changes > 0` [5 tokens], saving ~30%).
+  - Eliminates 2 wrapping tokens on variable initializers containing calculations, comparisons, and logical short-circuits (e.g., `idx =: (this.heap.length - 1)` [9 tokens] -> `idx =: this.heap.length - 1` [7 tokens], saving ~25%).
+  - Eliminates 2 to 4 wrapping tokens per `if.` and `while.` condition (e.g., `if. (retryCount < maxRetries) do.` -> `if. retryCount < maxRetries do.`).
+  - Yields 20–35% token reduction across statement bodies, controllers, and algorithmic utility pipelines.
+- **Concrete Syntax Changes**:
+  - `transpilers.ts`: Added `unwrapOuterParens` helper to unwrap outer parentheses in `ReturnStatement` for `BinaryExpression`, `LogicalExpression`, `ConditionalExpression`, and `AwaitExpression`; in `VariableDeclaration` initializers; in `IfStatement` and `WhileStatement` test expressions; in `AssignmentExpression` right-hand sides; and in `PropertyDefinition` / `ClassProperty` initializers.
+  - `codon-parser.ts`: Updated `UpdateExpression` detection in `parseExpression` to verify that the operand is a single token/member (`splitAtLevel(inner, " ").length === 1`), preventing call expressions with update arguments from misparsing.
+  - Examples:
+    - Old Codon: `return. (result.changes > 0)`
+    - New Codon: `return. result.changes > 0`
+    - Old Codon: `return. (a + b)`
+    - New Codon: `return. a + b`
+    - Old Codon: `return. (keyResolver || fallback)`
+    - New Codon: `return. keyResolver || fallback`
+    - Old Codon: `return. (@ (res.json()))`
+    - New Codon: `return. @ (res.json())`
+    - Old Codon: `idx =: (this.heap.length - 1)`
+    - New Codon: `idx =: this.heap.length - 1`
+    - Old Codon: `resolver =: (keyResolver || fallback)`
+    - New Codon: `resolver =: keyResolver || fallback`
+    - Old Codon: `if. (retryCount < maxRetries) do.`
+    - New Codon: `if. retryCount < maxRetries do.`
+    - Old Codon: `while. (i < 10) do.`
+    - New Codon: `while. i < 10 do.`
+
+## Revision 16a (successful)
+- **Tokens:** 500
+
+- **Revision Idea**: Introduce concise unparenthesized logical NOT expressions (`!expr`, `!obj.method()`) with correct operator precedence (evaluated after binary and logical expressions) and unparenthesized update expressions (`expr++`, `expr--`, `++expr`, `--expr`), eliminating mandatory outer wrapping parentheses `(! expr)` and `(expr++)`.
+- **Rationale**: In modern AI fullstack web development (React component state and JSX conditional rendering, form validation, event handling, API error checking, HTTP response handling, safe type checks, loop iterations, and auto-incrementing ID generators), logical NOT expressions (`!isValid`, `!response.ok`, `!input.trim()`, `!cache.has(key)`) and update expressions (`nextId.current++`, `i++`, `count++`) are among the most pervasive expressions. Prior to Revision 16a, Codon suffered from two critical limitations:
+  1. Codon strictly required every logical NOT expression to be wrapped in outer parentheses `(! expr)` and update expressions `(x++)`, `(++x)`. Omitting outer parentheses (such as `if. !input.trim() do.`, `return. !found`, `isValid =: !error && !loading`, or `id: nextId.current++`) caused the parser to misinterpret the expression as a raw malformed Identifier token (`{ type: "Identifier", name: "!input" }`) or misparse update expressions as broken binary addition/subtraction `nextId.current + +` or `i + +`, producing invalid JavaScript and fatal Babel compiler crashes (`Unexpected token`). In Revision 15a, an earlier attempt to unwrap `!` failed because the prefix `!` check was placed before binary splitting, which corrupted precedence in compound logical conditions like `!a && !b`.
+  2. `JSToCodonTranslator` unconditionally emitted redundant wrapping parentheses and whitespace for all logical NOT expressions `(! ${arg})` and update expressions `(${arg}++)`, inflating token counts across every conditional check and counter update in fullstack applications.
+  By enabling unparenthesized logical NOT parsing placed strictly after binary splitting, preventing binary `+`/`-` from splitting update operators `++`/`--`, and emitting concise `!${arg}` and `${arg}++` directly:
+  - Unparenthesized logical NOT: `!isValid`, `!response.ok`, `!input.trim()`, `!cache.has(key)`
+  - Unparenthesized update: `nextId.current++`, `i++`, `count--`
+  - Compound logical conditions with proper binding: `!error && !loading`, `!this.isClosedManually && this.retryCount < this.maxRetries`
+  - React handlers & JSX: `if. !input.trim() do. return. end.`, `<button disabled={!isValid}>`
+  - Full roundtrip fidelity: JS ➔ Codon (concise unparenthesized unary & update emission) ➔ JS (100% Babel parser validation).
+  - Retains 100% backward compatibility with legacy parenthesized forms `(! expr)` and `(x++)`.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates 2 wrapping tokens `(` and `)` plus redundant whitespace per logical NOT expression (e.g. `(! input.trim())` [6 tokens] -> `!input.trim()` [3 tokens], saving 50% tokens per check).
+  - Eliminates 2 wrapping tokens per update expression (e.g. `(nextId.current++)` [5 tokens] -> `nextId.current++` [3 tokens], saving 40% tokens; `(i++)` [4 tokens] -> `i++` [2 tokens], saving 50% tokens).
+  - Prevents AST corruption, invalid `nextId.current + +` additions, and syntax crashes across LLM fullstack code generation.
+- **Concrete Syntax Changes**:
+  - `codon-parser.ts`: Updated `parseExpression` to detect unparenthesized prefix `!` (when not `!=` or `!==`) placed strictly after `parseBinaryOrAssignment`, returning clean `UnaryExpression` nodes while preserving correct precedence in compound logical expressions (`!a && !b`). Updated update expression detection to parse `++` and `--` without requiring `wasWrapped`. Added boundary guards in `parseBinaryOrAssignment` so binary `+` and `-` operators do not match or split `++` and `--`.
+  - `transpilers.ts`: Updated `JSToCodonTranslator` in `UnaryExpression` to emit concise `!${this.transpile(node.argument)}` when `node.operator === "!"`, and updated `UpdateExpression` to emit unparenthesized `${arg}++` / `++${arg}` directly.
+  - Examples:
+    - Old Codon: `if. (! input.trim()) do.`
+    - New Codon: `if. !input.trim() do.`
+    - Old Codon: `valid =: ((! error) && (! loading))`
+    - New Codon: `valid =: (!error && !loading)` or `valid =: !error && !loading`
+    - Old Codon: `todo =: O(id:(nextId.current++);title:text)`
+    - New Codon: `todo =: O(id:nextId.current++;title:text)`
+    - Old Codon: `for. i =: 0 ; i < 10 ; (i++) do.`
+    - New Codon: `for. i =: 0 ; i < 10 ; i++ do.`
+
+## Revision 15a (unsuccessful)
+- **Tokens:** 3970
+
+- **Revision Idea**: Introduce concise unparenthesized logical NOT expressions (`!expr`, `!obj.method()`) and unparenthesized update expressions (`expr++`, `expr--`, `++expr`, `--expr`) in Codon, eliminating mandatory outer wrapping parentheses `(! expr)` and `(expr++)`.
+- **Rationale**: In modern AI fullstack web development (React component state and JSX conditional rendering, form validation, event handling, API error checking, HTTP response handling, safe type checks, loop iterations, and auto-incrementing ID generators), logical NOT expressions (`!isValid`, `!response.ok`, `!input.trim()`, `!cache.has(key)`) and update expressions (`nextId.current++`, `i++`, `count++`) are among the most pervasive expressions. Prior to Revision 15a, Codon suffered from two critical limitations:
+  1. Codon strictly required every logical NOT expression to be wrapped in outer parentheses `(! expr)` and update expressions `(x++)`, `(++x)`. Omitting outer parentheses (such as `if. !input.trim() do.`, `return. !found`, `isValid =: !error && !loading`, or `id: nextId.current++`) caused the parser to misinterpret the expression as a raw malformed Identifier token (`{ type: "Identifier", name: "!input" }`) or misparse update expressions as broken binary addition/subtraction `nextId.current + +` or `i + +`, producing invalid JavaScript and fatal Babel compiler crashes (`Unexpected token`).
+  2. `JSToCodonTranslator` unconditionally emitted redundant wrapping parentheses and whitespace for all logical NOT expressions `(! ${arg})` and update expressions `(${arg}++)`, inflating token counts across every conditional check and counter update in fullstack applications.
+  By enabling unparenthesized logical NOT parsing at depth 0, preventing binary `+`/`-` from splitting update operators `++`/`--`, and emitting concise `!${arg}` and `${arg}++` directly:
+  - Unparenthesized logical NOT: `!isValid`, `!response.ok`, `!input.trim()`, `!cache.has(key)`
+  - Unparenthesized update: `nextId.current++`, `i++`, `count--`
+  - Compound logical conditions: `!error && !loading`
+  - React handlers & JSX: `if. !input.trim() do. return. end.`, `<button disabled={!isValid}>`
+  - Full roundtrip fidelity: JS ➔ Codon (concise unparenthesized unary & update emission) ➔ JS (100% Babel parser validation).
+  - Retains 100% backward compatibility with legacy parenthesized forms `(! expr)` and `(x++)`.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates 2 wrapping tokens `(` and `)` plus redundant whitespace per logical NOT expression (e.g. `(! input.trim())` [6 tokens] -> `!input.trim()` [3 tokens], saving 50% tokens per check).
+  - Eliminates 2 wrapping tokens per update expression (e.g. `(nextId.current++)` [5 tokens] -> `nextId.current++` [3 tokens], saving 40% tokens; `(i++)` [4 tokens] -> `i++` [2 tokens], saving 50% tokens).
+  - Prevents AST corruption, invalid `nextId.current + +` additions, and syntax crashes across LLM fullstack code generation.
+- **Concrete Syntax Changes**:
+  - `codon-parser.ts`: Updated `parseExpression` to detect unparenthesized prefix `!` (when not `!=` or `!==`) after binary splitting, returning clean `UnaryExpression` nodes. Updated update expression detection to parse `++` and `--` without requiring `wasWrapped`. Added boundary guards in `parseBinaryOrAssignment` so binary `+` and `-` operators do not match or split `++` and `--`.
+  - `transpilers.ts`: Updated `JSToCodonTranslator` in `UnaryExpression` to emit concise `!${this.transpile(node.argument)}` when `node.operator === "!"`, and updated `UpdateExpression` to emit unparenthesized `${arg}++` / `++${arg}` directly.
+  - Examples:
+    - Old Codon: `if. (! input.trim()) do.`
+    - New Codon: `if. !input.trim() do.`
+    - Old Codon: `valid =: ((! error) && (! loading))`
+    - New Codon: `valid =: (!error && !loading)` or `valid =: !error && !loading`
+    - Old Codon: `todo =: O(id:(nextId.current++);title:text)`
+    - New Codon: `todo =: O(id:nextId.current++;title:text)`
+    - Old Codon: `for. i =: 0 ; i < 10 ; (i++) do.`
+    - New Codon: `for. i =: 0 ; i < 10 ; i++ do.`
+
+## Revision 14a (unsuccessful)
+- **Tokens:** 4889
+
+- **Revision Idea**: Introduce concise native unparenthesized JSX expressions (`<tag ...>...</tag>`, `<>...</>`), unparenthesized return statements (`return. expr`), and unparenthesized variable initializers (`x =: a + b`, `resolver =: a || b`) in Codon, eliminating redundant outer wrapping parentheses `(<div>...</div>)`, `(return. (a + b))`, and `(idx =: (this.heap.length - 1))`.
+- **Rationale**: In modern AI fullstack web development (React component rendering, JSX layout composition, Next.js / Remix page routes, Express API controllers, database query resolvers, algorithmic data structures, and state mutations):
+  1. JSX elements and fragments were historically wrapped in redundant outer parentheses `(<div>...</div>)` to avoid ambiguity with the relational `<` operator. However, Codon's parser already detects `<...>` prior to relational operators. Forcing outer parentheses on all JSX expressions inflates token counts across all React components, list mappings, and view templates.
+  2. Return statements in JavaScript (`return a + b;`, `return result.changes > 0;`, `return await p;`, `return <div>...</div>;`) were transpiled into Codon with redundant wrapping parentheses `return. (a + b)`, `return. (result.changes > 0)`, `return. (@ p)`, and `return. (<div>...</div>)`.
+  3. Variable declarations with binary arithmetic or logical fallback expressions (`const idx = this.heap.length - 1;`, `const resolver = keyResolver || fallback;`) were unconditionally wrapped as `idx =: (this.heap.length - 1)` and `resolver =: (keyResolver || fallback)`.
+  By emitting unparenthesized native JSX elements/fragments and unwrapping redundant outer parentheses in `return.` statements and variable initializers, Codon achieves optimal token density while maintaining 100% Babel parser roundtrip validation and backward compatibility with parenthesized forms.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates 2 wrapping tokens `(` and `)` on every JSX element and fragment root in React components.
+  - Eliminates 2 wrapping tokens `(` and `)` on return statements for binary, relational, logical, await, and JSX expressions across API handlers, utility functions, and controllers.
+  - Eliminates 2 wrapping tokens on variable initializers containing calculations and logical fallbacks.
+  - Yields 20–40% token savings across React component definitions and return-heavy algorithmic pipelines.
+- **Concrete Syntax Changes**:
+  - `transpilers.ts`:
+    - Updated `case "JSXElement"` to emit `${generate(node as any).code}` directly without outer wrapping parentheses.
+    - Updated `case "ReturnStatement"` to unwrap outer parentheses when returning `BinaryExpression`, `LogicalExpression`, `AwaitExpression`, `JSXElement`, or `JSXFragment`.
+    - Updated `case "VariableDeclaration"` to unwrap outer parentheses when initializers are `BinaryExpression` or `LogicalExpression`.
+  - `codon-parser.ts`: Verified and ensured `parseStatement` and `parseExpression` seamlessly handle unparenthesized JSX elements, fragments, and unparenthesized return/declaration expressions.
+  - Examples:
+    - Old Codon: `return. (<div><h2>Chat Room</h2></div>)`
+    - New Codon: `return. <div><h2>Chat Room</h2></div>`
+    - Old Codon: `el =: (<div><span>Hello</span></div>)`
+    - New Codon: `el =: <div><span>Hello</span></div>`
+    - Old Codon: `return. (result.changes > 0)`
+    - New Codon: `return. result.changes > 0`
+    - Old Codon: `return. (a + b)`
+    - New Codon: `return. a + b`
+    - Old Codon: `return. (@ res.json())`
+    - New Codon: `return. @ res.json()`
+    - Old Codon: `idx =: (this.heap.length - 1)`
+    - New Codon: `idx =: this.heap.length - 1`
+    - Old Codon: `resolver =: (keyResolver || fallback)`
+    - New Codon: `resolver =: keyResolver || fallback`
+
+## Revision 13a (unsuccessful)
+- **Tokens:** 4186
+
+- **Revision Idea**: Introduce concise computed property keys in object literals `O([key]:val)` and class declarations (`[key] =: val`, `method. [key] do.`), alongside flexible comma and semicolon property delimiters in `O(...)`, eliminating fatal compiler crashes and verbose multi-statement workarounds for dynamic dictionaries in Codon.
+- **Rationale**: In modern AI fullstack web development (GraphQL query execution and resolver dispatching, React/Redux form state updates, dynamic HTTP request/response headers, WebSocket action routing, cache lookups, schema validation maps, and classes implementing JavaScript symbols like `[Symbol.iterator]` or `[Symbol.species]`), computed property keys (`{ [key]: value }`) are ubiquitous. Prior to Revision 13a, Codon suffered from three critical limitations:
+  1. Codon completely failed when writing computed property keys in object expressions: `O([fieldName]:result)` or `O([key]:val)` caused `parseExpression` to parse `[fieldName]` as an `ArrayExpression`, setting `keyName` to `undefined` and hardcoding `computed: false`, which triggered fatal Babel generator exceptions (`TypeError: undefined is not an object (evaluating 'str.length')`).
+  2. `JSToCodonTranslator` erroneously stripped computed brackets from `ObjectProperty` and `ObjectMethod` nodes, transpiling `{ [fieldName]: result }` into static `O(fieldName:result)` and `{ [key]: val }` into `O(key:val)`, losing dynamic semantics and breaking roundtrip compilation fidelity.
+  3. `O(...)` strictly required semicolon delimiters `;` and broke when LLMs naturally used commas `O(a:1, b:2)` or `O(id, title)`.
+  By adding bracket-enclosed computed key recognition in `O(...)` (`O([key]:val)`), class body definitions (`[key] =: val`, `method. [key] do.`), multi-delimiter splitting (supporting both `,` and `;`), and bi-directional translation for computed `ObjectProperty` and `ObjectMethod`:
+  - Computed object properties: `O([fieldName]:result)`, `O([`user_${id}`]:user)`, `O([key]:val; count:1)`
+  - Flexible object delimiters: `O(id, title, completed:0)` and `O([k]:v, ...rest)`
+  - Computed class properties & methods: `static [Symbol.species] =: Array`, `method. [Symbol.iterator] do. ... end.`
+  - Full roundtrip fidelity: JS `{ [k]: v }` ➔ Codon `O([k]:v)` ➔ JS `{ [k]: v }` (100% Babel parser validation).
+  - Retains 100% backward compatibility with static colon pairs `O(key:val)`, identifier shorthand `O(prop)`, spread `O(...rest)`, and legacy alternating `O('key';val)`.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates verbose 3-line dictionary construction workarounds (`data =: O() \n data.[key] =: val \n return. data` [14+ tokens] -> `return. O([key]:val)` [5 tokens], saving ~65% tokens per dynamic object).
+  - Allows single-expression dynamic state updates in React hooks (e.g. `setForm {{prev => O(...prev, [name]:value)}}`).
+  - Resolves fatal compiler errors on GraphQL resolvers, dynamic event dispatches, and symbol methods across LLM fullstack benchmarks.
+- **Concrete Syntax Changes**:
+  - `codon-parser.ts`: Updated `O(...)` parsing to split properties across both semicolon `;` and comma `,` delimiters at depth 0. Added detection for bracket-enclosed keys `[keyPart]` in colon pairs, parsing the inner expression with `computed: true`. Updated `ClassBody` to support computed property definitions `[key] =: val` and computed methods `method. [key] do.`.
+  - `transpilers.ts`: Updated `JSToCodonTranslator` in `ObjectProperty` and `ObjectMethod` to emit `[${keyExpr}]:${valStr}` when `node.computed` is true. Updated `ClassMethod` and `PropertyDefinition` to preserve computed bracket notation.
+  - Examples:
+    - Old Codon (failed / multi-statement): `res =: O(); res.[fieldName] =: result; return. res`
+    - New Codon: `return. O([fieldName]:result)`
+    - Old Codon: `payload =: O('Content-Type':'application/json')`
+    - New Codon: `payload =: O([headerName]:headerVal, status:200)`
+    - Old Codon: `data =: O(a:1;b:2)`
+    - New Codon: `data =: O(a:1, b:2)`
+    - Old Codon: `entry =: O([Symbol.iterator]:{{fn => do. ... end.}})`
+    - New Codon: `entry =: O([Symbol.iterator]:{{fn => do. ... end.}})`
+
+## Revision 12a (unsuccessful)
+- **Tokens:** 8661
+
+- **Revision Idea**: Introduce concise unparenthesized statement-level function and method calls (`callee arg1 arg2`, `obj.method arg1 arg2`, `this.method arg1 arg2`) and standard argument call syntax (`callee(args)`) in Codon, eliminating mandatory outer wrapping parentheses `(console.log 'hello')`, `(res.json O(...))`, and `(addTodo 'item')` across statement-level invocations.
+- **Rationale**: In modern AI fullstack web development (React state setter calls `setMessages(...)` and `setInput(...)`, Express/Koa response streaming `res.json(...)`, `res.status(...)`, `res.writeHead(...)`, database operations `insertStmt.run(...)` and `db.exec(...)`, logging `console.log(...)`, DOM/Observer mutations `observer.observe(...)`, stream piping `req.pipe(...)`, socket emissions `this.emit(...)`, and controller calls `addTodo(...)`), statement-level function and method calls are ubiquitous, occurring on 25–40% of executable lines in fullstack modules. Prior to Revision 12a, Codon suffered from two major limitations:
+  1. Codon strictly required EVERY statement-level function or method call with arguments to be wrapped in outer parentheses `(console.log 'hello')`, `(res.json O(counter))`, `(addTodo 'Buy groceries')`, `(setMessages {{...}})`. Omitting outer parentheses (such as `console.log 'hello'` or `observer.observe sentinelRef.current`) caused the statement parser to fall through to `parseExpression` where lack of wrapping parentheses caused member calls to misparse as corrupted Identifiers containing spaces (e.g. `{ type: "Identifier", name: "observe sentinelRef" }`), producing invalid JavaScript and fatal compiler errors.
+  2. `JSToCodonTranslator` unconditionally emitted redundant wrapping parentheses for all call expressions `(${calleeStr} ${argsStr})`, inflating token counts across controllers, event handlers, lifecycle hooks, and server routes in fullstack applications.
+  By enabling unparenthesized statement-level call parsing in `parseStatement` (supporting space-separated Codon arguments `callee arg1 arg2`, member calls `obj.method arg1 arg2`, and standard call syntax `callee(arg1, arg2)`) and emitting concise unparenthesized calls in `JSToCodonTranslator` for statement-level `CallExpression` nodes:
+  - Statement-level logging & output: `console.log 'hello'`, `console.log getTodos()`
+  - Statement-level API responses: `res.json O(counter)`, `res.writeHead 502 O('Content-Type':'application/json')`
+  - Statement-level state updaters: `setMessages {{prev => [...prev, item]}}`, `setInput ''`
+  - Statement-level database execution: `db.exec ddl`, `addTodo 'Buy groceries'`, `toggleTodo 1`
+  - Statement-level event & stream operations: `observer.observe sentinelRef.current`, `req.pipe proxyReq`, `this.emit 'message' data`
+  - Expression-level standard call compatibility: `Number(result.lastInsertRowid)`, `JSON.stringify(payload)`, `resolve(res)`
+  - Full roundtrip fidelity: JS ➔ Codon (concise unparenthesized statement call emission) ➔ JS (100% Babel parser validation).
+  - Retains 100% backward compatibility with legacy parenthesized call statements `(console.log 'hello')` and 0-argument calls `callee()`.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates 2 wrapping tokens `(` and `)` on every statement-level function or method call with arguments (e.g. `(console.log 'hello')` [6 tokens] -> `console.log 'hello'` [4 tokens], saving ~33% tokens per call statement).
+  - Eliminates 2 wrapping tokens per React state updater and single-argument call (e.g. `(setInput '')` [5 tokens] -> `setInput ''` [3 tokens], saving 40% tokens; `(toggleTodo 1)` [5 tokens] -> `toggleTodo 1` [3 tokens], saving 40% tokens).
+  - Prevents AST corruption, invalid Identifier tokens with spaces in member expressions, and syntax crashes across LLM fullstack code generation.
+- **Concrete Syntax Changes**:
+  - `codon-parser.ts`: Updated `parseStatement` to detect statement-level function and method calls where the target callee is a valid identifier, member expression, or `super` followed by arguments, parsing them cleanly into `ExpressionStatement` containing `CallExpression` nodes instead of falling through to member/identifier misparsing. Added support for `callee(args)` in `parseExpression`.
+  - `transpilers.ts`: Updated `JSToCodonTranslator` in `ExpressionStatement` to emit concise unparenthesized `${calleeStr} ${argsStr}` (or `${calleeStr}()` for 0-argument calls) when translating statement-level `CallExpression` nodes.
+  - Examples:
+    - Old Codon: `(console.log 'hello')`
+    - New Codon: `console.log 'hello'`
+    - Old Codon: `(addTodo 'Buy groceries')`
+    - New Codon: `addTodo 'Buy groceries'`
+    - Old Codon: `(toggleTodo 1)`
+    - New Codon: `toggleTodo 1`
+    - Old Codon: `(res.json O(counter))`
+    - New Codon: `res.json O(counter)`
+    - Old Codon: `(setMessages {{prev => [...prev, item]}})`
+    - New Codon: `setMessages {{prev => [...prev, item]}}`
+    - Old Codon: `(setInput '')`
+    - New Codon: `setInput ''`
+    - Old Codon: `(observer.observe sentinelRef.current)`
+    - New Codon: `observer.observe sentinelRef.current`
+    - Old Codon: `(req.pipe proxyReq)`
+    - New Codon: `req.pipe proxyReq`
+
+## Revision 11a (unsuccessful)
+- **Tokens:** 5014
+
+- **Revision Idea**: Introduce concise unparenthesized `new` instantiation expressions (`new Callee [args]`, `new Callee()`, `new Callee`) in Codon, eliminating mandatory outer wrapping parentheses `(new Callee args)` across variable assignments (`db =: new Database ':memory:'`), member assignments (`this.socket = new WebSocket this.url`), class property definitions (`cache =: new Map`), throw statements (`throw. new Error 'msg'`), return statements (`return. new Response 'ok'`), and standalone statements (`new Worker 'task.js'`).
+- **Rationale**: In modern AI fullstack web development (database connection pools and SQLite/Postgres clients, WebSocket client and server state management, HTTP requests/responses/headers in route handlers, in-memory caches using Maps and Sets, Promise construction, HTTP agent keep-alive management, and error throwing in controllers and validations), `new` object instantiation is one of the most frequent operations. Prior to Revision 11a, Codon suffered from two major limitations:
+  1. Codon strictly required every `new` expression to be wrapped in outer parentheses `(new Database ':memory:')`, `(new WebSocket this.url)`, `(new Error 'msg')`, and `(new Map)`. Omitting outer parentheses (such as `db =: new Database ':memory:'`, `this.socket = new WebSocket this.url`, or `throw. new Error 'msg'`) caused `parseExpression` to fail because `new` was strictly gated behind `if (wasWrapped)`, falling through to parse as a malformed Identifier node with spaces in its name (`{ type: "Identifier", name: "new Database ':memory:'" }`), corrupting the AST and causing fatal Babel compilation errors.
+  2. `JSToCodonTranslator` unconditionally emitted redundant wrapping parentheses for all `NewExpression` nodes `(new ${callee} ${args})`, inflating token counts across variable declarations, class instance properties, throw statements, and return statements in fullstack applications.
+  By enabling unparenthesized `new` parsing in `parseExpression` (handling `new Callee args`, `new Callee()`, `new Callee(args)`, and `new Callee`) and emitting concise unparenthesized forms in variable declarations, member assignments, class fields, return statements, and throw statements:
+  - Variable declarations: `db =: new Database ':memory:'`, `cache =: new Map`, `p =: new Promise {{resolve => ...}}`
+  - Member assignments: `this.socket = new WebSocket this.url`, `this.agent = new http.Agent O(keepAlive:true)`
+  - Throw statements: `throw. new Error 'Invalid parameters'`, `throw. new TypeError 'Expected string'`
+  - Return statements: `return. new Response 'ok'`, `return. new Headers O(authorization:token)`
+  - Class properties: `cache =: new Map`, `subscribers =: new Set`
+  - Full roundtrip fidelity: JS ➔ Codon (concise unparenthesized `new` emission) ➔ JS (100% Babel parser validation).
+  - Retains 100% backward compatibility with legacy parenthesized forms `(new Callee args)` and `(new Callee)`.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates 2 wrapping tokens `(` and `)` on every `new` instantiation in variable initializers, member mutations, returns, and throws (e.g. `(new Database ':memory:')` [7 tokens] -> `new Database ':memory:'` [5 tokens], saving ~29% tokens).
+  - Eliminates 2 wrapping tokens per 0-arg collection instantiation (e.g. `(new Map)` [5 tokens] -> `new Map` [3 tokens], saving 40% tokens).
+  - Eliminates 2 wrapping tokens per error throw (e.g. `throw. (new Error 'fail')` [7 tokens] -> `throw. new Error 'fail'` [5 tokens], saving ~29% tokens).
+  - Prevents AST corruption and syntax hallucinations across LLM fullstack code generation.
+- **Concrete Syntax Changes**:
+  - `codon-parser.ts`: Updated `parseExpression` to detect `strippedExpr.startsWith("new ")` without requiring `wasWrapped`, parsing callee and arguments (supporting space-delimited Codon arguments, parenthesized call-like arguments `new Callee(...)`, and 0-argument forms `new Callee` / `new Callee()`).
+  - `transpilers.ts`: Updated `JSToCodonTranslator` to unwrap outer parentheses for `NewExpression` in `VariableDeclaration` initializers, `AssignmentExpression` right-hand sides, `PropertyDefinition` initializers, `ThrowStatement` arguments, `ReturnStatement` arguments, and standalone `ExpressionStatement` nodes, while safely preserving wrapping parentheses when `NewExpression` is nested as an argument in a `CallExpression`.
+  - Examples:
+    - Old Codon: `db =: (new Database ':memory:')`
+    - New Codon: `db =: new Database ':memory:'`
+    - Old Codon: `this.socket = (new WebSocket this.url)`
+    - New Codon: `this.socket = new WebSocket this.url`
+    - Old Codon: `throw. (new Error 'Not found')`
+    - New Codon: `throw. new Error 'Not found'`
+    - Old Codon: `return. (new Response 'ok')`
+    - New Codon: `return. new Response 'ok'`
+    - Old Codon: `cache =: (new Map)`
+    - New Codon: `cache =: new Map`
+    - Old Codon: `wss =: (new WebSocketServer O(port:8081))`
+    - New Codon: `wss =: new WebSocketServer O(port:8081)`
+
+## Revision 10a (successful)
+- **Tokens:** 772
+
+- **Revision Idea**: Introduce concise unparenthesized member assignment (`this.prop = val`, `this.prop =: val`, `obj.prop = val`, `obj.[key] = val`), variable reassignment (`x = val`), and compound assignment statements (`count += 1`, `len -= 1`, `total *= 2`) in Codon, eliminating mandatory outer wrapping parentheses `(this.prop = val)` and `(count += 1)`.
+- **Rationale**: In modern AI fullstack web development (React component refs, event handlers, Express/Koa request/response headers and status codes, WebSocket client connection state management, database query builders, in-memory indexes, and algorithmic pipelines), member assignments (`this.socket = null`, `this.retryCount = 0`, `res.statusCode = 200`, `headers.host = host`, `node.keys[i] = key`), variable reassignments (`idx = parentIdx`), and in-place compound mutations (`count += 1`, `nextId.current += 1`, `len -= 1`) are among the most frequent statement-level operations. Prior to Revision 10a, Codon suffered from two major limitations:
+  1. Codon strictly required every assignment statement to be wrapped in outer parentheses `(this.socket = null)`, `(this.retryCount = 0)`, `(count += 1)`. Omitting wrapping parentheses (such as `this.socket =: null`, `this.retryCount = 0`, or `count += 1`) caused `parseStatement` to misinterpret the assignment as a `VariableDeclaration` (`const this.socket = null;` or `const count + = 1;`), triggering fatal Babel parser syntax errors (`Unexpected keyword 'this'` or `Missing initializer in const declaration`).
+  2. `JSToCodonTranslator` unconditionally emitted redundant wrapping parentheses for all assignment statements `(${this.transpile(node.left)} ${node.operator} ${this.transpile(node.right)})`, inflating token counts across classes, handlers, loops, and state machines in fullstack applications.
+  By enabling unparenthesized member and compound assignment parsing at statement level and emitting concise `this.prop = val`, `obj.prop = val`, and `count += val` directly:
+  - Unparenthesized member assignment: `this.socket = null`, `this.socket =: null`, `this.retryCount = 0`, `this.isClosedManually = true`
+  - Unparenthesized property mutation: `res.statusCode = 200`, `headers.host = host`
+  - Unparenthesized computed member assignment: `this.heap.[idx] = tmp`, `records.[id] = row`
+  - Unparenthesized variable reassignment: `idx = parentIdx`, `smallest = left`
+  - Unparenthesized compound mutation: `count += 1`, `total -= fee`, `step *= 2`
+  - Full roundtrip fidelity: JS ➔ Codon (concise unparenthesized assignment emission) ➔ JS (100% Babel parser validation).
+  - Retains 100% backward compatibility with legacy parenthesized assignment expressions `(this.socket = null)`.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates 2 wrapping tokens `(` and `)` on every member assignment, reassignment, and compound mutation statement (e.g. `(this.socket = null)` [6 tokens] -> `this.socket = null` [4 tokens], saving ~33% tokens per assignment).
+  - Eliminates 2 wrapping tokens per compound mutation statement (e.g. `(count += 1)` [5 tokens] -> `count += 1` [3 tokens], saving 40% tokens).
+  - Prevents AST corruption, invalid `const this.socket` declarations, and fatal syntax errors across LLM fullstack code generation.
+- **Concrete Syntax Changes**:
+  - `codon-parser.ts`: Updated `parseStatement` to detect member assignments (targets containing `.` or `[` outside destructuring, or starting with `this.`), variable reassignments (plain `=` without pattern markers), and compound assignment operators (`+=`, `-=`, `*=`, `/=`, `%=`, `**=`, `??=`, `||=`, `&&=`), cleanly constructing `ExpressionStatement` nodes with `AssignmentExpression` instead of falling through to `VariableDeclaration`. Added support for `=:` on member assignments (`this.socket =: null` -> `this.socket = null;`).
+  - `transpilers.ts`: Updated `JSToCodonTranslator` in `ExpressionStatement` to emit concise unparenthesized `${this.transpile(node.expression.left)} ${node.expression.operator} ${this.transpile(node.expression.right)}` when translating statement-level assignments.
+  - Examples:
+    - Old Codon: `(this.socket = null)`
+    - New Codon: `this.socket = null` or `this.socket =: null`
+    - Old Codon: `(this.retryCount = 0)`
+    - New Codon: `this.retryCount = 0` or `this.retryCount =: 0`
+    - Old Codon: `(headers.host = host)`
+    - New Codon: `headers.host = host` or `headers.host =: host`
+    - Old Codon: `(this.heap.[idx] = tmp)`
+    - New Codon: `this.heap.[idx] = tmp` or `this.heap[idx] = tmp`
+    - Old Codon: `(count += 1)`
+    - New Codon: `count += 1`
+    - Old Codon: `(idx = parentIdx)`
+    - New Codon: `idx = parentIdx`
+
+## Revision 9a (unsuccessful)
+- **Tokens:** 4608
+
+- **Revision Idea**: Introduce concise unparenthesized unary expressions (`!expr`, `typeof expr`, `~expr`, `-expr`, `+expr`, `delete expr`, `void expr`) and update expressions (`expr++`, `expr--`, `++expr`, `--expr`) in Codon, eliminating mandatory outer wrapping parentheses `(! expr)`, `(typeof expr)`, and `(expr++)`.
+- **Rationale**: In modern AI fullstack web development (React component state and JSX conditional rendering, form validation, event handling, API error checking, HTTP response handling, safe type checks, loop iterations, and auto-incrementing ID generators), unary expressions (`!isValid`, `!response.ok`, `!input.trim()`, `typeof window !== 'undefined'`) and update expressions (`nextId.current++`, `i++`, `count++`) are among the most pervasive expressions. Prior to Revision 9a, Codon suffered from two major limitations:
+  1. Codon strictly required every unary expression to be wrapped in outer parentheses `(! expr)`, `(typeof expr)` and update expressions `(x++)`, `(++x)`. Omitting outer parentheses (such as `if. !input.trim() do.`, `return. !found`, `isValid =: !error && !loading`, or `id: nextId.current++`) caused the parser to misinterpret the expression as a raw Identifier token (`{ type: "Identifier", name: "!input.trim()" }`) or misparse update expressions as broken binary addition/subtraction `i + +` or `i - -`.
+  2. `JSToCodonTranslator` unconditionally emitted redundant wrapping parentheses and whitespace for all unary expressions `(! ${arg})` and update expressions `(${arg}++)`, inflating token counts across every conditional check and counter update in fullstack applications.
+  By enabling unparenthesized unary parsing at depth 0, preventing binary `+`/`-` from splitting update operators `++`/`--`, and emitting concise `!${arg}`, `typeof ${arg}`, and `${arg}++` directly:
+  - Unparenthesized logical NOT: `!isValid`, `!response.ok`, `!input.trim()`
+  - Unparenthesized type check: `typeof x === 'string'`, `typeof window !== 'undefined'`
+  - Unparenthesized update: `nextId.current++`, `i++`, `count--`
+  - React handlers & JSX: `if. !input.trim() do. return. end.`, `<button disabled={!isValid}>`
+  - Full roundtrip fidelity: JS ➔ Codon (concise unparenthesized unary & update emission) ➔ JS (100% Babel parser validation).
+  - Retains 100% backward compatibility with legacy parenthesized forms `(! expr)`, `(typeof expr)`, and `(x++)`.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates 2 wrapping tokens `(` and `)` plus redundant whitespace per unary expression (e.g. `(! isValid)` [5 tokens] -> `!isValid` [2 tokens], saving ~60% tokens per unary check).
+  - Eliminates 2 wrapping tokens per update expression (e.g. `(i++)` [4 tokens] -> `i++` [2 tokens], saving 50% tokens per increment/decrement).
+  - In compound logical conditions (e.g. `((! error) && (! loading))` [11 tokens] -> `!error && !loading` [5 tokens]), achieves over 54% token reduction.
+  - Prevents AST corruption, invalid identifier names (`!input`), and syntax hallucinations across LLM fullstack code generation.
+- **Concrete Syntax Changes**:
+  - `codon-parser.ts`: Updated `parseExpression` to parse prefix unary operators (`!`, `typeof `, `~`, `-`, `+`, `delete `, `void `) and update operators (`++`, `--` in both postfix and prefix positions) without requiring `wasWrapped`. Added boundary guards in `parseBinaryOrAssignment` so binary `+` and `-` operators do not match or split `++` and `--`.
+  - `transpilers.ts`: Updated `JSToCodonTranslator` to emit concise unparenthesized `!${arg}` and `typeof ${arg}` for `UnaryExpression`, and unparenthesized `${arg}++` / `++${arg}` for `UpdateExpression`.
+  - Examples:
+    - Old Codon: `if. (! input.trim()) do.`
+    - New Codon: `if. !input.trim() do.`
+    - Old Codon: `valid =: ((! error) && (! loading))`
+    - New Codon: `valid =: (!error && !loading)` or `valid =: !error && !loading`
+    - Old Codon: `if. ((typeof window) !== 'undefined') do.`
+    - New Codon: `if. (typeof window !== 'undefined') do.`
+    - Old Codon: `todo =: O(id:(nextId.current++);title:text)`
+    - New Codon: `todo =: O(id:nextId.current++;title:text)`
+    - Old Codon: `for. i =: 0 ; i < 10 ; (i++) do.`
+    - New Codon: `for. i =: 0 ; i < 10 ; i++ do.`
+
+## Revision 8a (unsuccessful)
+- **Tokens:** 4593
+
+- **Revision Idea**: Introduce concise conditional expressions (unparenthesized and right-associative chained ternary `test ? cons : alt`, and compact conditional forms) alongside logical nullish assignment operators (`??=`, `||=`, `&&=`), eliminating mandatory outer wrapping parentheses and supporting complex multi-branch conditional logic in fullstack Codon code.
+- **Rationale**: In modern AI fullstack web development (React component state and JSX conditional rendering, Express/Koa route parameter defaults, authentication/authorization status resolution, pagination boundaries, API error handling, and reactive state reducers), conditional expressions (`test ? consequent : alternate`) and logical short-circuit assignments (`cache[key] ??= compute()`, `headers ||= {}`) are among the most pervasive expressions. Prior to Revision 8a, Codon suffered from two major limitations:
+  1. Codon strictly required every ternary expression to be wrapped in outer parentheses `(test ? cons : alt)`. Omitting wrapping parentheses (such as `res =: isAuth ? 'user' : 'guest'` or `return. ok ? data : null`) caused the parser to misinterpret the entire conditional clause as a raw Identifier token containing spaces and operators (`{ type: "Identifier", name: "isAuth ? 'user' : 'guest'" }`), corrupting the AST.
+  2. Nested or chained ternaries (e.g., `(score >= 90 ? 'A' : score >= 80 ? 'B' : 'C')`) failed because Codon's parser rigidly required exactly two parts separated by `?`, causing multi-branch conditionals to erroneously fall through to `CallExpression` invocation `score(>=, 90, ...)`.
+  3. Logical assignment operators (`??=`, `||=`, `&&=`) were completely broken, emitting invalid JavaScript with spaces `a ||  = b` and causing Babel parser syntax errors.
+  By implementing right-associative depth-aware ternary parsing at level 0 and registering logical assignment operators in Tier 0 assignment precedence:
+  - Unparenthesized ternary: `res =: isAuth ? 'user' : 'guest'`
+  - Unparenthesized chained ternary: `grade =: score >= 90 ? 'A' : score >= 80 ? 'B' : 'C'`
+  - Return statements: `return. count > 0 ? count : 0`
+  - Logical assignment: `cache.[key] ??= (compute key)`, `options.headers ||= O()`
+  - Full roundtrip fidelity: JS ➔ Codon (concise unparenthesized ternary emission) ➔ JS (100% Babel parser validation).
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates 2 wrapping tokens `(` and `)` per ternary expression (~30% token reduction per conditional).
+  - Eliminates 6+ wrapper tokens on chained/nested conditionals (e.g. `(a ? b : (c ? d : e))` -> `a ? b : c ? d : e`).
+  - Cuts fallback initialization from 4-line `if.` blocks (12-15 tokens) down to a single logical assignment statement (3-5 tokens, a 65-75% token reduction).
+  - Prevents AST corruption and syntax hallucinations across LLM fullstack code generation.
+- **Concrete Syntax Changes**:
+  - `codon-parser.ts`: Implemented depth-aware right-associative ternary parsing in `parseExpression` to find the first un-nested `?` at level 0 and its matching `:` alternate delimiter, without requiring `wasWrapped`. Added `??=`, `||=`, and `&&=` to assignment operator precedence in `parseBinaryOrAssignment`.
+  - `transpilers.ts`: Updated `JSToCodonTranslator` to emit concise unparenthesized `test ? cons : alt` for `ConditionalExpression`, and preserved `AssignmentExpression` for logical assignment operators `??=`, `||=`, `&&=`.
+  - Examples:
+    - Old Codon: `status =: (isLoggedIn ? 'active' : 'guest')`
+    - New Codon: `status =: isLoggedIn ? 'active' : 'guest'`
+    - Old Codon: `badge =: (isNew ? 'NEW' : (isSale ? 'SALE' : 'REGULAR'))`
+    - New Codon: `badge =: isNew ? 'NEW' : isSale ? 'SALE' : 'REGULAR'`
+    - Old Codon: `if. (! cache.[key]) do. cache.[key] =: (compute key) end.`
+    - New Codon: `(cache.[key] ??= (compute key))`
+
 ## Revision 7a (successful)
 - **Tokens:** 3260
 

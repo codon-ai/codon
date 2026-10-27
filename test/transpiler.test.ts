@@ -353,7 +353,7 @@ for (let i = 0, j = 10; i < j; i++, j--) {
         const translator = new JSToCodonTranslator();
         const codonCode = translator.transpile(ast.program as any);
 
-        expect(codonCode).toContain("((i++), (j--))");
+        expect(codonCode).toContain("(i++, j--)");
 
         const astParser = new CodonToASTParser();
         const parsedAst = astParser.parse(codonCode);
@@ -1266,4 +1266,244 @@ TorusKnotCurve.prototype = Object.create(Curve.prototype);
         expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
     });
 });
+
+describe("Concise Unparenthesized Member & Compound Assignment Support", () => {
+    test("Transpiles unparenthesized member assignment this.prop = val and this.prop =: val", () => {
+        const codonCode = `
+class. Client do.
+  constructor. do.
+    this.socket = ''
+    this.retryCount =: 0
+    this.isClosedManually = false
+  end.
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain('this.socket = "";');
+        expect(js).toContain("this.retryCount = 0;");
+        expect(js).toContain("this.isClosedManually = false;");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles unparenthesized property assignment on objects headers.host and res.statusCode", () => {
+        const codonCode = `
+fn. handle req,res do.
+  headers.host = 'localhost:8080'
+  res.statusCode =: 200
+  memoized.cache = cache
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain('headers.host = "localhost:8080";');
+        expect(js).toContain("res.statusCode = 200;");
+        expect(js).toContain("memoized.cache = cache;");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles computed property assignments this.heap.[idx] = tmp and records[id] = row", () => {
+        const codonCode = `
+fn. swap idx,parentIdx do.
+  this.heap.[idx] = this.heap.[parentIdx]
+  this.heap[parentIdx] = tmp
+  records.[id] = row
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("this.heap[idx] = this.heap[parentIdx];");
+        expect(js).toContain("this.heap[parentIdx] = tmp;");
+        expect(js).toContain("records[id] = row;");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles unparenthesized compound assignments count += 1, len -= 1, total *= factor", () => {
+        const codonCode = `
+fn. update do.
+  count += 1
+  this.retryCount += 1
+  len -= 1
+  total *= 2
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("count += 1;");
+        expect(js).toContain("this.retryCount += 1;");
+        expect(js).toContain("len -= 1;");
+        expect(js).toContain("total *= 2;");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips JS member assignments and compound mutations using unparenthesized notation", () => {
+        const jsCode = `
+export class WebSocketWrapper {
+  constructor(url) {
+    this.url = url;
+    this.retryCount = 0;
+    this.isClosed = false;
+    this.socket = null;
+  }
+  reconnect() {
+    this.retryCount += 1;
+    this.isClosed = true;
+  }
+}
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("this.url = url");
+        expect(codonCode).toContain("this.retryCount = 0");
+        expect(codonCode).toContain("this.retryCount += 1");
+        expect(codonCode).toContain("this.isClosed = true");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(roundtrippedJs).toContain("this.url = url;");
+        expect(roundtrippedJs).toContain("this.retryCount = 0;");
+        expect(roundtrippedJs).toContain("this.retryCount += 1;");
+        expect(roundtrippedJs).toContain("this.isClosed = true;");
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Retains backward compatibility with parenthesized assignment expressions (this.prop = val)", () => {
+        const codonCode = `
+class. Legacy do.
+  constructor. do.
+    (this.count = 0)
+    (this.total = (this.total + 10))
+  end.
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("this.count = 0;");
+        expect(js).toContain("this.total = this.total + 10;");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+});
+
+describe("Concise Unparenthesized Logical NOT and Update Expressions", () => {
+    test("Transpiles unparenthesized logical NOT expressions !expr and !obj.method()", () => {
+        const codonCode = `
+fn. validate input do.
+  if. !input.trim() do.
+    return.
+  end.
+  isValid =: !error && !loading
+  isAuth =: !cache.has(userId)
+  return. isValid
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("if (!input.trim())");
+        expect(js).toContain("const isValid = !error && !loading;");
+        expect(js).toContain("const isAuth = !cache.has(userId);");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles unparenthesized update expressions expr++, expr--, ++expr, --expr", () => {
+        const codonCode = `
+i++
+count--
+++step
+--rank
+nextId.current++
+todo =: O(id:nextId.current++;title:text)
+for. idx =: 0 ; idx < 10 ; idx++ do.
+  (console.log idx)
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("i++;");
+        expect(js).toContain("count--;");
+        expect(js).toContain("++step;");
+        expect(js).toContain("--rank;");
+        expect(js).toContain("nextId.current++;");
+        expect(js).toContain("id: nextId.current++");
+        expect(js).toContain("for (const idx = 0; idx < 10; idx++)");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips JS logical NOT and update expressions", () => {
+        const jsCode = `
+function handler() {
+  if (!input.trim()) {
+    return;
+  }
+}
+nextId.current++;
+for (let i = 0; i < 10; i++) {
+  count++;
+}
+const valid = !error && !loading;
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("!input.trim()");
+        expect(codonCode).toContain("nextId.current++");
+        expect(codonCode).toContain("!error && !loading");
+        expect(codonCode).toContain("i++");
+        expect(codonCode).toContain("count++");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(roundtrippedJs).toContain("if (!input.trim())");
+        expect(roundtrippedJs).toContain("nextId.current++;");
+        expect(roundtrippedJs).toContain("!error && !loading");
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Retains backward compatibility with legacy parenthesized forms (! expr) and (x++)", () => {
+        const codonCode = `
+if. (! isValid) do.
+  (x++)
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("if (!isValid)");
+        expect(js).toContain("x++;");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+});
+
+
 
