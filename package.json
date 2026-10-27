@@ -1,6 +1,6 @@
 {
   "name": "codon-lang",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Codon compiler and translator for JavaScript",
   "main": "index.ts",
   "scripts": {
