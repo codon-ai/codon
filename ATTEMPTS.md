@@ -1,6 +1,51 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 27197)
 
+## Revision 32a (successful)
+- **Tokens:** 480
+
+- **Revision Idea**: Introduce concise unparenthesized binary and logical expressions (`left === right`, `left !== right`, `left > right`, `left < right`, `left >= right`, `left <= right`, `left && right`, `left || right`, `left ?? right`, `left + right`, `left - right`, `left * right`, `left / right`) across control flow statements (`if. condition do.`, `elseif. condition do.`, `while. condition do.`, `whilst. condition do.`, `for. ... ; condition ; ... do.`), variable declarations (`id =: expr`), return statements (`return. expr`), concise arrow function bodies (`{{params => expr}}`), member/instance property assignments (`target = expr`), and class property definitions (`prop =: expr`), eliminating mandatory outer wrapping parentheses `(...)`.
+- **Rationale**: In modern AI fullstack web development (React state filters, JSX conditionals, Express/Koa route validation, HTTP status verification, auth permission checks, loop iterations, pagination offsets, and data pipelines):
+  1. **Control Flow Conditions (`if.`, `elseif.`, `while.`, `whilst.`, `for.`)**: Comparison and logical conditions (`response.status === 200`, `i < len`, `count > 0`, `isAuth && hasRole`) appear on almost every branch. Previously, `JSToCodonTranslator` unconditionally emitted binary and logical expressions with outer wrapping parentheses `(${left} ${op} ${right})`. This produced double-wrapped and parenthesized condition headers such as `if. (a === b) do.`, `if. ((a > 0) && (b < 10)) do.`, `while. (i < len) do.`, `whilst. (count > 0) do.`, and `for. i =: 0 ; (i < len) ; i++ do.`. Codon's parser natively splits statement headers at ` do.` and `;` and parses binary and logical expressions via precedence tiers without requiring outer parentheses. Unwrapping outer parentheses eliminates 2 to 4 redundant wrapper tokens per control flow condition.
+  2. **Return Statements & Arrow Closures**: Returning the result of a comparison, calculation, or logical check (`return a === b;`, `return a + b;`, `return isOk && ready;`, `todos.filter(t => t.id !== id)`, `items.sort((a, b) => a - b)`) is standard across route handlers, data mappers, and predicates. Previously, Codon emitted `return. (a === b)`, `return. (a + b)`, and `{{t => (t.id !== id)}}`, inflating token counts across array transformations and predicate helpers. Unwrapping outer parentheses eliminates 2 tokens per return and arrow callback.
+  3. **Variable & Member Assignments**: Computing boolean flags, status codes, and numerical totals (`isMatch =: a === b`, `valid =: isAuth && hasRole`, `sum =: a + b`, `this.active = a === b`) previously emitted wrapping parentheses around the right-hand side. Codon's statement and expression parsers already handle precedence-tiered binary operators natively on the right-hand side of assignments.
+  4. **Unparenthesized Binary & Logical Emission**: Unwrapping the outermost matching parentheses using `isFullyWrapped` in `JSToCodonTranslator` for `IfStatement`, `WhileStatement`, `DoWhileStatement`, `ForStatement`, `ReturnStatement`, `VariableDeclaration`, `ArrowFunctionExpression`, `ExpressionStatement` (assignment right-hand side), and `PropertyDefinition` eliminates 2 redundant tokens per expression while preserving 100% backward compatibility with parenthesized forms and guaranteeing complete AST roundtrip fidelity.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates 2 wrapping tokens `(` and `)` per `if.` and `elseif.` condition (e.g. `if. (a === b) do.` [7 tokens] -> `if. a === b do.` [5 tokens], saving ~29% tokens).
+  - Eliminates 2 to 4 wrapping tokens per compound logical condition (e.g. `if. ((a > 0) && (b < 10)) do.` [14 tokens] -> `if. (a > 0) && (b < 10) do.` [12 tokens]).
+  - Eliminates 2 wrapping tokens per loop condition (e.g. `while. (i < len) do.` [7 tokens] -> `while. i < len do.` [5 tokens]; `for. i =: 0 ; (i < 10) ; i++ do.` [12 tokens] -> `for. i =: 0 ; i < 10 ; i++ do.` [10 tokens]).
+  - Eliminates 2 wrapping tokens per return statement (e.g. `return. (a === b)` [6 tokens] -> `return. a === b` [4 tokens], saving ~33% tokens).
+  - Eliminates 2 wrapping tokens per concise arrow function body (e.g. `{{t => (t.id !== id)}}` [9 tokens] -> `{{t => t.id !== id}}` [7 tokens], saving ~22% tokens).
+  - Eliminates 2 wrapping tokens per variable initialization (e.g. `isMatch =: (a === b)` [7 tokens] -> `isMatch =: a === b` [5 tokens], saving ~29% tokens).
+  - Preserves 100% backward compatibility with legacy parenthesized expressions `(a === b)` and `(a + b)`.
+- **Concrete Syntax Changes**:
+  - `transpilers.ts`:
+    - Imported `isFullyWrapped` from `./codon-parser`.
+    - In `JSToCodonTranslator.prototype.transpile`:
+      - `case "IfStatement"`: When `node.test.type === "BinaryExpression" || node.test.type === "LogicalExpression"`, unwraps outer `(...)` in `testStr` for both `if.` and `elseif.` chains.
+      - `case "WhileStatement"` & `case "DoWhileStatement"`: When `node.test.type === "BinaryExpression" || node.test.type === "LogicalExpression"`, unwraps outer `(...)` in `testStr`.
+      - `case "ForStatement"`: When `node.test` is a `BinaryExpression` or `LogicalExpression`, unwraps outer `(...)` in `testStr`.
+      - `case "ReturnStatement"`: When `node.argument?.type === "BinaryExpression" || node.argument?.type === "LogicalExpression"`, unwraps outer `(...)` in `argStr` to `return. ${argStr.slice(1, -1)}`.
+      - `case "VariableDeclaration"`: When `d.init?.type === "BinaryExpression" || d.init?.type === "LogicalExpression"`, unwraps outer `(...)` in `initStr` to `id =: ${initStr.slice(1, -1)}`.
+      - `case "ArrowFunctionExpression"`: When `node.body?.type === "BinaryExpression" || node.body?.type === "LogicalExpression"`, unwraps outer `(...)` in `bodyStr` to `{{${pHeader} => ${bodyStr.slice(1, -1)}}}`.
+      - `case "ExpressionStatement"`: When `node.expression.type === "AssignmentExpression"` and the right-hand side is a `BinaryExpression` or `LogicalExpression`, unwraps outer `(...)` in `rightStr`.
+      - `case "PropertyDefinition"` / `case "ClassProperty"`: When `pNode.value?.type === "BinaryExpression" || pNode.value?.type === "LogicalExpression"`, unwraps outer `(...)` in `initStr`.
+  - Examples:
+    - Old Codon: `if. (a === b) do.`
+    - New Codon: `if. a === b do.`
+    - Old Codon: `while. (i < len) do.`
+    - New Codon: `while. i < len do.`
+    - Old Codon: `for. i =: 0 ; (i < 10) ; i++ do.`
+    - New Codon: `for. i =: 0 ; i < 10 ; i++ do.`
+    - Old Codon: `return. (a === b)`
+    - New Codon: `return. a === b`
+    - Old Codon: `return. (a + b)`
+    - New Codon: `return. a + b`
+    - Old Codon: `filtered =: (todos.filter {{t => (t.id !== id)}})`
+    - New Codon: `filtered =: (todos.filter {{t => t.id !== id}})`
+    - Old Codon: `isMatch =: (a === b)`
+    - New Codon: `isMatch =: a === b`
+
 ## Revision 31a (successful)
 - **Tokens:** 538
 
