@@ -2,7 +2,7 @@
 A running log of all successful and failed optimization attempts. (JavaScript: 27197)
 
 ## Revision 31a (successful)
-- **Tokens:** 1420
+- **Tokens:** 538
 
 - **Revision Idea**: Introduce concise unparenthesized `new` constructor expressions (`new Callee args`, `new Callee()`, `new Callee`) across throw statements (`throw. new Error 'msg'`), variable declarations (`client =: new ApiClient baseUrl`), return statements (`return. new Promise {{...}}`), arrow function bodies (`{{=> new Set}}`), member/instance property assignments (`this.buffer = new ArrayBuffer byteLength`), and class property definitions (`timers =: new Map`), eliminating mandatory outer wrapping parentheses `(new ...)`.
 - **Rationale**: In modern AI fullstack web development (React component states, HTTP/WebSocket clients, error handling, route validation, async promises, task queues, and collections):
