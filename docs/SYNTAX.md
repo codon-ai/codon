@@ -617,27 +617,42 @@ end.)
 
 ### Conditionals (`if.` / `elseif.` / `else.`)
 
+Codon supports concise unparenthesized comparison and logical conditions:
+
 ```codon
-if. (x === 1) do.
+if. x === 1 do.
   (console.log 'one')
-elseif. (x === 2) do.
+elseif. x === 2 do.
   (console.log 'two')
 else.
   (console.log 'other')
 end.
 ```
 
+Compound logical conditions bind cleanly without outer parentheses:
+```codon
+if. (user.age >= 18) && user.active do.
+  return. true
+end.
+```
+
 ### Loops (`while.`, `whilst.`, `for.`, `for_in.`, `for_of.`)
 
-- **While Loop**:
+- **While Loop** (with unparenthesized condition):
   ```codon
-  while. (n > 0) do.
-    (n = n - 1)
+  while. n > 0 do.
+    n--
   end.
   ```
-- **For Loop (C-Style)**:
+- **Do-While Loop** (`whilst.`):
   ```codon
-  for. i =: 0 ; (i < 10) ; (i++) do.
+  whilst. pending > 0 do.
+    pending--
+  end.
+  ```
+- **For Loop (C-Style)** (with unparenthesized test condition and update):
+  ```codon
+  for. i =: 0 ; i < 10 ; i++ do.
     (console.log i)
   end.
   ```
@@ -683,6 +698,8 @@ end.
 
 ```codon
 return. result
+return. a === b               NB. Unparenthesized comparison return
+return. a + b                 NB. Unparenthesized arithmetic return
 return.
 throw. new Error 'Operation failed'
 ```

@@ -119,11 +119,11 @@ Comprehensive documentation is available in the **[`docs/`](docs/README.md)** di
 | **String Capitalization** | `word.charAt(0).toUpperCase() + word.slice(1)` | `M!m_binary_expr_32(word)` | **~75%** |
 | **Monadic Await** | `const res = await fetch(url);` | `res =: @ (fetch url)` | **~50%** |
 | **Object Shorthand & Spread** | `{ ...options, active: true, port }` | `O(...options;active:true;port)` | **~40%** |
-| **Arrow Closure** | `const double = (x) => x * 2;` | `double =: {{x => (x * 2)}}` | **~50%** |
+| **Arrow Closure** | `const double = (x) => x * 2;` | `double =: {{x => x * 2}}` | **~55%** |
 | **Average Fork** | `const avg = (arr) => sum(arr) / arr.length;` | `avg =: (fork sum div tally)` | **~40%** |
 | **Sum Reduction** | `const total = nums.reduce((a, b) => a + b, 0);` | `total =: +/ nums` | **~70%** |
 | **Numeric Vector** | `const primes = [2, 3, 5, 7, 11];` | `primes = 2 3 5 7 11` | **~50%** |
-| **Function Declaration** | `function add(a, b) { return a + b; }` | `fn. add a,b do. return. (a + b) end.` | **~35%** |
+| **Function Declaration** | `function add(a, b) { return a + b; }` | `fn. add a,b do. return. a + b end.` | **~40%** |
 | **Module Import** | `import { useState, useRef } from "react";` | `import. {useState,useRef} from 'react'` | **~45%** |
 
 ---

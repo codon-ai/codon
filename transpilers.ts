@@ -65,6 +65,7 @@ import generate from "@babel/generator";
 import * as fs from "fs";
 import * as path from "path";
 import { macroDictionary, resolveScopes, normalizeSubtree, type ScopeResolution } from "./macro-dict";
+import { isFullyWrapped } from "./codon-parser";
 
 export interface CompilerOptions {
     rewriteImportExtensions?: boolean;
@@ -267,6 +268,9 @@ export class JSToCodonTranslator {
                         if (d.init?.type === "NewExpression" && initStr.startsWith("(new ") && initStr.endsWith(")")) {
                             initStr = initStr.slice(1, -1);
                         }
+                        if ((d.init?.type === "BinaryExpression" || d.init?.type === "LogicalExpression") && isFullyWrapped(initStr)) {
+                            initStr = initStr.slice(1, -1);
+                        }
                         return `${idStr} =: ${initStr}`;
                     })
                     .join("\n");
@@ -280,6 +284,9 @@ export class JSToCodonTranslator {
                     const assignNode = node.expression as AssignmentExpression;
                     let rightStr = this.transpile(assignNode.right);
                     if (assignNode.right?.type === "NewExpression" && rightStr.startsWith("(new ") && rightStr.endsWith(")")) {
+                        rightStr = rightStr.slice(1, -1);
+                    }
+                    if ((assignNode.right?.type === "BinaryExpression" || assignNode.right?.type === "LogicalExpression") && isFullyWrapped(rightStr)) {
                         rightStr = rightStr.slice(1, -1);
                     }
                     return `${this.transpile(assignNode.left)} ${assignNode.operator} ${rightStr}`;
@@ -296,14 +303,21 @@ export class JSToCodonTranslator {
                 return node.body.map((n) => this.transpile(n)).join("\n");
 
             case "IfStatement": {
-                const testStr = this.transpile(node.test);
+                let testStr = this.transpile(node.test);
+                if ((node.test.type === "BinaryExpression" || node.test.type === "LogicalExpression") && isFullyWrapped(testStr)) {
+                    testStr = testStr.slice(1, -1);
+                }
                 const consStr = this.transpile(node.consequent);
                 if (node.alternate) {
                     if (node.alternate.type === "IfStatement") {
                         let cur: any = node.alternate;
                         let chain = `if. ${testStr} do.\n${consStr}\n`;
                         while (cur && cur.type === "IfStatement") {
-                            chain += `elseif. ${this.transpile(cur.test)} do.\n${this.transpile(cur.consequent)}\n`;
+                            let curTest = this.transpile(cur.test);
+                            if ((cur.test.type === "BinaryExpression" || cur.test.type === "LogicalExpression") && isFullyWrapped(curTest)) {
+                                curTest = curTest.slice(1, -1);
+                            }
+                            chain += `elseif. ${curTest} do.\n${this.transpile(cur.consequent)}\n`;
                             cur = cur.alternate;
                         }
                         if (cur) {
@@ -338,16 +352,29 @@ export class JSToCodonTranslator {
 
             case "ForStatement": {
                 const initStr = node.init ? this.transpile(node.init) : "";
-                const testStr = node.test ? this.transpile(node.test) : "";
+                let testStr = node.test ? this.transpile(node.test) : "";
+                if (node.test && (node.test.type === "BinaryExpression" || node.test.type === "LogicalExpression") && isFullyWrapped(testStr)) {
+                    testStr = testStr.slice(1, -1);
+                }
                 const updateStr = node.update ? this.transpile(node.update) : "";
                 return `for. ${initStr} ; ${testStr} ; ${updateStr} do.\n${this.transpile(node.body)}\nend.`;
             }
 
-            case "WhileStatement":
-                return `while. ${this.transpile(node.test)} do.\n${this.transpile(node.body)}\nend.`;
+            case "WhileStatement": {
+                let testStr = this.transpile(node.test);
+                if ((node.test.type === "BinaryExpression" || node.test.type === "LogicalExpression") && isFullyWrapped(testStr)) {
+                    testStr = testStr.slice(1, -1);
+                }
+                return `while. ${testStr} do.\n${this.transpile(node.body)}\nend.`;
+            }
 
-            case "DoWhileStatement":
-                return `whilst. ${this.transpile(node.test)} do.\n${this.transpile(node.body)}\nend.`;
+            case "DoWhileStatement": {
+                let testStr = this.transpile(node.test);
+                if ((node.test.type === "BinaryExpression" || node.test.type === "LogicalExpression") && isFullyWrapped(testStr)) {
+                    testStr = testStr.slice(1, -1);
+                }
+                return `whilst. ${testStr} do.\n${this.transpile(node.body)}\nend.`;
+            }
 
             case "TryStatement": {
                 const blockStr = this.transpile(node.block);
@@ -373,6 +400,9 @@ export class JSToCodonTranslator {
                     argStr = "@ " + argStr.slice(3, -1);
                 }
                 if (node.argument.type === "NewExpression" && argStr.startsWith("(new ") && argStr.endsWith(")")) {
+                    argStr = argStr.slice(1, -1);
+                }
+                if ((node.argument.type === "BinaryExpression" || node.argument.type === "LogicalExpression") && isFullyWrapped(argStr)) {
                     argStr = argStr.slice(1, -1);
                 }
                 return `return. ${argStr}`;
@@ -425,6 +455,9 @@ export class JSToCodonTranslator {
                 const keyStr = (pNode.key as any).type === "Identifier" ? (pNode.key as any).name : this.transpile(pNode.key);
                 let initStr = pNode.value ? this.transpile(pNode.value) : "''";
                 if (pNode.value?.type === "NewExpression" && initStr.startsWith("(new ") && initStr.endsWith(")")) {
+                    initStr = initStr.slice(1, -1);
+                }
+                if ((pNode.value?.type === "BinaryExpression" || pNode.value?.type === "LogicalExpression") && isFullyWrapped(initStr)) {
                     initStr = initStr.slice(1, -1);
                 }
                 return `${pNode.static ? "static " : ""}${keyStr} =: ${initStr}`;
@@ -554,6 +587,9 @@ export class JSToCodonTranslator {
                     bodyStr = "@ " + bodyStr.slice(3, -1);
                 }
                 if (node.body.type === "NewExpression" && bodyStr.startsWith("(new ") && bodyStr.endsWith(")")) {
+                    bodyStr = bodyStr.slice(1, -1);
+                }
+                if ((node.body.type === "BinaryExpression" || node.body.type === "LogicalExpression") && isFullyWrapped(bodyStr)) {
                     bodyStr = bodyStr.slice(1, -1);
                 }
                 return `{{${pHeader} => ${bodyStr}}}`;

@@ -711,8 +711,8 @@ const handler = function (req, res) {
         const translator = new JSToCodonTranslator();
         const codonCode = translator.transpile(ast.program as any);
 
-        expect(codonCode).toContain("{{x => (x * 2)}}");
-        expect(codonCode).toContain("{{a,b => (a + b)}}");
+        expect(codonCode).toContain("{{x => x * 2}}");
+        expect(codonCode).toContain("{{a,b => a + b}}");
         expect(codonCode).toContain("{{async => do.");
         expect(codonCode).toContain("{{fn req,res => do.");
         expect(codonCode).not.toContain("NB. pE|");
@@ -1697,6 +1697,132 @@ end.
         expect(js).toContain('throw new Error("Legacy error");');
         expect(js).toContain("const c = new ApiClient(baseUrl);");
         expect(js).toContain("return new Promise(resolve => resolve(1));");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+});
+
+describe("Concise Unparenthesized Binary and Logical Expressions Support", () => {
+    test("Transpiles unparenthesized binary and logical expressions in control flow, returns, variables, and closures", () => {
+        const codonCode = `
+fn. validateUser user,minAge,role do.
+  if. user.age < minAge do.
+    return. false
+  elseif. user.role !== role do.
+    return. false
+  end.
+  isValid =: user.active && user.verified
+  while. retryCount < maxRetries do.
+    retryCount++
+  end.
+  whilst. pending > 0 do.
+    pending--
+  end.
+  for. i =: 0 ; i < 10 ; i++ do.
+    count++
+  end.
+  filterInactive =: {{item => item.status === 'active' && item.score >= 50}}
+  this.ready = status === 200
+  return. user.score + 100
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("if (user.age < minAge) {");
+        expect(js).toContain("else if (user.role !== role) {");
+        expect(js).toContain("const isValid = user.active && user.verified;");
+        expect(js).toContain("while (retryCount < maxRetries) {");
+        expect(js).toContain("while (pending > 0);");
+        expect(js).toContain("for (const i = 0; i < 10; i++) {");
+        expect(js).toContain("const filterInactive = item => item.status === \"active\" && item.score >= 50;");
+        expect(js).toContain("this.ready = status === 200;");
+        expect(js).toContain("return user.score + 100;");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips JS control flow, return comparisons, and arrow predicates without wrapping parentheses", () => {
+        const jsCode = `
+function processItems(items, threshold) {
+  const isReady = items.length > 0 && threshold !== null;
+  if (items.length === 0) {
+    return false;
+  } else if (items.length > 100) {
+    return true;
+  }
+  while (threshold > 0) {
+    threshold--;
+  }
+  for (let i = 0; i < items.length; i++) {
+    total += i;
+  }
+  const filtered = items.filter(item => item.id !== 0 && item.value >= threshold);
+  const addBonus = (score, bonus) => score + bonus;
+  return total > 1000;
+}
+`;
+        const jsAst = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(jsAst.program as any);
+
+        expect(codonCode).toContain("isReady =: (items.length > 0) && (threshold !== '')");
+        expect(codonCode).toContain("if. items.length === 0 do.");
+        expect(codonCode).toContain("elseif. items.length > 100 do.");
+        expect(codonCode).toContain("while. threshold > 0 do.");
+        expect(codonCode).toContain("for. i =: 0 ; i < items.length ; i++ do.");
+        expect(codonCode).toContain("{{item => (item.id !== 0) && (item.value >= threshold)}}");
+        expect(codonCode).toContain("addBonus =: {{score,bonus => score + bonus}}");
+        expect(codonCode).toContain("return. total > 1000");
+
+        expect(codonCode).not.toContain("if. (items.length === 0) do.");
+        expect(codonCode).not.toContain("while. (threshold > 0) do.");
+        expect(codonCode).not.toContain("return. (total > 1000)");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(roundtrippedJs).toContain("if (items.length === 0) {");
+        expect(roundtrippedJs).toContain("else if (items.length > 100) {");
+        expect(roundtrippedJs).toContain("while (threshold > 0) {");
+        expect(roundtrippedJs).toContain("return total > 1000;");
+        expect(roundtrippedJs).toContain("(score, bonus) => score + bonus");
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Retains backward compatibility with legacy parenthesized binary and logical forms", () => {
+        const codonCode = `
+fn. legacyCheck a,b do.
+  if. (a === b) do.
+    return. (a + b)
+  elseif. ((a > 0) && (b > 0)) do.
+    return. (a * b)
+  end.
+  while. (a < b) do.
+    a++
+  end.
+  for. i =: 0 ; (i < 10) ; i++ do.
+    count++
+  end.
+  pred =: {{x => (x !== 0)}}
+  return. (a === 0)
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("if (a === b) {");
+        expect(js).toContain("return a + b;");
+        expect(js).toContain("else if (a > 0 && b > 0) {");
+        expect(js).toContain("return a * b;");
+        expect(js).toContain("while (a < b) {");
+        expect(js).toContain("for (const i = 0; i < 10; i++) {");
+        expect(js).toContain("const pred = x => x !== 0;");
+        expect(js).toContain("return a === 0;");
         expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
     });
 });
