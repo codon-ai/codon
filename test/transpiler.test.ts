@@ -1519,5 +1519,95 @@ end.
     });
 });
 
+describe("Concise Unparenthesized Typeof, Bitwise NOT, and Return Await Expressions", () => {
+    test("Transpiles unparenthesized typeof and ~ expressions", () => {
+        const codonCode = `
+isClient =: typeof window !== 'undefined'
+isFn =: typeof callback === 'function'
+idx =: ~items.indexOf(val)
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain('const isClient = typeof window !== "undefined";');
+        expect(js).toContain('const isFn = typeof callback === "function";');
+        expect(js).toContain("const idx = ~items.indexOf(val);");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles unparenthesized monadic await in return statements and arrow functions", () => {
+        const codonCode = `
+async_fn. fetchUser id do.
+  return. @ (fetch ('/api/user/' + id))
+end.
+
+fetchJson =: {{async url => @ (fetch url)}}
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("async function fetchUser(id)");
+        expect(js).toContain("return await fetch(");
+        expect(js).toContain("const fetchJson = async url => await fetch(url);");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips JS typeof checks, bitwise NOT, and async returns", () => {
+        const jsCode = `
+const isString = typeof x === "string";
+const hasWindow = typeof window !== "undefined";
+const found = ~str.indexOf("test");
+async function getData() {
+  return await res.json();
+}
+const query = async q => await search(q);
+`;
+        const jsAst = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(jsAst.program as any);
+
+        expect(codonCode).toContain("typeof x === 'string'");
+        expect(codonCode).toContain("typeof window !== 'undefined'");
+        expect(codonCode).toContain("~");
+        expect(codonCode).toContain("return. @");
+        expect(codonCode).toContain("{{async q => @");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(roundtrippedJs).toContain('typeof x === "string"');
+        expect(roundtrippedJs).toContain('typeof window !== "undefined"');
+        expect(roundtrippedJs).toContain("~");
+        expect(roundtrippedJs).toContain("return await res.json();");
+        expect(roundtrippedJs).toContain("async q => await search(q)");
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Retains backward compatibility with legacy parenthesized forms (typeof x), (~ x), and return. (@ expr)", () => {
+        const codonCode = `
+isStr =: ((typeof x) === 'string')
+hasMatch =: (~ (str.indexOf 'x'))
+async_fn. test do.
+  return. (@ (res.json()))
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain('const isStr = typeof x === "string";');
+        expect(js).toContain("return await res.json();");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+});
+
+
 
 

@@ -348,8 +348,14 @@ export class JSToCodonTranslator {
             case "ThrowStatement":
                 return `throw. ${this.transpile(node.argument)}`;
 
-            case "ReturnStatement":
-                return node.argument ? `return. ${this.transpile(node.argument)}` : "return.";
+            case "ReturnStatement": {
+                if (!node.argument) return "return.";
+                let argStr = this.transpile(node.argument);
+                if (node.argument.type === "AwaitExpression" && argStr.startsWith("(@ ") && argStr.endsWith(")")) {
+                    argStr = "@ " + argStr.slice(3, -1);
+                }
+                return `return. ${argStr}`;
+            }
 
             case "YieldExpression":
                 return (node as any).argument ? `yield. ${this.transpile((node as any).argument)}` : "yield.";
@@ -519,7 +525,11 @@ export class JSToCodonTranslator {
                 if (isBlock) {
                     return `{{${pHeader} => do.\n${this.transpile(node.body)}\n}}`;
                 }
-                return `{{${pHeader} => ${this.transpile(node.body)}}}`;
+                let bodyStr = this.transpile(node.body);
+                if (node.body.type === "AwaitExpression" && bodyStr.startsWith("(@ ") && bodyStr.endsWith(")")) {
+                    bodyStr = "@ " + bodyStr.slice(3, -1);
+                }
+                return `{{${pHeader} => ${bodyStr}}}`;
             }
 
             case "ThisExpression":
@@ -621,6 +631,12 @@ export class JSToCodonTranslator {
                 if (node.operator === "!") {
                     return `!${this.transpile(node.argument)}`;
                 }
+                if (node.operator === "typeof") {
+                    return `typeof ${this.transpile(node.argument)}`;
+                }
+                if (node.operator === "~") {
+                    return `~${this.transpile(node.argument)}`;
+                }
                 return `(${node.operator} ${this.transpile(node.argument)})`;
 
             case "UpdateExpression":
@@ -701,6 +717,12 @@ export class JSToCodonTranslator {
 
             case "JSXExpressionContainer":
                 return `{${this.transpile(node.expression)}}`;
+
+            case "ArrayPattern":
+            case "ObjectPattern":
+            case "AssignmentPattern":
+            case "RestElement":
+                return this.transpilePattern(node);
 
             default:
                 throw new Error(`Unsupported AST node type: ${(node as any).type}`);
