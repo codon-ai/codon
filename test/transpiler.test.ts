@@ -1519,5 +1519,189 @@ end.
     });
 });
 
+describe("Concise Unparenthesized Typeof, Bitwise NOT, and Return Await Expressions", () => {
+    test("Transpiles unparenthesized typeof and ~ expressions", () => {
+        const codonCode = `
+isClient =: typeof window !== 'undefined'
+isFn =: typeof callback === 'function'
+idx =: ~items.indexOf(val)
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain('const isClient = typeof window !== "undefined";');
+        expect(js).toContain('const isFn = typeof callback === "function";');
+        expect(js).toContain("const idx = ~items.indexOf(val);");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Transpiles unparenthesized monadic await in return statements and arrow functions", () => {
+        const codonCode = `
+async_fn. fetchUser id do.
+  return. @ (fetch ('/api/user/' + id))
+end.
+
+fetchJson =: {{async url => @ (fetch url)}}
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain("async function fetchUser(id)");
+        expect(js).toContain("return await fetch(");
+        expect(js).toContain("const fetchJson = async url => await fetch(url);");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips JS typeof checks, bitwise NOT, and async returns", () => {
+        const jsCode = `
+const isString = typeof x === "string";
+const hasWindow = typeof window !== "undefined";
+const found = ~str.indexOf("test");
+async function getData() {
+  return await res.json();
+}
+const query = async q => await search(q);
+`;
+        const jsAst = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(jsAst.program as any);
+
+        expect(codonCode).toContain("typeof x === 'string'");
+        expect(codonCode).toContain("typeof window !== 'undefined'");
+        expect(codonCode).toContain("~");
+        expect(codonCode).toContain("return. @");
+        expect(codonCode).toContain("{{async q => @");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(roundtrippedJs).toContain('typeof x === "string"');
+        expect(roundtrippedJs).toContain('typeof window !== "undefined"');
+        expect(roundtrippedJs).toContain("~");
+        expect(roundtrippedJs).toContain("return await res.json();");
+        expect(roundtrippedJs).toContain("async q => await search(q)");
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Retains backward compatibility with legacy parenthesized forms (typeof x), (~ x), and return. (@ expr)", () => {
+        const codonCode = `
+isStr =: ((typeof x) === 'string')
+hasMatch =: (~ (str.indexOf 'x'))
+async_fn. test do.
+  return. (@ (res.json()))
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain('const isStr = typeof x === "string";');
+        expect(js).toContain("return await res.json();");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+});
+
+describe("Concise Unparenthesized NewExpression Constructor Support", () => {
+    test("Transpiles unparenthesized new constructor expressions (throw, variable, return, arrow, member)", () => {
+        const codonCode = `
+fn. test baseUrl do.
+  if. !baseUrl do.
+    throw. new Error 'Base URL required'
+  end.
+  client =: new ApiClient baseUrl
+  this.buffer = new ArrayBuffer 1024
+  timers =: new Map
+  delay =: {{ms => new Promise {{r => (setTimeout r ms)}}}}
+  return. new Response 'ok'
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain('throw new Error("Base URL required");');
+        expect(js).toContain("const client = new ApiClient(baseUrl);");
+        expect(js).toContain("this.buffer = new ArrayBuffer(1024);");
+        expect(js).toContain("const timers = new Map();");
+        expect(js).toContain("const delay = ms => new Promise(r => setTimeout(r, ms));");
+        expect(js).toContain('return new Response("ok");');
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips JS throw new Error, new Promise, and collection instantiations", () => {
+        const jsCode = `
+class Service {
+  constructor(baseUrl) {
+    if (!baseUrl) {
+      throw new Error("Missing baseUrl");
+    }
+    this.client = new ApiClient(baseUrl);
+    this.buffer = new ArrayBuffer(512);
+  }
+  fetchData() {
+    return new Promise(resolve => resolve(42));
+  }
+}
+const waitTimer = timeMs => new Promise(notify => doSchedule(notify, timeMs));
+const visited = new Set();
+`;
+        const jsAst = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(jsAst.program as any);
+
+        expect(codonCode).toContain("throw. new Error 'Missing baseUrl'");
+        expect(codonCode).toContain("this.client = new ApiClient baseUrl");
+        expect(codonCode).toContain("this.buffer = new ArrayBuffer 512");
+        expect(codonCode).toContain("return. new Promise {{resolve => (resolve 42)}}");
+        expect(codonCode).toContain("waitTimer =: {{timeMs => new Promise {{notify => (doSchedule notify timeMs)}}}}");
+        expect(codonCode).toContain("visited =: new Set");
+
+        expect(codonCode).not.toContain("throw. (new Error");
+        expect(codonCode).not.toContain("this.client = (new ApiClient");
+        expect(codonCode).not.toContain("return. (new Promise");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(roundtrippedJs).toContain('throw new Error("Missing baseUrl");');
+        expect(roundtrippedJs).toContain("this.client = new ApiClient(baseUrl);");
+        expect(roundtrippedJs).toContain("this.buffer = new ArrayBuffer(512);");
+        expect(roundtrippedJs).toContain("return new Promise(resolve => resolve(42));");
+        expect(roundtrippedJs).toContain("const visited = new Set();");
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Retains backward compatibility with legacy parenthesized forms (new Callee args)", () => {
+        const codonCode = `
+fn. legacy baseUrl do.
+  throw. (new Error 'Legacy error')
+  c =: (new ApiClient baseUrl)
+  return. (new Promise {{resolve => (resolve 1)}})
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain('throw new Error("Legacy error");');
+        expect(js).toContain("const c = new ApiClient(baseUrl);");
+        expect(js).toContain("return new Promise(resolve => resolve(1));");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+});
+
+
+
 
 

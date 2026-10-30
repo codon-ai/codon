@@ -1765,6 +1765,63 @@ export class CodonToASTParser {
             }
         }
 
+        // Unparenthesized Typeof Unary Expression: typeof expr
+        if (strippedExpr.startsWith("typeof ")) {
+            const innerArg = strippedExpr.slice(7).trim();
+            if (innerArg.length > 0) {
+                return {
+                    type: "UnaryExpression",
+                    operator: "typeof",
+                    argument: this.parseExpression(innerArg),
+                    prefix: true,
+                };
+            }
+        }
+
+        // Unparenthesized Bitwise NOT Unary Expression: ~expr
+        if (strippedExpr.startsWith("~") && !strippedExpr.startsWith("~:")) {
+            const innerArg = strippedExpr.slice(1).trim();
+            if (innerArg.length > 0) {
+                return {
+                    type: "UnaryExpression",
+                    operator: "~",
+                    argument: this.parseExpression(innerArg),
+                    prefix: true,
+                };
+            }
+        }
+
+        // Unparenthesized New Expression: new Callee ...
+        if (strippedExpr.startsWith("new ")) {
+            const spaceParts = splitAtLevel(strippedExpr, " ");
+            if (spaceParts.length > 1 && spaceParts[0] === "new" && spaceParts[1]) {
+                const calleeStr = spaceParts[1];
+                let calleeNode: Node;
+                let newArgs: Node[];
+                if (spaceParts.length === 2 && calleeStr.endsWith("()")) {
+                    calleeNode = this.parseExpression(calleeStr.slice(0, -2));
+                    newArgs = [];
+                } else if (spaceParts.length === 2 && calleeStr.includes("(") && calleeStr.endsWith(")")) {
+                    const parsedCall = this.parseExpression(calleeStr);
+                    if (parsedCall.type === "CallExpression") {
+                        calleeNode = parsedCall.callee;
+                        newArgs = parsedCall.arguments;
+                    } else {
+                        calleeNode = this.parseExpression(calleeStr);
+                        newArgs = [];
+                    }
+                } else {
+                    calleeNode = this.parseExpression(calleeStr);
+                    newArgs = spaceParts.slice(2).map((a) => this.parseExpression(a));
+                }
+                return {
+                    type: "NewExpression",
+                    callee: calleeNode,
+                    arguments: newArgs,
+                };
+            }
+        }
+
         // Monadic Codon verbs: #, %, %:, |, +/, */
         if (strippedExpr === "#") return { type: "Identifier", name: "tally" };
         if (strippedExpr === "+/") return { type: "Identifier", name: "sum" };

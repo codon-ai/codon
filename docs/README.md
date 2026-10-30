@@ -82,6 +82,10 @@ flowchart TD
 | **ES Module Import** | `import { useState, useRef } from "react";` | `import. {useState,useRef} from 'react'` | **~45%** |
 | **Logical NOT Expression** | `if (!input.trim()) return;` | `if. !input.trim() do. return. end.` | **~40%** |
 | **Update Expression** | `nextId.current++;` | `nextId.current++` | **~40%** |
+| **Type Reflection Guard** | `if (typeof window !== "undefined")` | `if. (typeof window !== 'undefined') do.` | **~25%** |
+| **Return Await** | `return await res.json();` | `return. @ (res.json())` | **~29%** |
+| **Error Throw** | `throw new Error("Invalid");` | `throw. new Error 'Invalid'` | **~29%** |
+| **Class Instantiation** | `const client = new ApiClient(url);` | `client =: new ApiClient url` | **~29%** |
 
 ---
 
