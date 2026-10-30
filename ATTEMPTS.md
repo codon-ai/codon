@@ -1,6 +1,42 @@
 # Attempts
 A running log of all successful and failed optimization attempts. (JavaScript: 27197)
 
+## Revision 30a (successful)
+- **Tokens:** 26500
+
+- **Revision Idea**: Introduce concise unparenthesized `typeof` and bitwise NOT (`~`) unary expressions (`typeof expr`, `typeof x === 'string'`, `typeof window !== 'undefined'`, `~str.indexOf(sub)`), unparenthesized monadic await in return statements (`return. @ expr`), and unparenthesized monadic await in concise arrow function bodies (`{{async param => @ expr}}`), eliminating redundant outer wrapping parentheses `(typeof expr)`, `(~ expr)`, `return. (@ expr)`, and `{{async => (@ expr)}}`.
+- **Rationale**: In modern AI fullstack web development (React component state and environment detection, Express/Koa API route handlers, input validation, runtime type guards, string/array searching, Next.js server actions, asynchronous database queries, and async pipeline closures):
+  1. **Runtime Type Guards and `typeof`**: Fullstack code frequently performs environment and runtime type checks (`typeof window !== 'undefined'`, `typeof process !== 'undefined'`, `typeof callback === 'function'`, `typeof data === 'string'`). Previously, Codon strictly required `typeof` expressions to be wrapped in outer parentheses `(typeof x)`. Omitting parentheses (e.g. `typeof x === 'string'`) caused the parser to fail because `typeof` was gated behind `if (wasWrapped)`, producing a malformed Identifier node named `"typeof x"` that broke member expressions (`typeof x.y`) and AST validation. Furthermore, `JSToCodonTranslator` unconditionally emitted redundant wrapping parentheses `(typeof ${arg})`, producing double-parenthesized comparisons like `((typeof x) === 'string')`. Placing unparenthesized `typeof ` parsing strictly after binary/logical splitting ensures that comparisons like `typeof x === 'string'` and `typeof window !== 'undefined'` split at the comparison operator first and bind correctly.
+  2. **Bitwise NOT (`~`) Operations**: In string matching, array searching, and index sentinel checks (`~items.indexOf(val)`), bitwise NOT expressions were wrapped as `(~ expr)`. Supporting unparenthesized `~expr` eliminates outer wrapper tokens and aligns bitwise NOT with logical NOT (`!expr`).
+  3. **Unparenthesized Monadic Await in Return Statements (`return. @ expr`)**: In API route handlers, server actions, and async helper functions, returning an awaited promise (`return await res.json()`, `return await db.query(...)`) is ubiquitous. While Codon's `VariableDeclaration` (`res =: @ (fetch url)`) and `ExpressionStatement` (`@ (delay 50)`) already emitted concise unparenthesized `@ expr`, `ReturnStatement` previously emitted `return. (@ (res.json()))` with redundant parentheses. Codon's statement parser already parses `return. @ ...` cleanly; unwrapping the outer parentheses in `ReturnStatement` eliminates 2 redundant tokens per async return.
+  4. **Unparenthesized Monadic Await in Arrow Function Expressions (`{{async x => @ expr}}`)**: In asynchronous array mapping and concise async callbacks (`routes.get('/data', {{async req => @ (handler req)}})`), `ArrowFunctionExpression` previously emitted `(@ expr)`. Unwrapping outer parentheses eliminates 2 tokens per async arrow callback.
+  Together, these revisions eliminate wrapping parentheses across type guards, index checks, async returns, and arrow closures, preserving 100% backward compatibility with parenthesized forms and guaranteeing complete AST roundtrip fidelity.
+- **Target Token Savings for Fullstack Applications**:
+  - Eliminates 2 wrapping tokens per `typeof` check in runtime type guards and environment guards (e.g. `((typeof window) !== 'undefined')` [10 tokens] -> `(typeof window !== 'undefined')` [8 tokens] or `typeof window !== 'undefined'`, saving 20–25% tokens per type guard).
+  - Eliminates 2 to 4 wrapping tokens per bitwise NOT operation (e.g. `(~ (str.indexOf sub))` [8 tokens] -> `~str.indexOf(sub)` [4 tokens], saving ~50% tokens).
+  - Eliminates 2 wrapping tokens per async return statement across API handlers, data fetchers, and server actions (e.g. `return. (@ (res.json()))` [7 tokens] -> `return. @ (res.json())` [5 tokens], saving ~29% tokens).
+  - Eliminates 2 wrapping tokens per concise async arrow expression (e.g. `{{async url => (@ (fetch url))}}` [9 tokens] -> `{{async url => @ (fetch url)}}` [7 tokens], saving ~22% tokens).
+  - Prevents AST corruption, invalid Identifier tokens with spaces (`{ type: "Identifier", name: "typeof x" }`), and syntax crashes across LLM fullstack code generation.
+- **Concrete Syntax Changes**:
+  - `codon-parser.ts`:
+    - In `parseExpression`, added detection for `strippedExpr.startsWith("typeof ")` and `strippedExpr.startsWith("~")` placed strictly after `parseBinaryOrAssignment`. This parses unparenthesized `typeof expr` and `~expr` into ESTree `UnaryExpression` nodes while preserving correct operator precedence in compound expressions like `typeof x === 'string'` and `~items.indexOf(val)`.
+  - `transpilers.ts`:
+    - In `JSToCodonTranslator.prototype.transpile`:
+      - `case "UnaryExpression"`: Updated `node.operator === "typeof"` to emit concise `typeof ${this.transpile(node.argument)}` and `node.operator === "~"` to emit `~${this.transpile(node.argument)}`.
+      - `case "ReturnStatement"`: When `node.argument?.type === "AwaitExpression"` and `argStr.startsWith("(@ ") && argStr.endsWith(")")`, unwraps to `return. @ ${argStr.slice(3, -1)}`.
+      - `case "ArrowFunctionExpression"`: When `node.body?.type === "AwaitExpression"` and `bodyStr.startsWith("(@ ") && bodyStr.endsWith(")")`, unwraps to `{{${pHeader} => @ ${bodyStr.slice(3, -1)}}}`.
+  - Examples:
+    - Old Codon: `isClient =: ((typeof window) !== 'undefined')`
+    - New Codon: `isClient =: (typeof window !== 'undefined')`
+    - Old Codon: `isStr =: ((typeof x) === 'string')`
+    - New Codon: `isStr =: (typeof x === 'string')`
+    - Old Codon: `found =: (~ (str.indexOf sub))`
+    - New Codon: `found =: (~(str.indexOf sub))` or `found =: ~str.indexOf(sub)`
+    - Old Codon: `return. (@ (res.json()))`
+    - New Codon: `return. @ (res.json())`
+    - Old Codon: `fetcher =: {{async url => (@ (fetch url))}}`
+    - New Codon: `fetcher =: {{async url => @ (fetch url)}}`
+
 ## Revision 29a (unsuccessful)
 - **Tokens:** 1000000
 
