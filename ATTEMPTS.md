@@ -1,5 +1,5 @@
 # Attempts
-A running log of all successful and failed optimization attempts. (JavaScript: 4571)
+A running log of all successful and failed optimization attempts. (JavaScript: 27197)
 
 ## Human Revision 1
 Nothing to do with the language itself. Instead, I edited the hard-coded JS to Codon transpiler to search for the optimal macro usage. Then, it only uses the macro if it is more compact than the normal Codon code.
