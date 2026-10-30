@@ -2,7 +2,7 @@
 A running log of all successful and failed optimization attempts. (JavaScript: 27197)
 
 ## Revision 30a (successful)
-- **Tokens:** 26500
+- **Tokens:** 1604
 
 - **Revision Idea**: Introduce concise unparenthesized `typeof` and bitwise NOT (`~`) unary expressions (`typeof expr`, `typeof x === 'string'`, `typeof window !== 'undefined'`, `~str.indexOf(sub)`), unparenthesized monadic await in return statements (`return. @ expr`), and unparenthesized monadic await in concise arrow function bodies (`{{async param => @ expr}}`), eliminating redundant outer wrapping parentheses `(typeof expr)`, `(~ expr)`, `return. (@ expr)`, and `{{async => (@ expr)}}`.
 - **Rationale**: In modern AI fullstack web development (React component state and environment detection, Express/Koa API route handlers, input validation, runtime type guards, string/array searching, Next.js server actions, asynchronous database queries, and async pipeline closures):
