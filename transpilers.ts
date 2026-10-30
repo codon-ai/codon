@@ -78,6 +78,31 @@ export interface CompilerOptions {
 
 export class JSToCodonTranslator {
     private resolution?: ScopeResolution;
+    private macroSuppressed = new WeakSet<object>();
+
+    private compactSize(code: string): number {
+        let size = 0;
+        let quote = "";
+        let escaped = false;
+        for (const char of code) {
+            if (quote) {
+                size++;
+                if (escaped) {
+                    escaped = false;
+                } else if (char === "\\") {
+                    escaped = true;
+                } else if (char === quote) {
+                    quote = "";
+                }
+            } else if (char === "'" || char === '"' || char === "`") {
+                quote = char;
+                size++;
+            } else if (!/\s/.test(char)) {
+                size++;
+            }
+        }
+        return size;
+    }
 
     public tryMacroMatch(node: Node): string | null {
         try {
@@ -87,40 +112,44 @@ export class JSToCodonTranslator {
             }
 
             const { canonical, hash, placeholderArgs } = normalizeSubtree(node as any, this.resolution);
-            const macro = macroDictionary.lookupByHash(hash);
-            if (!macro) return null;
-            if (macro.canonical && macro.canonical !== canonical) return null;
+            const macros = macroDictionary.matchingEntries(hash, canonical, node.type);
+            let best: { code: string; size: number; score: number; macroSize: number; count: number; name: string } | undefined;
 
-            const args: string[] = [];
-            for (const param of macro.parameters) {
-                const argNode = placeholderArgs[param.name];
-                if (!argNode) {
-                    args.push(param.kind === "literal" ? "null" : "undefined");
-                    continue;
-                }
-                if (argNode.type === "Identifier") {
-                    args.push(argNode.name);
-                } else if (
-                    argNode.type === "Literal" ||
-                    argNode.type === "StringLiteral" ||
-                    argNode.type === "NumericLiteral" ||
-                    argNode.type === "BooleanLiteral" ||
-                    argNode.type === "NullLiteral"
-                ) {
-                    if (typeof argNode.value === "string") {
-                        args.push(`'${argNode.value}'`);
+            for (const macro of macros) {
+                const args: string[] = [];
+                for (const param of macro.parameters) {
+                    const argNode = placeholderArgs[param.name];
+                    if (!argNode) {
+                        args.push(param.kind === "literal" ? "null" : "undefined");
                     } else {
-                        args.push(String(argNode.value));
+                        args.push(this.transpile(argNode));
                     }
-                } else {
-                    args.push(this.transpile(argNode));
+                }
+
+                const code = args.length === 0
+                    ? `M!${macro.name}()`
+                    : `M!${macro.name}(${args.join(";")})`;
+                const candidate = {
+                    code,
+                    size: this.compactSize(code),
+                    score: macro.score,
+                    macroSize: macro.size,
+                    count: macro.count,
+                    name: macro.name,
+                };
+                if (
+                    !best ||
+                    candidate.size < best.size ||
+                    (candidate.size === best.size && candidate.score > best.score) ||
+                    (candidate.size === best.size && candidate.score === best.score && candidate.macroSize > best.macroSize) ||
+                    (candidate.size === best.size && candidate.score === best.score && candidate.macroSize === best.macroSize && candidate.count > best.count) ||
+                    (candidate.size === best.size && candidate.score === best.score && candidate.macroSize === best.macroSize && candidate.count === best.count && candidate.name < best.name)
+                ) {
+                    best = candidate;
                 }
             }
 
-            if (args.length === 0) {
-                return `M!${macro.name}()`;
-            }
-            return `M!${macro.name}(${args.join(";")})`;
+            return best?.code ?? null;
         } catch {
             return null;
         }
@@ -131,10 +160,19 @@ export class JSToCodonTranslator {
 
         if (node.type === "Program") {
             this.resolution = resolveScopes(node);
-        } else {
+        } else if (!this.macroSuppressed.has(node as object)) {
             const macroMatch = this.tryMacroMatch(node);
             if (macroMatch !== null) {
-                return macroMatch;
+                this.macroSuppressed.add(node as object);
+                try {
+                    const direct = this.transpile(node);
+                    if (this.compactSize(macroMatch) < this.compactSize(direct)) {
+                        return macroMatch;
+                    }
+                    return direct;
+                } finally {
+                    this.macroSuppressed.delete(node as object);
+                }
             }
         }
 

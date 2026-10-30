@@ -386,7 +386,8 @@ export function normalizeSubtree(
 
 export class MacroDictionary {
     private byName: Map<string, MacroEntry> = new Map();
-    private byHash: Map<string, MacroEntry> = new Map();
+    private byHash: Map<string, MacroEntry[]> = new Map();
+    private byCanonical: Map<string, MacroEntry[]> = new Map();
     private byNodeType: Map<string, MacroEntry[]> = new Map();
     private loaded = false;
 
@@ -418,7 +419,12 @@ export class MacroDictionary {
             };
 
             this.byName.set(macro.name, macro);
-            this.byHash.set(macro.hash, macro);
+            const hashEntries = this.byHash.get(macro.hash) ?? [];
+            hashEntries.push(macro);
+            this.byHash.set(macro.hash, hashEntries);
+            const canonicalEntries = this.byCanonical.get(macro.canonical) ?? [];
+            canonicalEntries.push(macro);
+            this.byCanonical.set(macro.canonical, canonicalEntries);
             const list = this.byNodeType.get(macro.nodeType) ?? [];
             list.push(macro);
             this.byNodeType.set(macro.nodeType, list);
@@ -433,7 +439,23 @@ export class MacroDictionary {
 
     public lookupByHash(hash: string): MacroEntry | undefined {
         this.load();
-        return this.byHash.get(hash);
+        return this.byHash.get(hash)?.slice().sort((a, b) =>
+            b.score - a.score || b.size - a.size || b.count - a.count || a.name.localeCompare(b.name)
+        )[0];
+    }
+
+    public matchingEntries(hash: string, canonical: string, nodeType: string): MacroEntry[] {
+        this.load();
+        const matches = new Map<string, MacroEntry>();
+        for (const macro of this.byHash.get(hash) ?? []) {
+            if ((!macro.canonical || macro.canonical === canonical) && macro.nodeType === nodeType) {
+                matches.set(macro.name, macro);
+            }
+        }
+        for (const macro of this.byCanonical.get(canonical) ?? []) {
+            if (macro.nodeType === nodeType) matches.set(macro.name, macro);
+        }
+        return [...matches.values()];
     }
 
     public entriesForNodeType(nodeType: string): MacroEntry[] {

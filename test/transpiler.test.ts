@@ -1242,6 +1242,20 @@ TorusKnotCurve.prototype = Object.create(Curve.prototype);
         expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
     });
 
+    test("Uses a macro only when it is more compact than regular Codon", () => {
+        const jsCode = `
+function assertObject(output) {
+  expect(output).to.be.an("object");
+}
+`;
+        const ast = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(ast.program as any);
+
+        expect(codonCode).toContain("((expect output).to.be.an 'object')");
+        expect(codonCode).not.toContain("M!m_expression_stmt_601");
+    });
+
     test("Transpiles string capitalization binary expression macro M!m_binary_expr_32", () => {
         const codonCode = `capitalized =: M!m_binary_expr_32(word)`;
         const astParser = new CodonToASTParser();
