@@ -718,6 +718,12 @@ export class JSToCodonTranslator {
             case "JSXExpressionContainer":
                 return `{${this.transpile(node.expression)}}`;
 
+            case "ArrayPattern":
+            case "ObjectPattern":
+            case "AssignmentPattern":
+            case "RestElement":
+                return this.transpilePattern(node);
+
             default:
                 throw new Error(`Unsupported AST node type: ${(node as any).type}`);
         }
