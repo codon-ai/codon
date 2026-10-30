@@ -1765,6 +1765,32 @@ export class CodonToASTParser {
             }
         }
 
+        // Unparenthesized Typeof Unary Expression: typeof expr
+        if (strippedExpr.startsWith("typeof ")) {
+            const innerArg = strippedExpr.slice(7).trim();
+            if (innerArg.length > 0) {
+                return {
+                    type: "UnaryExpression",
+                    operator: "typeof",
+                    argument: this.parseExpression(innerArg),
+                    prefix: true,
+                };
+            }
+        }
+
+        // Unparenthesized Bitwise NOT Unary Expression: ~expr
+        if (strippedExpr.startsWith("~") && !strippedExpr.startsWith("~:")) {
+            const innerArg = strippedExpr.slice(1).trim();
+            if (innerArg.length > 0) {
+                return {
+                    type: "UnaryExpression",
+                    operator: "~",
+                    argument: this.parseExpression(innerArg),
+                    prefix: true,
+                };
+            }
+        }
+
         // Monadic Codon verbs: #, %, %:, |, +/, */
         if (strippedExpr === "#") return { type: "Identifier", name: "tally" };
         if (strippedExpr === "+/") return { type: "Identifier", name: "sum" };

@@ -21,6 +21,8 @@ This document provides a comprehensive, rigorous specification of the Codon lang
 5. [Monadic Verbs](#5-monadic-verbs)
    - [Await (`@` and `@:`)](#await--and-)
    - [Logical NOT (`!`)](#logical-not-)
+   - [Type Reflection (`typeof`)](#type-reflection-typeof)
+   - [Bitwise NOT (`~`)](#bitwise-not-)
    - [Tally (`#`)](#tally-)
    - [Reciprocal (`%`)](#reciprocal-)
    - [Square Root (`%:`)](#square-root-)
@@ -299,6 +301,12 @@ data =: @ (response.json())
 
 NB. Colon-inflected verb form
 user =: @: (getUser id)
+
+NB. Unparenthesized return await
+return. @ (res.json())
+
+NB. Unparenthesized arrow await
+fetcher =: {{async url => @ (fetch url)}}
 ```
 
 Transpiles to:
@@ -307,6 +315,8 @@ await delay(100);
 const response = await fetch(url);
 const data = await response.json();
 const user = await getUser(id);
+return await res.json();
+const fetcher = async url => await fetch(url);
 ```
 
 ### Logical NOT (`!`)
@@ -347,6 +357,42 @@ const canRetry = !this.isClosed && this.retryCount < this.maxRetries;
 ```
 
 Legacy parenthesized form `(! expr)` remains fully supported.
+
+### Type Reflection (`typeof`)
+
+Codon natively supports unparenthesized prefix type reflection (`typeof expr`) with correct operator precedence across binary and relational comparisons:
+
+```codon
+isClient =: typeof window !== 'undefined'
+isFn =: typeof callback === 'function'
+isStr =: typeof x === 'string'
+```
+
+Transpiles to:
+```javascript
+const isClient = typeof window !== "undefined";
+const isFn = typeof callback === "function";
+const isStr = typeof x === "string";
+```
+
+Legacy parenthesized form `((typeof expr) === 'string')` remains fully supported.
+
+### Bitwise NOT (`~`)
+
+Codon supports unparenthesized bitwise NOT (`~expr`), commonly used for index search sentinel checks:
+
+```codon
+found =: ~str.indexOf('needle')
+inList =: ~items.indexOf(val)
+```
+
+Transpiles to:
+```javascript
+const found = ~str.indexOf("needle");
+const inList = ~items.indexOf(val);
+```
+
+Legacy parenthesized form `(~ expr)` remains fully supported.
 
 ### Tally (`#`)
 Calculates the length of an array or string:
