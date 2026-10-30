@@ -84,6 +84,8 @@ flowchart TD
 | **Update Expression** | `nextId.current++;` | `nextId.current++` | **~40%** |
 | **Type Reflection Guard** | `if (typeof window !== "undefined")` | `if. (typeof window !== 'undefined') do.` | **~25%** |
 | **Return Await** | `return await res.json();` | `return. @ (res.json())` | **~29%** |
+| **Error Throw** | `throw new Error("Invalid");` | `throw. new Error 'Invalid'` | **~29%** |
+| **Class Instantiation** | `const client = new ApiClient(url);` | `client =: new ApiClient url` | **~29%** |
 
 ---
 

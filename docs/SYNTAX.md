@@ -23,6 +23,7 @@ This document provides a comprehensive, rigorous specification of the Codon lang
    - [Logical NOT (`!`)](#logical-not-)
    - [Type Reflection (`typeof`)](#type-reflection-typeof)
    - [Bitwise NOT (`~`)](#bitwise-not-)
+   - [Constructor Instantiation (`new`)](#constructor-instantiation-new)
    - [Tally (`#`)](#tally-)
    - [Reciprocal (`%`)](#reciprocal-)
    - [Square Root (`%:`)](#square-root-)
@@ -394,6 +395,35 @@ const inList = ~items.indexOf(val);
 
 Legacy parenthesized form `(~ expr)` remains fully supported.
 
+### Constructor Instantiation (`new`)
+
+Codon supports concise unparenthesized `new` constructor expressions (`new Callee args`, `new Callee()`, `new Callee`) across variable declarations, error throw statements, promise returns, arrow callbacks, and member assignments:
+
+```codon
+throw. new Error 'Invalid request'
+client =: new ApiClient baseUrl
+res =: new Response 'ok'
+timers =: new Map
+visited =: new Set [startNode]
+this.buffer = new ArrayBuffer byteLength
+return. new Promise {{resolve => (resolve 1)}}
+delay =: {{ms => new Promise {{r => (setTimeout r ms)}}}}
+```
+
+Transpiles to:
+```javascript
+throw new Error("Invalid request");
+const client = new ApiClient(baseUrl);
+const res = new Response("ok");
+const timers = new Map();
+const visited = new Set([startNode]);
+this.buffer = new ArrayBuffer(byteLength);
+return new Promise(resolve => resolve(1));
+const delay = ms => new Promise(r => setTimeout(r, ms));
+```
+
+Legacy parenthesized form `(new Callee args)` remains fully supported.
+
 ### Tally (`#`)
 Calculates the length of an array or string:
 ```codon
@@ -654,7 +684,7 @@ end.
 ```codon
 return. result
 return.
-throw. (new Error 'Operation failed')
+throw. new Error 'Operation failed'
 ```
 
 ---

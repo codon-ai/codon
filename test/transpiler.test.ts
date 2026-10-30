@@ -1608,6 +1608,100 @@ end.
     });
 });
 
+describe("Concise Unparenthesized NewExpression Constructor Support", () => {
+    test("Transpiles unparenthesized new constructor expressions (throw, variable, return, arrow, member)", () => {
+        const codonCode = `
+fn. test baseUrl do.
+  if. !baseUrl do.
+    throw. new Error 'Base URL required'
+  end.
+  client =: new ApiClient baseUrl
+  this.buffer = new ArrayBuffer 1024
+  timers =: new Map
+  delay =: {{ms => new Promise {{r => (setTimeout r ms)}}}}
+  return. new Response 'ok'
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain('throw new Error("Base URL required");');
+        expect(js).toContain("const client = new ApiClient(baseUrl);");
+        expect(js).toContain("this.buffer = new ArrayBuffer(1024);");
+        expect(js).toContain("const timers = new Map();");
+        expect(js).toContain("const delay = ms => new Promise(r => setTimeout(r, ms));");
+        expect(js).toContain('return new Response("ok");');
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Roundtrips JS throw new Error, new Promise, and collection instantiations", () => {
+        const jsCode = `
+class Service {
+  constructor(baseUrl) {
+    if (!baseUrl) {
+      throw new Error("Missing baseUrl");
+    }
+    this.client = new ApiClient(baseUrl);
+    this.buffer = new ArrayBuffer(512);
+  }
+  fetchData() {
+    return new Promise(resolve => resolve(42));
+  }
+}
+const waitTimer = timeMs => new Promise(notify => doSchedule(notify, timeMs));
+const visited = new Set();
+`;
+        const jsAst = parser.parse(jsCode, { sourceType: "module" });
+        const translator = new JSToCodonTranslator();
+        const codonCode = translator.transpile(jsAst.program as any);
+
+        expect(codonCode).toContain("throw. new Error 'Missing baseUrl'");
+        expect(codonCode).toContain("this.client = new ApiClient baseUrl");
+        expect(codonCode).toContain("this.buffer = new ArrayBuffer 512");
+        expect(codonCode).toContain("return. new Promise {{resolve => (resolve 42)}}");
+        expect(codonCode).toContain("waitTimer =: {{timeMs => new Promise {{notify => (doSchedule notify timeMs)}}}}");
+        expect(codonCode).toContain("visited =: new Set");
+
+        expect(codonCode).not.toContain("throw. (new Error");
+        expect(codonCode).not.toContain("this.client = (new ApiClient");
+        expect(codonCode).not.toContain("return. (new Promise");
+
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const roundtrippedJs = compiler.transpile(parsedAst);
+
+        expect(roundtrippedJs).toContain('throw new Error("Missing baseUrl");');
+        expect(roundtrippedJs).toContain("this.client = new ApiClient(baseUrl);");
+        expect(roundtrippedJs).toContain("this.buffer = new ArrayBuffer(512);");
+        expect(roundtrippedJs).toContain("return new Promise(resolve => resolve(42));");
+        expect(roundtrippedJs).toContain("const visited = new Set();");
+        expect(() => parser.parse(roundtrippedJs, { sourceType: "module" })).not.toThrow();
+    });
+
+    test("Retains backward compatibility with legacy parenthesized forms (new Callee args)", () => {
+        const codonCode = `
+fn. legacy baseUrl do.
+  throw. (new Error 'Legacy error')
+  c =: (new ApiClient baseUrl)
+  return. (new Promise {{resolve => (resolve 1)}})
+end.
+`;
+        const astParser = new CodonToASTParser();
+        const parsedAst = astParser.parse(codonCode);
+        const compiler = new CodonToJSCompiler();
+        const js = compiler.transpile(parsedAst);
+
+        expect(js).toContain('throw new Error("Legacy error");');
+        expect(js).toContain("const c = new ApiClient(baseUrl);");
+        expect(js).toContain("return new Promise(resolve => resolve(1));");
+        expect(() => parser.parse(js, { sourceType: "module" })).not.toThrow();
+    });
+});
+
+
 
 
 
